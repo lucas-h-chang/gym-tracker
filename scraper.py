@@ -1,6 +1,7 @@
 import requests
 import sqlite3
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ==========================================
 # PHASE 1: GET THE DATA
@@ -18,7 +19,7 @@ max_capacity = 150
 percentage = int((current_count / max_capacity) * 100)
 
 # Get the exact date and time right now
-current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+current_time = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M:%S")
 
 print(f"[{current_time}] Fetched data: {current_count} people ({percentage}%)")
 
