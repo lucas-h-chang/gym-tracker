@@ -1,0 +1,39 @@
+name: Scrape Gym Data
+
+# 1. Tell the robot WHEN to run
+on:
+  schedule:
+    - cron: '*/15 * * * *' # This translates to "every 15 minutes"
+  workflow_dispatch: # This gives you a manual "Run" button to test it
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest # The robot uses a Linux computer
+
+    steps:
+      # 2. Tell the robot to download your code from GitHub
+      - name: Check out this repo
+        uses: actions/checkout@v3
+
+      # 3. Tell the robot to install Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # 4. Tell the robot to install your scraping tool
+      - name: Install tools
+        run: pip install requests
+
+      # 5. RUN YOUR SCRIPT!
+      - name: Run the scraper
+        run: python scraper.py
+
+      # 6. Save the updated database back to GitHub
+      - name: Commit and push changes
+        run: |
+          git config user.name "Automated Robot"
+          git config user.email "actions@users.noreply.github.com"
+          git add gym_history.db
+          git commit -m "Saved new gym data" || exit 0
+          git push
