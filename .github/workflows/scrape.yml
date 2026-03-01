@@ -2,8 +2,6 @@ name: Scrape Gym Data
 
 # 1. Tell the robot WHEN to run
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch: # This gives you a manual "Run" button to test it
 
 jobs:
