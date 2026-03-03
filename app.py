@@ -101,7 +101,8 @@ points = line.mark_point(color='#FDB927', size=60)
 # 6. Combine AND THEN make interactive
 # We use + to layer them, then call .interactive() on the result
 final_predict_chart = (line + points).properties(
-    height=300
+    height=300,
+    padding={'right': 40}
 ).interactive(bind_y=False) # <--- This is the magic lock
 
 st.altair_chart(final_predict_chart, use_container_width=True)
