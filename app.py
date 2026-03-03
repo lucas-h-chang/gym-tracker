@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import altair as alt
-import datetime 
+from datetime import datetime 
 import pytz
 
 california_tz = pytz.timezone('America/Los_Angeles')
