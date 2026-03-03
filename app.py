@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 california_tz = pytz.timezone('America/Los_Angeles')
-now = datetime.now(california_tz)
+current_time = datetime.now(california_tz)
 
 current_hour = current_time.hour
 current_day = current_time.strftime('%A')
