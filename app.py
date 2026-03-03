@@ -3,12 +3,16 @@ import sqlite3
 import pandas as pd
 import altair as alt
 import datetime 
+import pytz
 
+california_tz = pytz.timezone('America/Los_Angeles')
+now = datetime.now(california_tz)
 
-now = datetime.datetime.now()
-current_hour = now.hour
-current_day = now.strftime("%A")
+current_hour = current_time.hour
+current_day = current_time.strftime('%A')
 
+# 2. Check the RSF hours using the California time
+is_open = False
 ##
 # RSF OPEN/CLOSE STATUS
 ##
