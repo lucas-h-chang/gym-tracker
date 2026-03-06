@@ -127,8 +127,8 @@ st.altair_chart(final_predict_chart, use_container_width=True)
 # 
 # Raw data log
 #
-st.subheader("Raw Data Log")
-st.dataframe(df)
+# st.subheader("Raw Data Log")
+# st.dataframe(df)
 
 
 ##
