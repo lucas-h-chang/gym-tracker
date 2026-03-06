@@ -72,13 +72,14 @@ day_data = df[(df['day_of_week'] == target_day) &
               (df['hour_numeric'] >= start) & 
               (df['hour_numeric'] <= end)].copy()
 
-# This snapstimes like 2:00:01 and 2:00:45 into the same bucket (14.00)
-day_data['hour_numeric'] = day_data['hour_numeric'].round(2)
+# 2. THE FIX: Instead of rounding, we find the "First" label for every numeric time.
+# This keeps your 1:15, 1:30, 1:45 granularity but removes the 'ghost' duplicates.
+avg_data = day_data.groupby('hour_numeric').agg({
+    'percent_full': 'mean',
+    'hour_label': 'first'  # This picks ONE label so you don't get 4 points for 1:30
+}).reset_index()
 
-# Update your groupby to ONLY use 'hour'
-avg_data = day_data.groupby(['hour_numeric', 'hour_label'])['percent_full'].mean().reset_index()
-
-# Sort the data so the chart goes in proper chronological order
+# 3. CRITICAL: Sort by the number so the line doesn't jump backward
 avg_data = avg_data.sort_values('hour_numeric')
 
 #hour labels
