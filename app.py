@@ -44,16 +44,15 @@ df = pd.read_sql_query("SELECT * FROM capacity_log", conn)
 ##
 st.header("Weekly Patterns")
 
-# 1. FIRST: Create the 'hour' and 'day_of_week' columns from the timestamp
-# 1. Convert to datetime
+
+
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 df['day_of_week'] = df['timestamp'].dt.day_name()
 
-# 2. Create the 15-minute label for the chart and tooltips
-# We round to the nearest 15 mins to align all data points
+
 df['hour_label'] = df['timestamp'].dt.round('15min').dt.strftime('%I:%M %p').str.lstrip('0')
 
-# 3. Create a numeric helper to keep the times in the correct order (7.25, 7.5, etc.)
+# Create a numeric helper to keep the times in the correct order (7.25, 7.5, etc.)
 df['hour_numeric'] = df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60
 
 # 2. Select Day
@@ -68,10 +67,13 @@ elif target_day == 'Saturday':
 else: # Sunday
     start, end = 8, 23
 
-# Update your filter to use the NUMERIC helper (much cleaner than string math)
+
 day_data = df[(df['day_of_week'] == target_day) & 
               (df['hour_numeric'] >= start) & 
               (df['hour_numeric'] <= end)].copy()
+
+# This snapstimes like 2:00:01 and 2:00:45 into the same bucket (14.00)
+day_data['hour_numeric'] = day_data['hour_numeric'].round(2)
 
 # Update your groupby to ONLY use 'hour'
 avg_data = day_data.groupby(['hour_numeric', 'hour_label'])['percent_full'].mean().reset_index()
@@ -82,9 +84,9 @@ avg_data = avg_data.sort_values('hour_numeric')
 #hour labels
 hour_ticks = [label for label in avg_data['hour_label'].unique() if ':00' in str(label)]
 
-# 4. The Gold Line Chart (Base)
+
 line = alt.Chart(avg_data).mark_line(color='#FDB927', strokeWidth=3).encode(
-    # Change :N to :Q so Altair treats it as a continuous number scale
+    
     x=alt.X('hour_numeric:Q', 
         title='Time of Day',
         axis=alt.Axis(
