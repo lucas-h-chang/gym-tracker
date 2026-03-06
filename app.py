@@ -73,7 +73,11 @@ day_data = df[(df['day_of_week'] == target_day) &
               (df['hour_numeric'] <= end)].copy()
 
 # This snapstimes like 2:00:01 and 2:00:45 into the same bucket (14.00)
-day_data['hour_numeric'] = day_data['hour_numeric'].round(2)
+day_data['hour_numeric'] = day_data['hour_numeric'].round(1)
+
+day_data['hour_label'] = day_data['hour_numeric'].apply(
+    lambda x: f"{int(x if x <= 12 else x-12)}:{'30' if x % 1 >= 0.5 else '00'} {'AM' if x < 12 else 'PM'}"
+)
 
 # Update your groupby to ONLY use 'hour'
 avg_data = day_data.groupby(['hour_numeric', 'hour_label'])['percent_full'].mean().reset_index()
