@@ -95,7 +95,8 @@ line = alt.Chart(avg_data).mark_line(color='#FDB927', strokeWidth=3).encode(
         title='Time of Day',
         axis=alt.Axis(
             values=avg_data['hour_numeric'].unique().tolist(), # Use numeric values for placement
-            labelExpr="datum.value % 1 === 0 ? datum.value + ':00' : ''" # Optional: cleaner labels
+            labelExpr="datum.value % 1 === 0 ? datum.value + ':00' : ''",
+            grid=False# Optional: cleaner labels
         )
     ),
     y=alt.Y('percent_full:Q', title='Average Capacity (%)', scale=alt.Scale(domain=[0,100])),
