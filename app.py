@@ -72,16 +72,19 @@ day_data = df[(df['day_of_week'] == target_day) &
               (df['hour_numeric'] >= start) & 
               (df['hour_numeric'] <= end)].copy()
 
-# 2. THE FIX: Instead of rounding, we find the "First" label for every numeric time.
-# This keeps your 1:15, 1:30, 1:45 granularity but removes the 'ghost' duplicates.
+# 2. THE FIX: Quantize to the nearest 15 minutes (0.25)
+# This turns 15.0833 (3:05 PM) into 15.0 (3:00 PM)
+day_data['hour_numeric'] = (day_data['hour_numeric'] * 4).round() / 4
+
+# 3. Group by the newly 'binned' numbers
+# We use .agg({'hour_label': 'first'}) to ensure only ONE label exists per bin
 avg_data = day_data.groupby('hour_numeric').agg({
     'percent_full': 'mean',
-    'hour_label': 'first'  # This picks ONE label so you don't get 4 points for 1:30
+    'hour_label': 'first'
 }).reset_index()
 
-# 3. CRITICAL: Sort by the number so the line doesn't jump backward
+# 4. Sort strictly by the numeric value
 avg_data = avg_data.sort_values('hour_numeric')
-
 #hour labels
 hour_ticks = [label for label in avg_data['hour_label'].unique() if ':00' in str(label)]
 
