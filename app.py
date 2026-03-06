@@ -86,20 +86,25 @@ avg_data = day_data.groupby('hour_numeric').agg({
 # 4. Sort strictly by the numeric value
 avg_data = avg_data.sort_values('hour_numeric')
 #hour labels
-hour_ticks = [label for label in avg_data['hour_label'].unique() if ':00' in str(label)]
+hour_ticks = [h for h in range(7, 24)] 
 
-
+# 2. Update your chart encoding
 line = alt.Chart(avg_data).mark_line(color='#FDB927', strokeWidth=3).encode(
-    
     x=alt.X('hour_numeric:Q', 
         title='Time of Day',
         axis=alt.Axis(
-            values=avg_data['hour_numeric'].unique().tolist(), # Use numeric values for placement
-            labelExpr="datum.value % 1 === 0 ? datum.value + ':00' : ''",
-            grid=False# Optional: cleaner labels
+            values=hour_ticks,
+            # This logic: If 13, make it 1. If 0, make it 12. Add AM/PM based on 12.
+            labelExpr="datum.value == 0 ? '12 AM' : datum.value == 12 ? '12 PM' : datum.value > 12 ? (datum.value - 12) + ' PM' : datum.value + ' AM'",
+            grid=False,
+            labelAngle=0 # Keeps labels horizontal and easy to read
         )
     ),
-    y=alt.Y('percent_full:Q', title='Average Capacity (%)', scale=alt.Scale(domain=[0,100])),
+    y=alt.Y('percent_full:Q', 
+        title='Average Capacity (%)', 
+        scale=alt.Scale(domain=[0, 100]),
+        axis=alt.Axis(grid=False)
+    ),
     tooltip=[
         alt.Tooltip('hour_label', title='Time'),
         alt.Tooltip('percent_full', title='Avg Capacity', format='.1f')
