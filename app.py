@@ -80,7 +80,7 @@ avg_data = day_data.groupby(['hour_numeric', 'hour_label'])['percent_full'].mean
 avg_data = avg_data.sort_values('hour_numeric')
 
 #hour labels
-hour_ticks = [label for label in avg_data['hour_label'].unique() if ':00' in label]
+hour_ticks = [label for label in avg_data['hour_label'].unique() if ':00' in str(label)]
 
 # 4. The Gold Line Chart (Base)
 line = alt.Chart(avg_data).mark_line(color='#FDB927', strokeWidth=3).encode(
