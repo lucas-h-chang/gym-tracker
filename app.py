@@ -84,10 +84,14 @@ hour_ticks = [label for label in avg_data['hour_label'].unique() if ':00' in str
 
 # 4. The Gold Line Chart (Base)
 line = alt.Chart(avg_data).mark_line(color='#FDB927', strokeWidth=3).encode(
-    x=alt.X('hour_label:N', 
-            sort=avg_data['hour_label'].tolist(), 
-            title='Time of Day',
-            axis=alt.Axis(values=hour_ticks)),
+    # Change :N to :Q so Altair treats it as a continuous number scale
+    x=alt.X('hour_numeric:Q', 
+        title='Time of Day',
+        axis=alt.Axis(
+            values=avg_data['hour_numeric'].unique().tolist(), # Use numeric values for placement
+            labelExpr="datum.value % 1 === 0 ? datum.value + ':00' : ''" # Optional: cleaner labels
+        )
+    ),
     y=alt.Y('percent_full:Q', title='Average Capacity (%)', scale=alt.Scale(domain=[0,100])),
     tooltip=[
         alt.Tooltip('hour_label', title='Time'),
