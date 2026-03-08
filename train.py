@@ -404,11 +404,12 @@ if __name__ == "__main__":
     #   - Works well even with structured/tabular data like ours
     #
     # random_state=42: makes results reproducible (same random seed every run)
-    # n_estimators=100: number of trees (more = more accurate but slower)
+    # n_estimators=20: 20 trees keeps the saved model small (<100 MB) for GitHub
+    # max_depth=15: limits how deep each tree grows, further reducing file size
     # --------------------------------------------------------------------------
 
     print("\n--- Training Random Forest (scikit-learn) ---")
-    rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+    rf = RandomForestRegressor(n_estimators=20, max_depth=15, random_state=42, n_jobs=-1)
     # .fit() is where all the learning happens. scikit-learn handles everything internally.
     rf.fit(X_train, y_train)
 

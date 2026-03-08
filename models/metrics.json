@@ -1,0 +1,30 @@
+{
+  "trained_at": "2026-03-08 13:59:20",
+  "training_rows": 111652,
+  "test_rows": 27913,
+  "rf": {
+    "rmse": 13.52,
+    "mae": 9.45
+  },
+  "mlp": {
+    "rmse": 14.01,
+    "mae": 9.86
+  },
+  "feature_importances": {
+    "hour_numeric": 0.2528,
+    "week_of_year": 0.1276,
+    "is_weekend": 0.0177,
+    "is_finals": 0.0201,
+    "is_dead_week": 0.0058,
+    "is_first_week": 0.0063,
+    "is_break": 0.4988,
+    "is_holiday": 0.0085,
+    "day_Monday": 0.008,
+    "day_Tuesday": 0.0041,
+    "day_Wednesday": 0.0034,
+    "day_Thursday": 0.0052,
+    "day_Friday": 0.0104,
+    "day_Saturday": 0.0025,
+    "day_Sunday": 0.0287
+  }
+}
