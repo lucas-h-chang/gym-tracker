@@ -185,7 +185,7 @@ with col_day:
 
 with col_right:
     time_range = st.selectbox("Data range:", [
-        "All time", "Last year", "Last 6 months", "Last month", "Last week"
+        "Last week", "Last month", "Last 6 months", "Last year", "All time"
     ])
     semester_only = st.checkbox("Semester only", value=True,
         help="Excludes summer, winter break, and spring break, so these averages reflect normal school weeks only. Nice.")
