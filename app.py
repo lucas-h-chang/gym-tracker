@@ -205,6 +205,7 @@ cutoffs = {
 }
 cutoff = cutoffs[time_range]
 if cutoff is not None:
+    cutoff = cutoff.replace(hour=0, minute=0, second=0, microsecond=0)
     df = df[df['timestamp'] >= cutoff.replace(tzinfo=None)]
 
 # Then apply semester filter (stacks on top of time range)
