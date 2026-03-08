@@ -1,48 +1,31 @@
 name: Scrape Gym Data
 
-# 1. Tell the robot WHEN to run
 on:
-  workflow_dispatch: # This gives you a manual "Run" button to test it
+  workflow_dispatch:  # triggered externally by cron-job.org every 15 minutes
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest # The robot uses a Linux computer
+    runs-on: ubuntu-latest
 
     steps:
-      # 2. Tell the robot to download your code from GitHub
       - name: Check out this repo
         uses: actions/checkout@v3
 
-      # 3. Tell the robot to install Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 4. Install scraper dependencies
-      - name: Install scraper tools
+      - name: Install tools
         run: pip install requests
 
-      # 5. RUN YOUR SCRIPT!
       - name: Run the scraper
         run: python scraper.py
 
-      # 6. Install ML dependencies (scikit-learn + PyTorch CPU-only build)
-      #    torch+cpu is a smaller download (~200 MB vs ~800 MB for GPU)
-      - name: Install ML tools
-        run: pip install scikit-learn torch --index-url https://download.pytorch.org/whl/cpu pandas
-
-      # 7. Retrain both models on the newly updated database.
-      #    This runs automatically after every scrape so the model always
-      #    learns from the latest data.
-      - name: Train models
-        run: python train.py
-
-      # 8. Save the updated database AND model artifacts back to GitHub
-      - name: Commit and push changes
+      - name: Commit and push
         run: |
           git config user.name "Automated Robot"
           git config user.email "actions@users.noreply.github.com"
-          git add gym_history.db models/
+          git add gym_history.db
           git commit -m "Saved new gym data" || exit 0
           git push

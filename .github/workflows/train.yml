@@ -1,0 +1,33 @@
+name: Retrain Models
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'  # 1st of every month at 4 AM UTC
+  workflow_dispatch:       # manual "Run" button to retrain on demand
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install ML tools
+        run: pip install scikit-learn torch --index-url https://download.pytorch.org/whl/cpu pandas numpy
+
+      - name: Train models
+        run: python train.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "Automated Robot"
+          git config user.email "actions@users.noreply.github.com"
+          git add models/
+          git commit -m "Retrained models" || exit 0
+          git push
