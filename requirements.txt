@@ -2,3 +2,6 @@ streamlit
 pandas
 altair
 pytz
+numpy
+scikit-learn
+torch
