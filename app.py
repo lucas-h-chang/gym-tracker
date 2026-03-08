@@ -156,9 +156,12 @@ else:
     st.altair_chart(importance_chart, use_container_width=True)
 
 
-# 2. Connect to your local database file
-conn = sqlite3.connect("gym_history.db")
-df = pd.read_sql_query("SELECT * FROM capacity_log", conn)
+@st.cache_data(ttl=86400)  # cache for 1 day; clears on app restart anyway
+def load_data():
+    conn = sqlite3.connect("gym_history.db")
+    return pd.read_sql_query("SELECT * FROM capacity_log", conn)
+
+df = load_data()
 
 
 ##
