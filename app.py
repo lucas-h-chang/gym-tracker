@@ -263,6 +263,8 @@ avg_data = day_data.groupby('hour_numeric').agg({
 close_hour = end  # end was set above based on the selected day
 close_label = f"{close_hour % 12 or 12}:00 {'AM' if close_hour < 12 else 'PM'}"
 closing_row = pd.DataFrame([{'hour_numeric': close_hour, 'percent_full': 0.0, 'hour_label': close_label}])
+# Drop any real data at exactly closing time so the synthetic 0 is the only point there.
+avg_data = avg_data[avg_data['hour_numeric'] < close_hour]
 avg_data = pd.concat([avg_data, closing_row], ignore_index=True)
 
 # 5. Sort strictly by the numeric value
