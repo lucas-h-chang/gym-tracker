@@ -145,13 +145,13 @@ else:
     importances_df = pd.DataFrame({
         'Feature': feature_names,
         'Importance': rf.feature_importances_
-    }).sort_values('Importance', ascending=False)
+    }).sort_values('Importance', ascending=False).head(10)
 
     importance_chart = alt.Chart(importances_df).mark_bar(color='#FDB927').encode(
         x=alt.X('Importance:Q', title='Importance Score'),
         y=alt.Y('Feature:N', sort='-x', title=None),
         tooltip=['Feature', alt.Tooltip('Importance:Q', format='.3f')]
-    ).properties(title='What Drives Predictions (Random Forest feature importances)', height=280)
+    ).properties(title='What Drives Predictions (Random Forest feature importances)', height=320)
 
     st.altair_chart(importance_chart, use_container_width=True)
 
