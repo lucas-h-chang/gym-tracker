@@ -287,7 +287,7 @@ line = alt.Chart(avg_data).mark_line(color='#FDB927', strokeWidth=3).encode(
     ),
     y=alt.Y('percent_full:Q', 
         title='Average Capacity (%)', 
-        scale=alt.Scale(domain=[0, 100]),
+        scale=alt.Scale(domain=[0, 110]),
         axis=alt.Axis(grid=True)
     ),
     tooltip=[
