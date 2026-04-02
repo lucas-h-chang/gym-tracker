@@ -3,251 +3,648 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Berkeley RSF Weight Room Capacity Tracker</title>
+  <title>Berkeley RSF Weight Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --gold: #FDB927;
-      --blue: #003262;
-      --bg: #111;
-      --card: #1e1e1e;
-      --border: #333;
-      --text: #e0e0e0;
-      --muted: #888;
+      --bg:         #09090f;
+      --panel:      #0d0e16;
+      --panel2:     #12131e;
+      --border:     rgba(160, 170, 220, 0.1);
+      --border2:    rgba(160, 170, 220, 0.16);
+      --accent:     #93a4f5;
+      --accent-bg:  rgba(147, 164, 245, 0.08);
+      --text:       #e2e3ee;
+      --sub:        #8f92aa;
+      --muted:      #454660;
+      --open-color: #6ee7b7;
+      --closed-color: #f87171;
+      --font:  'Inter', -apple-system, sans-serif;
+      --mono:  'JetBrains Mono', monospace;
     }
 
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    .container {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 24px 20px 60px;
-    }
-
-    /* ── Status Banner ── */
-    .banner {
-      padding: 10px 16px;
-      border-radius: 6px;
-      font-weight: 600;
-      margin-bottom: 24px;
+      font-family: var(--font);
       font-size: 14px;
+      min-height: 100vh;
     }
-    .banner.open  { background: #1a3a1a; border: 1px solid #2d6a2d; color: #6fcf6f; }
-    .banner.closed { background: #3a1a1a; border: 1px solid #6a2d2d; color: #cf6f6f; }
+
+    /* ── Data Warning ── */
+    #data-warning {
+      display: none;
+      text-align: center;
+      padding: 10px 24px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      font-family: var(--mono);
+      background: rgba(248, 113, 113, 0.07);
+      border-bottom: 1px solid rgba(248, 113, 113, 0.15);
+      color: #f87171;
+    }
 
     /* ── Header ── */
-    h1 { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 4px; }
-    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 36px; }
-
-    /* ── Sections ── */
-    h2 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #fff;
-      margin-bottom: 16px;
-      padding-bottom: 8px;
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      height: 64px;
       border-bottom: 1px solid var(--border);
     }
 
-    section { margin-bottom: 48px; }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* Status pill */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 12px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: transparent;
+      transition: border-color 0.4s, background 0.4s;
+    }
+    .status-badge.open {
+      border-color: rgba(110, 231, 183, 0.28);
+      background: rgba(110, 231, 183, 0.05);
+    }
+    .status-badge.closed {
+      border-color: rgba(248, 113, 113, 0.22);
+      background: rgba(248, 113, 113, 0.05);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-badge.open .status-dot {
+      background: var(--open-color);
+      animation: live-pulse 2.8s ease-in-out infinite;
+    }
+    .status-badge.closed .status-dot {
+      background: var(--closed-color);
+    }
+
+    @keyframes live-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.35; }
+    }
+
+    .status-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+    .status-badge.open   .status-label { color: var(--open-color); }
+    .status-badge.closed .status-label { color: var(--closed-color); }
+
+    .header-clock {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Main ── */
+    main {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+    }
+
+    .panel-left {
+      padding: 52px 52px 60px 48px;
+      border-right: 1px solid var(--border);
+    }
+
+    .panel-right {
+      padding: 52px 48px 60px 44px;
+    }
+
+    /* ── Eyebrow + title ── */
+    .eyebrow {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--text);
+      margin-bottom: 32px;
+    }
+
+    /* ── Chart card ── */
+    .chart-card {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px 24px 22px;
+      overflow: hidden;
+    }
+    .chart-card canvas { display: block; width: 100% !important; }
+
+    .no-data-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--mono);
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+      line-height: 1.7;
+    }
 
     /* ── Controls ── */
     .controls {
       display: flex;
       flex-wrap: wrap;
-      gap: 16px;
-      margin-bottom: 20px;
+      gap: 28px;
+      margin-top: 28px;
       align-items: flex-end;
     }
 
-    .field { display: flex; flex-direction: column; gap: 5px; }
-    .field label { font-size: 13px; color: var(--muted); }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      position: relative;
+    }
 
-    input[type="date"],
+    .field label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
     select {
-      background: var(--card);
-      border: 1px solid var(--border);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border2);
       color: var(--text);
-      padding: 7px 10px;
-      border-radius: 5px;
-      font-size: 14px;
+      padding: 6px 0;
+      font-size: 13px;
+      font-family: var(--font);
       cursor: pointer;
       outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 120px;
+      transition: border-color 0.15s;
     }
-    input[type="date"]:focus,
-    select:focus { border-color: var(--gold); }
+    select:focus { border-bottom-color: var(--accent); }
+    select option { background: #1c1d2e; color: var(--text); }
+    input[type="hidden"] { display: none; }
 
-    .field-checkbox {
+    .check-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding-bottom: 8px;
+      margin-top: 20px;
     }
-    .field-checkbox label { font-size: 14px; color: var(--text); cursor: pointer; }
-    input[type="checkbox"] { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+    .check-row label {
+      font-size: 12px;
+      color: var(--sub);
+      cursor: pointer;
+    }
+    .check-row .hint {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 13px;
+      height: 13px;
+      cursor: pointer;
+    }
 
-    /* ── Prediction Metrics ── */
-    .metrics {
+    .chart-caption {
+      margin-top: 14px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Custom pickers ── */
+    .custom-picker-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border2);
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      min-width: 130px;
+      transition: border-color 0.15s;
+      user-select: none;
+    }
+    .custom-picker-trigger:hover { border-bottom-color: var(--accent); }
+    .custom-picker-trigger svg { color: var(--muted); flex-shrink: 0; }
+
+    .picker-popup {
+      display: none;
+      position: absolute;
+      z-index: 100;
+      background: #13141f;
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+      margin-top: 4px;
+    }
+    .picker-popup.open { display: block; }
+
+    /* Calendar */
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .cal-nav {
+      background: none;
+      border: none;
+      color: var(--sub);
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 14px;
+      border-radius: 4px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .cal-nav:hover { background: var(--panel2); color: var(--text); }
+    .cal-month-label { color: var(--text); font-size: 13px; }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      padding: 0 10px 12px;
+    }
+    .cal-dow {
+      text-align: center;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+    .cal-day {
+      text-align: center;
+      padding: 6px 4px;
+      font-size: 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: var(--sub);
+      transition: background 0.1s, color 0.1s;
+    }
+    .cal-day:hover { background: var(--panel2); color: var(--text); }
+    .cal-day.today { color: var(--accent); font-weight: 600; }
+    .cal-day.selected { background: var(--accent); color: #09090f; font-weight: 700; }
+    .cal-day.selected:hover { background: var(--accent); }
+    .cal-day.empty { pointer-events: none; }
+    .cal-day.other-month { color: var(--muted); opacity: 0.4; }
+
+    /* Time picker */
+    .time-list {
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 6px;
+      width: 140px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border2) transparent;
+    }
+    .time-list::-webkit-scrollbar { width: 4px; }
+    .time-list::-webkit-scrollbar-track { background: transparent; }
+    .time-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .time-option {
+      padding: 7px 12px;
+      font-size: 13px;
+      font-family: var(--mono);
+      color: var(--sub);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+    }
+    .time-option:hover { background: var(--panel2); color: var(--text); }
+    .time-option.selected { background: var(--accent); color: #09090f; font-weight: 600; }
+    .time-option.selected:hover { background: var(--accent); }
+
+    /* ── Predictor ── */
+    .pred-sticky {
+      position: sticky;
+      top: 36px;
+    }
+
+    .pred-inputs {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    /* Hero prediction card */
+    .pred-hero {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 26px 28px 22px;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pred-hero-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .pred-hero-number {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Capacity bar */
+    .cap-track {
+      height: 3px;
+      background: var(--panel2);
+      border-radius: 2px;
+      margin-top: 18px;
+      overflow: hidden;
+    }
+    .cap-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+    }
+    .cap-fill.high { background: #fbbf24; }
+    .cap-fill.over { background: var(--closed-color); }
+
+    .pred-hero-sub {
+      font-size: 11px;
+      color: var(--sub);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    /* Model cards */
+    .model-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 10px;
+      margin-bottom: 22px;
     }
 
-    .metric-card {
-      background: var(--card);
+    .model-card {
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px 20px;
-    }
-    .metric-card .label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-    .metric-card .value {
-      font-size: 36px;
-      font-weight: 700;
-      color: var(--gold);
-      line-height: 1.1;
-    }
-    .metric-card .sublabel { font-size: 12px; color: var(--muted); margin-top: 4px; }
-
-    /* ── Caption ── */
-    .caption {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 10px;
-    }
-
-    /* ── Charts ── */
-    .chart-wrap {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 16px;
-      margin-top: 8px;
+    }
+
+    .model-card-label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+      white-space: nowrap;
+    }
+
+    .model-card-value {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--sub);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .model-card-meta {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* Metrics table */
+    .metrics-block {
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+    }
+
+    .metric-key {
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .metric-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--sub);
     }
 
     /* ── Footer ── */
     footer {
-      text-align: center;
-      font-size: 12px;
-      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 48px;
       border-top: 1px solid var(--border);
-      padding-top: 20px;
+    }
+
+    .footer-l {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .footer-r {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
     }
   </style>
 </head>
 <body>
-<div class="container">
 
-  <div id="status-banner" class="banner">Checking RSF hours...</div>
+<div id="data-warning"></div>
 
-  <h1>Berkeley RSF Weight Room Capacity Tracker</h1>
-  <p class="subtitle">Historical capacity data and predicted capacity at every 15-minute interval.</p>
+<header>
+  <div class="logo">RSF Crowd Level Predictor</div>
+  <div class="header-right">
+    <span class="header-clock" id="clock">--:--</span>
+  </div>
+</header>
 
-  <!-- ── PREDICT ── -->
-  <section>
-    <h2>Predict Capacity</h2>
+<main>
+
+  <!-- LEFT: Weekly Patterns -->
+  <div class="panel-left" id="section-weekly">
+    <div class="status-badge" id="status-badge" style="display:inline-flex; margin-bottom: 28px;">
+      <div class="status-dot"></div>
+      <span class="status-label" id="status-text">—</span>
+    </div>
+    <div class="eyebrow">HISTORICAL DATA</div>
+    <div class="section-title">Weekly Patterns</div>
+
+    <div class="chart-card">
+      <canvas id="weekly-chart" height="290"></canvas>
+      <div id="weekly-no-data" class="no-data-overlay">
+        No data for this combination —<br>try a wider range or uncheck Semester only.
+      </div>
+    </div>
+
     <div class="controls">
       <div class="field">
-        <label for="date-input">Date</label>
-        <input type="date" id="date-input">
-      </div>
-      <div class="field">
-        <label for="time-select">Time</label>
-        <select id="time-select"></select>
-      </div>
-    </div>
-
-    <div class="metrics">
-      <div class="metric-card">
-        <div class="label">Neural Network (MLP)</div>
-        <div class="value" id="mlp-value">—</div>
-        <div class="sublabel" id="mlp-sub">PyTorch 3-layer neural network</div>
-      </div>
-      <div class="metric-card">
-        <div class="label">Random Forest</div>
-        <div class="value" id="rf-value">—</div>
-        <div class="sublabel" id="rf-sub">Ensemble of 100 decision trees</div>
-      </div>
-    </div>
-
-    <p class="caption" id="metrics-caption"></p>
-
-    <div class="chart-wrap">
-      <canvas id="importance-chart" height="260"></canvas>
-    </div>
-  </section>
-
-  <!-- ── WEEKLY PATTERNS ── -->
-  <section>
-    <h2>Weekly Patterns</h2>
-    <div class="controls">
-      <div class="field">
-        <label for="day-select">Day</label>
+        <label>DAY</label>
         <select id="day-select">
           <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
           <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
         </select>
       </div>
       <div class="field">
-        <label for="range-select">Data range</label>
+        <label>DATE RANGE</label>
         <select id="range-select">
           <option>Last week</option><option>Last month</option>
           <option>Last 6 months</option><option>Last year</option><option>All time</option>
         </select>
       </div>
-      <div class="field-checkbox">
-        <input type="checkbox" id="semester-check" checked>
-        <label for="semester-check">Semester only</label>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="semester-check" checked>
+      <label for="semester-check">Semester only</label>
+      <span class="hint">— excludes breaks</span>
+    </div>
+    <div class="chart-caption" id="weekly-meta"></div>
+  </div>
+
+  <!-- RIGHT: Predictor -->
+  <div class="panel-right" id="section-predict">
+    <div class="pred-sticky">
+      <div class="eyebrow">ML MODEL</div>
+      <div class="section-title">Predict Occupancy</div>
+
+      <div class="pred-inputs">
+        <div class="field">
+          <label>DATE</label>
+          <div class="custom-picker-trigger" id="date-trigger">
+            <span id="date-display">—</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 5h10" stroke="currentColor" stroke-width="1.2"/><path d="M4 1v2M8 1v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </div>
+          <input type="hidden" id="date-input">
+          <div class="picker-popup" id="cal-popup"></div>
+        </div>
+        <div class="field">
+          <label>TIME</label>
+          <div class="custom-picker-trigger" id="time-trigger">
+            <span id="time-display">—</span>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.5V5l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </div>
+          <input type="hidden" id="time-select">
+          <div class="picker-popup" id="time-popup"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="chart-wrap">
-      <canvas id="weekly-chart" height="220"></canvas>
-    </div>
-  </section>
+      <div class="pred-hero">
+        <div class="pred-hero-label">AVERAGE PREDICTION</div>
+        <div class="pred-hero-number" id="avg-value">—</div>
+        <div class="cap-track">
+          <div class="cap-fill" id="capacity-fill"></div>
+        </div>
+      </div>
 
-  <footer id="footer"></footer>
-</div>
+      <div class="model-row">
+        <div class="model-card">
+          <div class="model-card-label">NEURAL NETWORK</div>
+          <div class="model-card-value" id="mlp-value">—</div>
+          <div class="model-card-meta" id="mlp-sub">PyTorch MLP</div>
+        </div>
+        <div class="model-card">
+          <div class="model-card-label">RANDOM FOREST</div>
+          <div class="model-card-value" id="rf-value">—</div>
+          <div class="model-card-meta" id="rf-sub">100 trees</div>
+        </div>
+      </div>
+
+      <div class="metrics-block" id="metrics-block"></div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-l">BERKELEY RSF &nbsp;·&nbsp; 2022–<span id="footer-end">—</span></div>
+  <div class="footer-r" id="footer-sub"></div>
+</footer>
 
 <script>
-// ── Constants ──────────────────────────────────────────────────────────────
-const FEATURE_LABELS = {
-  hour_numeric:   'Time of day',
-  week_of_year:   'Week of year',
-  is_weekend:     'Weekend',
-  is_finals:      'Finals week',
-  is_dead_week:   'Dead week',
-  is_first_week:  'First week of semester',
-  is_break:       'Break period',
-  is_holiday:     'Holiday',
-  day_Monday:     'Monday',
-  day_Tuesday:    'Tuesday',
-  day_Wednesday:  'Wednesday',
-  day_Thursday:   'Thursday',
-  day_Friday:     'Friday',
-  day_Saturday:   'Saturday',
-  day_Sunday:     'Sunday',
-};
-
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
 
 function getOpenHours(jsDay) {
-  if (jsDay === 6) return { open: 8, close: 18 }; // Saturday
-  if (jsDay === 0) return { open: 8, close: 23 }; // Sunday
-  return { open: 7, close: 23 };                  // Mon–Fri
+  if (jsDay === 6) return { open: 8, close: 18 };
+  if (jsDay === 0) return { open: 8, close: 23 };
+  return { open: 7, close: 23 };
 }
 
 function formatHour(h) {
@@ -264,253 +661,435 @@ function formatTime(h, m) {
 
 function todayPT() {
   const pt = getPTNow();
-  const y = pt.getFullYear();
-  const m = String(pt.getMonth() + 1).padStart(2, '0');
-  const d = String(pt.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return `${pt.getFullYear()}-${String(pt.getMonth()+1).padStart(2,'0')}-${String(pt.getDate()).padStart(2,'0')}`;
 }
 
-// ── Status Banner ──────────────────────────────────────────────────────────
-function updateBanner() {
+// ── Clock ──────────────────────────────────────────────────────
+function updateClock() {
   const pt = getPTNow();
-  const hour = pt.getHours();
-  const jsDay = pt.getDay();
-  const { open, close } = getOpenHours(jsDay);
-  const isOpen = hour >= open && hour < close;
-  const banner = document.getElementById('status-banner');
-  banner.className = `banner ${isOpen ? 'open' : 'closed'}`;
-  banner.textContent = isOpen ? '✓ RSF is currently OPEN' : '✗ RSF is currently CLOSED';
+  document.getElementById('clock').textContent =
+    `${String(pt.getHours()).padStart(2,'0')}:${String(pt.getMinutes()).padStart(2,'0')}`;
+}
+setInterval(updateClock, 15000);
+updateClock();
+
+// ── Status ─────────────────────────────────────────────────────
+function updateStatusBar() {
+  const pt = getPTNow();
+  const { open, close } = getOpenHours(pt.getDay());
+  const isOpen = pt.getHours() >= open && pt.getHours() < close;
+  const badge = document.getElementById('status-badge');
+  const label = document.getElementById('status-text');
+  badge.className = `status-badge ${isOpen ? 'open' : 'closed'}`;
+  label.textContent = isOpen ? 'OPEN' : 'CLOSED';
 }
 
-// ── Time Picker ────────────────────────────────────────────────────────────
+// ── Number animation ───────────────────────────────────────────
+function animateValue(el, from, to, suffix = '%') {
+  if (typeof from !== 'number' || isNaN(from)) from = 0;
+  const duration = 480;
+  const startTime = performance.now();
+  function tick(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(from + (to - from) * ease) + suffix;
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── Custom Pickers ─────────────────────────────────────────────
+
+let calYear, calMonth;
+
+function closeAllPickers() {
+  document.getElementById('cal-popup').classList.remove('open');
+  document.getElementById('time-popup').classList.remove('open');
+}
+
+// Calendar
+function renderCalendar() {
+  const popup = document.getElementById('cal-popup');
+  const selectedVal = document.getElementById('date-input').value;
+  const today = todayPT();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const monthNames = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+
+  let html = `<div class="cal-header">
+    <button class="cal-nav" id="cal-prev">&#8592;</button>
+    <span class="cal-month-label">${monthNames[calMonth]} ${calYear}</span>
+    <button class="cal-nav" id="cal-next">&#8594;</button>
+  </div><div class="cal-grid">`;
+
+  for (const d of ['Su','Mo','Tu','We','Th','Fr','Sa']) {
+    html += `<div class="cal-dow">${d}</div>`;
+  }
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const val = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const cls = [
+      'cal-day',
+      val === selectedVal ? 'selected' : '',
+      val === today ? 'today' : '',
+    ].filter(Boolean).join(' ');
+    html += `<div class="${cls}" data-val="${val}">${d}</div>`;
+  }
+  html += `</div>`;
+  popup.innerHTML = html;
+
+  popup.querySelector('#cal-prev').addEventListener('click', (e) => {
+    e.stopPropagation();
+    calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  popup.querySelector('#cal-next').addEventListener('click', (e) => {
+    e.stopPropagation();
+    calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  });
+  popup.querySelectorAll('.cal-day[data-val]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = el.dataset.val;
+      document.getElementById('date-input').value = val;
+      document.getElementById('date-display').textContent = formatDateDisplay(val);
+      closeAllPickers();
+      populateTimePicker(val);
+      if (window._predData) updatePrediction(window._predData);
+    });
+  });
+}
+
+function formatDateDisplay(val) {
+  const [y, m, d] = val.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
+}
+
+// Time picker
 function populateTimePicker(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
-  const jsDay = d.getDay();
-  const { open, close } = getOpenHours(jsDay);
-  const sel = document.getElementById('time-select');
-  const prev = sel.value;
-  sel.innerHTML = '';
+  const { open, close } = getOpenHours(d.getDay());
+  const prevVal = document.getElementById('time-select').value;
 
+  // Build time slots
+  const slots = [];
   for (let h = open; h < close; h++) {
     for (const m of [0, 15, 30, 45]) {
-      const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = formatTime(h, m);
-      sel.appendChild(opt);
+      slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
     }
   }
 
-  if ([...sel.options].some(o => o.value === prev)) {
-    sel.value = prev;
-  } else {
+  // Pick best default
+  let selected = slots.includes(prevVal) ? prevVal : null;
+  if (!selected) {
     const pt = getPTNow();
     const cur = pt.getHours() * 60 + pt.getMinutes();
-    let best = sel.options[0];
     let bestDiff = Infinity;
-    for (const o of sel.options) {
-      const [h, m] = o.value.split(':').map(Number);
+    for (const s of slots) {
+      const [h, m] = s.split(':').map(Number);
       const diff = Math.abs(h * 60 + m - cur);
-      if (diff < bestDiff) { bestDiff = diff; best = o; }
+      if (diff < bestDiff) { bestDiff = diff; selected = s; }
     }
-    sel.value = best.value;
+  }
+
+  document.getElementById('time-select').value = selected;
+  document.getElementById('time-display').textContent = formatTime(...selected.split(':').map(Number));
+
+  // Render popup list
+  const popup = document.getElementById('time-popup');
+  popup.innerHTML = `<div class="time-list">${
+    slots.map(s => `<div class="time-option${s === selected ? ' selected' : ''}" data-val="${s}">${
+      formatTime(...s.split(':').map(Number))
+    }</div>`).join('')
+  }</div>`;
+
+  popup.querySelectorAll('.time-option').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = el.dataset.val;
+      document.getElementById('time-select').value = val;
+      document.getElementById('time-display').textContent = formatTime(...val.split(':').map(Number));
+      popup.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      closeAllPickers();
+      if (window._predData) updatePrediction(window._predData);
+    });
+  });
+
+  // Scroll selected into view when popup opens
+  const listEl = popup.querySelector('.time-list');
+  const selEl = popup.querySelector('.time-option.selected');
+  if (selEl && listEl) {
+    setTimeout(() => {
+      selEl.scrollIntoView({ block: 'center' });
+    }, 10);
   }
 }
 
-// ── Prediction Lookup ──────────────────────────────────────────────────────
+// ── Prediction ─────────────────────────────────────────────────
+let lastAvg = null;
+
 function updatePrediction(data) {
   const date = document.getElementById('date-input').value;
   const time = document.getElementById('time-select').value;
-  const key = `${date}_${time}`;
-  const pred = data.predictions[key];
+  const pred = data.predictions[`${date}_${time}`];
 
-  const mlpEl  = document.getElementById('mlp-value');
-  const rfEl   = document.getElementById('rf-value');
-  const mlpSub = document.getElementById('mlp-sub');
-  const rfSub  = document.getElementById('rf-sub');
+  const avgEl   = document.getElementById('avg-value');
+  const fillEl  = document.getElementById('capacity-fill');
+  const mlpEl   = document.getElementById('mlp-value');
+  const rfEl    = document.getElementById('rf-value');
+  const mlpSub  = document.getElementById('mlp-sub');
+  const rfSub   = document.getElementById('rf-sub');
 
   if (!pred) {
-    mlpEl.textContent = '—';
-    rfEl.textContent  = '—';
-    mlpSub.textContent = 'PyTorch 3-layer neural network';
-    rfSub.textContent  = 'Ensemble of 100 decision trees';
+    avgEl.textContent = '—';
+    fillEl.style.width = '0%';
+    fillEl.className = 'cap-fill';
+    mlpEl.textContent = '—'; rfEl.textContent = '—';
+    mlpSub.textContent = 'PyTorch MLP'; rfSub.textContent = '100 trees';
+    lastAvg = null;
     return;
   }
 
   const [rf, mlp] = pred;
+  const avg = Math.round((mlp + rf) / 2);
+
+  animateValue(avgEl, lastAvg !== null ? lastAvg : avg, avg);
+  lastAvg = avg;
+
+  const pct = Math.min(avg, 100);
+  fillEl.style.width = `${pct}%`;
+  fillEl.className = `cap-fill${avg >= 90 ? ' over' : avg >= 70 ? ' high' : ''}`;
+
   mlpEl.textContent = `${mlp}%`;
   rfEl.textContent  = `${rf}%`;
-  mlpSub.textContent = mlp >= 100 ? 'At or over capacity' : `avg error ±${data.metrics.mlp_mae}%`;
-  rfSub.textContent  = rf  >= 100 ? 'At or over capacity' : `avg error ±${data.metrics.rf_mae}%`;
+  mlpSub.textContent = mlp >= 100 ? 'At capacity' : `±${data.metrics.mlp_mae}% avg err`;
+  rfSub.textContent  = rf  >= 100 ? 'At capacity' : `±${data.metrics.rf_mae}% avg err`;
+
 }
 
-// ── Feature Importance Chart ───────────────────────────────────────────────
-function initImportanceChart(data) {
-  const items = [...data.feature_importances].reverse(); // ascending so top is at top
-  const labels = items.map(d => FEATURE_LABELS[d.name] || d.name);
-  const values = items.map(d => d.value);
+// ── Weekly Chart ───────────────────────────────────────────────
+let weeklyChart = null;
 
-  new Chart(document.getElementById('importance-chart'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: '#FDB927',
-        borderRadius: 3,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'What Drives Predictions (Random Forest feature importances)',
-          color: '#ccc',
-          font: { size: 13 },
-          padding: { bottom: 12 },
-        },
-        tooltip: {
-          callbacks: {
-            label: (item) => ` ${item.raw.toFixed(3)}`
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: '#2a2a2a' },
-          ticks: { color: '#888', font: { size: 11 } },
-          title: { display: true, text: 'Importance Score', color: '#666', font: { size: 11 } },
-        },
-        y: {
-          grid: { display: false },
-          ticks: { color: '#ccc', font: { size: 12 } },
-        }
+// Returns closed hour ranges within the 8–23 window for a given day name
+function getClosedRanges(dayName) {
+  const jsDay = DAYS.indexOf(dayName);
+  const { open, close } = getOpenHours(jsDay);
+  const ranges = [];
+  if (open > 7)  ranges.push([7, open]);
+  if (close < 23) ranges.push([close, 23]);
+  return ranges;
+}
+
+// Custom plugin: draws red transparent zones for closed hours
+const closedZonePlugin = {
+  id: 'closedZone',
+  beforeDatasetsDraw(chart) {
+    const ranges = chart.options.plugins.closedZone?.ranges;
+    if (!ranges || ranges.length === 0) return;
+    const { ctx, chartArea, scales } = chart;
+    ctx.save();
+    ctx.fillStyle = 'rgba(248, 113, 113, 0.10)';
+    for (const [from, to] of ranges) {
+      const x1 = Math.max(scales.x.getPixelForValue(from), chartArea.left);
+      const x2 = Math.min(scales.x.getPixelForValue(to), chartArea.right);
+      if (x2 > x1) ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.height);
+    }
+    // Draw a subtle red top border on each zone
+    ctx.strokeStyle = 'rgba(248, 113, 113, 0.22)';
+    ctx.lineWidth = 1;
+    for (const [from, to] of ranges) {
+      const x1 = Math.max(scales.x.getPixelForValue(from), chartArea.left);
+      const x2 = Math.min(scales.x.getPixelForValue(to), chartArea.right);
+      if (x2 > x1) {
+        ctx.beginPath();
+        ctx.moveTo(x1, chartArea.top);
+        ctx.lineTo(x1, chartArea.bottom);
+        ctx.stroke();
       }
     }
-  });
-}
-
-// ── Weekly Patterns Chart ─────────────────────────────────────────────────
-let weeklyChart = null;
+    ctx.restore();
+  }
+};
+Chart.register(closedZonePlugin);
 
 function updateWeeklyChart(data) {
   const day      = document.getElementById('day-select').value;
   const range    = document.getElementById('range-select').value;
   const semester = document.getElementById('semester-check').checked;
-  const key      = `${day}|${range}|${semester}`;
-  const points   = data.weekly[key] || [];
+  const raw      = data.weekly[`${day}|${range}|${semester}`] || [];
+  const hasData  = raw.some(p => p.y > 0);
+  const points   = hasData ? raw : [];
 
-  const d = new Date(`2000-01-03T12:00:00`); // arbitrary Monday
-  const offset = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].indexOf(day);
-  d.setDate(3 + offset);
-  const jsDay = d.getDay();
-  const { open, close } = getOpenHours(jsDay);
+  document.getElementById('weekly-no-data').style.display = hasData ? 'none' : 'flex';
+
+  const semStr = semester ? ', semester weeks' : '';
+  document.getElementById('weekly-meta').textContent = `${day}s · ${range}${semStr}`;
+
+  const closedRanges = getClosedRanges(day);
 
   if (weeklyChart) {
     weeklyChart.data.datasets[0].data = points;
-    weeklyChart.options.scales.x.min = open;
-    weeklyChart.options.scales.x.max = close;
+    weeklyChart.options.plugins.closedZone.ranges = closedRanges;
     weeklyChart.update();
     return;
   }
 
-  weeklyChart = new Chart(document.getElementById('weekly-chart'), {
+  const ctx = document.getElementById('weekly-chart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 290);
+  gradient.addColorStop(0, 'rgba(147, 164, 245, 0.2)');
+  gradient.addColorStop(1, 'rgba(147, 164, 245, 0)');
+
+  weeklyChart = new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [{
         data: points,
-        borderColor: '#FDB927',
-        backgroundColor: 'rgba(253,185,39,0.08)',
-        borderWidth: 2.5,
-        pointRadius: 3,
-        pointBackgroundColor: '#FDB927',
-        tension: 0.3,
+        borderColor: '#93a4f5',
+        backgroundColor: gradient,
+        borderWidth: 1.5,
+        pointRadius: 2,
+        pointBackgroundColor: '#93a4f5',
+        pointBorderColor: 'transparent',
+        tension: 0.35,
         fill: true,
       }]
     },
     options: {
       parsing: false,
+      animation: { duration: 320 },
       plugins: {
+        closedZone: { ranges: closedRanges },
         legend: { display: false },
         tooltip: {
+          backgroundColor: '#1a1b2e',
+          titleColor: '#8f92aa',
+          bodyColor: '#e2e3ee',
+          borderColor: 'rgba(147,164,245,0.18)',
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
             title: (items) => items[0].raw.label || '',
-            label: (item) => ` ${item.raw.y.toFixed(1)}% avg capacity`,
+            label: (item) => ` ${item.raw.y.toFixed(1)}% capacity`,
           }
         }
       },
       scales: {
         x: {
-          type: 'linear',
-          min: open,
-          max: close,
-          grid: { color: '#222' },
+          type: 'linear', min: 7, max: 23,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
           ticks: {
-            color: '#888',
-            font: { size: 11 },
+            color: '#454660',
+            font: { size: 10, family: "'JetBrains Mono'" },
             stepSize: 1,
-            callback: (v) => Number.isInteger(v) ? formatHour(v) : '',
+            callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
           }
         },
         y: {
-          min: 0,
-          max: 110,
-          grid: { color: '#222' },
+          min: 0, max: 110,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
           ticks: {
-            color: '#888',
-            font: { size: 11 },
-            callback: (v) => `${v}%`,
-          },
-          title: { display: true, text: 'Average Capacity (%)', color: '#666', font: { size: 11 } },
+            color: '#454660',
+            font: { size: 10, family: "'JetBrains Mono'" },
+            callback: (v) => `${v}%`
+          }
         }
       }
     }
   });
 }
 
-// ── Boot ───────────────────────────────────────────────────────────────────
+// ── Data Warning ───────────────────────────────────────────────
+function showDataWarning(msg) {
+  const el = document.getElementById('data-warning');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ── Boot ───────────────────────────────────────────────────────
 async function init() {
-  updateBanner();
+  updateStatusBar();
 
-  const res = await fetch('data.json');
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch('data.json');
+    data = await res.json();
+  } catch (e) {
+    showDataWarning('⚠  Could not load gym data. The data file may be missing or the last scrape failed. Please check back later.');
+    return;
+  }
 
-  // Default date = today PT
-  const dateInput = document.getElementById('date-input');
-  dateInput.value = todayPT();
+  const predCount = Object.keys(data.predictions || {}).length;
+  if (predCount === 0) {
+    showDataWarning('⚠  Prediction data is unavailable — the last data collection may have failed or is still in progress.');
+  } else {
+    const builtAt = data.built_at ? new Date(data.built_at.replace(' PT', '')) : null;
+    if (builtAt && (Date.now() - builtAt.getTime()) / 3600000 > 48) {
+      showDataWarning(`⚠  Data may be outdated — last updated ${data.built_at}.`);
+    }
+  }
 
-  // Default day select = today
+  window._predData = data;
+
+  const today = todayPT();
+  document.getElementById('date-input').value = today;
+  document.getElementById('date-display').textContent = formatDateDisplay(today);
   const pt = getPTNow();
+  calYear = pt.getFullYear(); calMonth = pt.getMonth();
   document.getElementById('day-select').value = DAYS[pt.getDay()];
+  populateTimePicker(today);
 
-  // Populate time picker for today
-  populateTimePicker(dateInput.value);
-
-  // Wire up events
-  dateInput.addEventListener('change', () => {
-    populateTimePicker(dateInput.value);
-    updatePrediction(data);
+  // Calendar trigger
+  document.getElementById('date-trigger').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const calPopup = document.getElementById('cal-popup');
+    const timePopup = document.getElementById('time-popup');
+    const isOpen = calPopup.classList.contains('open');
+    timePopup.classList.remove('open');
+    if (!isOpen) { renderCalendar(); calPopup.classList.add('open'); }
+    else calPopup.classList.remove('open');
   });
-  document.getElementById('time-select').addEventListener('change', () => updatePrediction(data));
+
+  // Time trigger
+  document.getElementById('time-trigger').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const calPopup = document.getElementById('cal-popup');
+    const timePopup = document.getElementById('time-popup');
+    const isOpen = timePopup.classList.contains('open');
+    calPopup.classList.remove('open');
+    if (!isOpen) {
+      timePopup.classList.add('open');
+      const selEl = timePopup.querySelector('.time-option.selected');
+      if (selEl) setTimeout(() => selEl.scrollIntoView({ block: 'center' }), 10);
+    } else {
+      timePopup.classList.remove('open');
+    }
+  });
+
+  // Close on outside click
+  document.addEventListener('click', closeAllPickers);
+
   document.getElementById('day-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('semester-check').addEventListener('change', () => updateWeeklyChart(data));
 
-  // Initial renders
   updatePrediction(data);
-  initImportanceChart(data);
   updateWeeklyChart(data);
 
-  // Metrics caption
   const m = data.metrics;
-  document.getElementById('metrics-caption').textContent =
-    `Last trained: ${m.trained_at} on ${m.training_rows.toLocaleString()} rows — ` +
-    `MLP avg error: ±${m.mlp_mae}%,  RF avg error: ±${m.rf_mae}%`;
+  document.getElementById('metrics-block').innerHTML = `
+    <div class="metric-row"><span class="metric-key">TRAINED</span><span class="metric-val">${m.trained_at}</span></div>
+    <div class="metric-row"><span class="metric-key">TRAINING ROWS</span><span class="metric-val">${m.training_rows.toLocaleString()}</span></div>
+  `;
 
-  // Footer
-  document.getElementById('footer').textContent = `Data updated: ${data.built_at}`;
+  const endYear = data.built_at ? data.built_at.slice(0, 4) : '—';
+  document.getElementById('footer-end').textContent = endYear;
+  document.getElementById('footer-sub').textContent = `UPDATED ${data.built_at}`;
 }
 
 init();

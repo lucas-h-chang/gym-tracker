@@ -166,7 +166,7 @@ def compute_weekly_averages():
                 avg = pd.concat([avg, closing_row], ignore_index=True)
                 avg = avg.sort_values('hour_numeric')
 
-                key = f'{day}|{range_name}|{semester_only}'
+                key = f'{day}|{range_name}|{str(semester_only).lower()}'
                 result[key] = [
                     {'x': row['hour_numeric'], 'y': round(row['percent_full'], 1), 'label': row['hour_label']}
                     for _, row in avg.iterrows()
