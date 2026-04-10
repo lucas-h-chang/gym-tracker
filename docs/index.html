@@ -122,13 +122,6 @@
     .status-badge.open   .status-label { color: var(--open-color); }
     .status-badge.closed .status-label { color: var(--closed-color); }
 
-    .header-clock {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-    }
-
     /* ── Main ── */
     main {
       display: grid;
@@ -508,13 +501,6 @@
       border-top: 1px solid var(--border);
     }
 
-    .footer-l {
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }
-
     .footer-r {
       font-family: var(--mono);
       font-size: 10px;
@@ -527,56 +513,20 @@
 <div id="data-warning"></div>
 
 <header>
-  <div class="logo">RSF Crowd Level Predictor</div>
-  <div class="header-right">
-    <span class="header-clock" id="clock">--:--</span>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div class="logo">RSF Crowd Level Predictor</div>
+    <div class="status-badge" id="status-badge" style="display:inline-flex;">
+      <div class="status-dot"></div>
+      <span class="status-label" id="status-text">—</span>
+    </div>
   </div>
+  <div class="header-right"></div>
 </header>
 
 <main>
 
-  <!-- LEFT: Weekly Patterns -->
-  <div class="panel-left" id="section-weekly">
-    <div class="status-badge" id="status-badge" style="display:inline-flex; margin-bottom: 28px;">
-      <div class="status-dot"></div>
-      <span class="status-label" id="status-text">—</span>
-    </div>
-    <div class="eyebrow">HISTORICAL DATA</div>
-    <div class="section-title">Weekly Patterns</div>
-
-    <div class="chart-card">
-      <canvas id="weekly-chart" height="290"></canvas>
-      <div id="weekly-no-data" class="no-data-overlay">
-        No data for this combination —<br>try a wider range or uncheck Semester only.
-      </div>
-    </div>
-
-    <div class="controls">
-      <div class="field">
-        <label>DAY</label>
-        <select id="day-select">
-          <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-          <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>DATE RANGE</label>
-        <select id="range-select">
-          <option>Last week</option><option>Last month</option>
-          <option>Last 6 months</option><option>Last year</option><option>All time</option>
-        </select>
-      </div>
-    </div>
-    <div class="check-row">
-      <input type="checkbox" id="semester-check" checked>
-      <label for="semester-check">Semester only</label>
-      <span class="hint">— excludes breaks</span>
-    </div>
-    <div class="chart-caption" id="weekly-meta"></div>
-  </div>
-
-  <!-- RIGHT: Predictor -->
-  <div class="panel-right" id="section-predict">
+  <!-- LEFT: Predictor -->
+  <div class="panel-left" id="section-predict">
     <div class="pred-sticky">
       <div class="eyebrow">ML MODEL</div>
       <div class="section-title">Predict Occupancy</div>
@@ -627,10 +577,45 @@
     </div>
   </div>
 
+  <!-- RIGHT: Weekly Patterns -->
+  <div class="panel-right" id="section-weekly">
+    <div class="eyebrow">HISTORICAL DATA</div>
+    <div class="section-title">Weekly Patterns</div>
+
+    <div class="chart-card">
+      <canvas id="weekly-chart" height="290"></canvas>
+      <div id="weekly-no-data" class="no-data-overlay">
+        No data for this combination —<br>try a wider range or uncheck Semester only.
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="field">
+        <label>DAY</label>
+        <select id="day-select">
+          <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+          <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>DATE RANGE</label>
+        <select id="range-select">
+          <option>Last week</option><option>Last month</option>
+          <option>Last 6 months</option><option>Last year</option><option>All time</option>
+        </select>
+      </div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="semester-check" checked>
+      <label for="semester-check">Semester only</label>
+      <span class="hint">— excludes breaks</span>
+    </div>
+    <div class="chart-caption" id="weekly-meta"></div>
+  </div>
+
 </main>
 
 <footer>
-  <div class="footer-l">BERKELEY RSF &nbsp;·&nbsp; 2022–<span id="footer-end">—</span></div>
   <div class="footer-r" id="footer-sub"></div>
 </footer>
 
@@ -663,15 +648,6 @@ function todayPT() {
   const pt = getPTNow();
   return `${pt.getFullYear()}-${String(pt.getMonth()+1).padStart(2,'0')}-${String(pt.getDate()).padStart(2,'0')}`;
 }
-
-// ── Clock ──────────────────────────────────────────────────────
-function updateClock() {
-  const pt = getPTNow();
-  document.getElementById('clock').textContent =
-    `${String(pt.getHours()).padStart(2,'0')}:${String(pt.getMinutes()).padStart(2,'0')}`;
-}
-setInterval(updateClock, 15000);
-updateClock();
 
 // ── Status ─────────────────────────────────────────────────────
 function updateStatusBar() {
@@ -951,7 +927,8 @@ function updateWeeklyChart(data) {
         borderColor: '#93a4f5',
         backgroundColor: gradient,
         borderWidth: 1.5,
-        pointRadius: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
         pointBackgroundColor: '#93a4f5',
         pointBorderColor: 'transparent',
         tension: 0.35,
