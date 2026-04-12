@@ -28,6 +28,18 @@ jobs:
       - name: Run the scraper
         run: python scraper.py
 
+      - name: Install notification dependencies
+        run: pip install twilio supabase
+
+      - name: Run notifier
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python notifier.py
+
       - name: Build static site
         run: python build_static.py
 

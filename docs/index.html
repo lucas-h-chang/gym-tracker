@@ -77,8 +77,8 @@
       align-items: center;
       justify-content: center;
       gap: 7px;
-      height: 28px;
-      padding: 0 12px;
+      height: 40px;
+      padding: 0 20px;
       border-radius: 100px;
       border: 1px solid var(--border);
       background: transparent;
@@ -115,12 +115,12 @@
     }
 
     .status-label {
-      font-size: 10px;
+      font-size: 15px;
       font-weight: 600;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       color: var(--muted);
       transition: color 0.3s;
-      line-height: 28px;
+      line-height: 40px;
       display: block;
     }
     .status-badge.open   .status-label { color: var(--open-color); }
@@ -510,6 +510,298 @@
       font-size: 10px;
       color: var(--muted);
     }
+
+    /* ── Subscribe section ── */
+    #subscribe {
+      border-top: 1px solid var(--border);
+      padding: 64px 48px 72px;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .subscribe-eyebrow {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .subscribe-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .subscribe-sub {
+      font-size: 13px;
+      color: var(--sub);
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+
+    /* Phone input */
+    .phone-field {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .phone-field label {
+      display: block;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 7px;
+    }
+
+    .phone-input {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .phone-input::placeholder { color: var(--muted); }
+    .phone-input:focus { border-color: var(--accent); }
+
+    /* Notification cards */
+    .notif-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .notif-card:has(.notif-checkbox:checked) {
+      border-color: rgba(147, 164, 245, 0.22);
+    }
+
+    .notif-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px;
+      cursor: pointer;
+      user-select: none;
+      gap: 12px;
+    }
+
+    .notif-card-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .notif-checkbox {
+      accent-color: var(--accent);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .notif-card-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .notif-card-desc {
+      font-size: 11px;
+      color: var(--sub);
+      margin-top: 1px;
+    }
+
+    .notif-card-toggle {
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .notif-card-header:hover .notif-card-toggle { color: var(--sub); }
+
+    .notif-card-body {
+      padding: 0 18px 16px;
+      display: none;
+    }
+    .notif-card-body.open { display: block; }
+
+    .notif-card-body-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Window rows */
+    .window-rows { display: flex; flex-direction: column; gap: 8px; }
+
+    .window-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .window-row-day {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--sub);
+      width: 80px;
+      flex-shrink: 0;
+    }
+
+    .window-select {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 12px;
+      padding: 5px 8px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s;
+      min-width: 0;
+    }
+    .window-select:focus { border-color: var(--accent); }
+    .window-select option { background: #1c1d2e; }
+
+    .window-arrow {
+      color: var(--muted);
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .window-threshold-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+
+    .window-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 4px;
+      transition: color 0.12s;
+      flex-shrink: 0;
+    }
+    .window-remove:hover { color: var(--closed-color); }
+
+    .add-window-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--font);
+      padding: 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.15s;
+    }
+    .add-window-btn:hover { opacity: 0.75; }
+
+    /* Digest hour select */
+    .digest-hour-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .digest-hour-row label {
+      font-size: 12px;
+      color: var(--sub);
+    }
+
+    /* Subscribe button */
+    .subscribe-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 13px 24px;
+      background: var(--accent);
+      color: #09090f;
+      border: none;
+      border-radius: 100px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .subscribe-btn:hover:not(:disabled) { opacity: 0.85; }
+    .subscribe-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .unsubscribe-link {
+      display: none;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    .unsubscribe-link:hover { color: var(--closed-color); }
+
+    .subscribe-status {
+      display: none;
+      margin-top: 14px;
+      font-size: 12px;
+      font-family: var(--mono);
+      text-align: center;
+      padding: 10px 16px;
+      border-radius: 6px;
+    }
+    .subscribe-status.success {
+      color: var(--open-color);
+      background: rgba(110, 231, 183, 0.06);
+      border: 1px solid rgba(110, 231, 183, 0.15);
+    }
+    .subscribe-status.error {
+      color: var(--closed-color);
+      background: rgba(248, 113, 113, 0.06);
+      border: 1px solid rgba(248, 113, 113, 0.15);
+    }
+
+    /* Header subscribe button */
+    .header-subscribe-btn {
+      display: inline-flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--sub);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .header-subscribe-btn:hover {
+      border-color: rgba(147, 164, 245, 0.3);
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -517,14 +809,16 @@
 <div id="data-warning"></div>
 
 <header>
-  <div style="display:flex; align-items:center; gap:14px;">
+  <div style="display:flex; align-items:center; gap:28px;">
     <div class="logo">RSF Crowd Level Predictor</div>
     <div class="status-badge" id="status-badge" style="display:inline-flex;">
       <span class="status-label" id="status-text">—</span>
       <span class="status-label" id="live-count" style="margin-left:4px;"></span>
     </div>
   </div>
-  <div class="header-right"></div>
+  <div class="header-right">
+    <a href="#subscribe" class="header-subscribe-btn">Subscribe</a>
+  </div>
 </header>
 
 <main>
@@ -616,6 +910,83 @@
   </div>
 
 </main>
+
+<!-- ── Subscribe Section ── -->
+<section id="subscribe">
+  <div class="subscribe-eyebrow">GET RSF ALERTS</div>
+  <div class="subscribe-title">Stay in the loop.</div>
+  <p class="subscribe-sub">
+    Enter your number to subscribe. Already signed up? Enter it again to
+    edit your preferences or unsubscribe.
+  </p>
+
+  <div class="phone-field">
+    <label>PHONE NUMBER</label>
+    <input
+      class="phone-input"
+      id="sub-phone"
+      type="tel"
+      placeholder="+1 (555) 000-0000"
+      autocomplete="tel"
+    />
+  </div>
+
+  <!-- Window Threshold card -->
+  <div class="notif-card" id="card-window">
+    <div class="notif-card-header" onclick="toggleCard('window')">
+      <div class="notif-card-left">
+        <input type="checkbox" class="notif-checkbox" id="chk-window" checked onclick="event.stopPropagation()">
+        <div>
+          <div class="notif-card-name">Window Threshold</div>
+          <div class="notif-card-desc">Notify me when it drops below my target during my free hours</div>
+        </div>
+      </div>
+      <span class="notif-card-toggle" id="toggle-window">▼</span>
+    </div>
+    <div class="notif-card-body open" id="body-window">
+      <div class="notif-card-body-label">MY FREE WINDOWS</div>
+      <div class="window-rows" id="window-rows"></div>
+      <button class="add-window-btn" onclick="addWindowRow()">+ Add a day</button>
+    </div>
+  </div>
+
+  <!-- Quieter Than Usual card -->
+  <div class="notif-card" id="card-quiet">
+    <div class="notif-card-header">
+      <div class="notif-card-left">
+        <input type="checkbox" class="notif-checkbox" id="chk-quiet" checked>
+        <div>
+          <div class="notif-card-name">Quieter Than Usual</div>
+          <div class="notif-card-desc">When it's 25%+ emptier than the semester average for this time of day</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Daily Digest card -->
+  <div class="notif-card" id="card-digest">
+    <div class="notif-card-header" onclick="toggleCard('digest')">
+      <div class="notif-card-left">
+        <input type="checkbox" class="notif-checkbox" id="chk-digest" checked onclick="event.stopPropagation()">
+        <div>
+          <div class="notif-card-name">Daily Digest</div>
+          <div class="notif-card-desc">Morning summary: peak time, best windows, special academic periods</div>
+        </div>
+      </div>
+      <span class="notif-card-toggle" id="toggle-digest">▼</span>
+    </div>
+    <div class="notif-card-body open" id="body-digest">
+      <div class="digest-hour-row">
+        <label for="digest-hour-select">Send at</label>
+        <select class="window-select" id="digest-hour-select"></select>
+      </div>
+    </div>
+  </div>
+
+  <button class="subscribe-btn" id="sub-btn" onclick="handleSubscribe()">Subscribe</button>
+  <div class="unsubscribe-link" id="unsub-link" onclick="handleUnsubscribe()">Unsubscribe</div>
+  <div class="subscribe-status" id="sub-status"></div>
+</section>
 
 <footer>
   <div class="footer-r" id="footer-sub"></div>
@@ -979,8 +1350,8 @@ function updateWeeklyChart(data) {
           grid: { color: 'rgba(255,255,255,0.04)' },
           border: { display: false },
           ticks: {
-            color: '#454660',
-            font: { size: 10, family: "'JetBrains Mono'" },
+            color: '#8f92aa',
+            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
             stepSize: 1,
             callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
           }
@@ -990,8 +1361,8 @@ function updateWeeklyChart(data) {
           grid: { color: 'rgba(255,255,255,0.04)' },
           border: { display: false },
           ticks: {
-            color: '#454660',
-            font: { size: 10, family: "'JetBrains Mono'" },
+            color: '#8f92aa',
+            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
             callback: (v) => `${v}%`
           }
         }
@@ -1089,6 +1460,216 @@ async function init() {
 }
 
 init();
+
+// ── Subscribe ──────────────────────────────────────────────────
+
+// Replace these with your actual Supabase project values.
+// The anon key is safe to expose — it only allows SELECT on the
+// subscriber's own row (scoped by RLS to matching phone_number).
+const SUPABASE_URL     = 'https://njhxcwcvyorwqlfacnal.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_in5UWgu0ZCkriOULxBZ8GA_kKJ0qUvA';
+
+const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+function fmtHour(h) {
+  if (h === 0)  return '12 AM';
+  if (h === 12) return '12 PM';
+  return h > 12 ? `${h - 12} PM` : `${h} AM`;
+}
+
+// ── Digest hour picker ────────────────────────────────────────
+function buildDigestHourPicker(selectedHour = 6) {
+  const sel = document.getElementById('digest-hour-select');
+  sel.innerHTML = HOURS.map(h =>
+    `<option value="${h}"${h === selectedHour ? ' selected' : ''}>${fmtHour(h)}</option>`
+  ).join('');
+}
+buildDigestHourPicker();
+
+// ── Window rows ───────────────────────────────────────────────
+let windowRowId = 0;
+
+function hourOptions(selected) {
+  return HOURS.map(h =>
+    `<option value="${h}"${h === selected ? ' selected' : ''}>${fmtHour(h)}</option>`
+  ).join('');
+}
+
+function addWindowRow(day = 'Monday', start = 15, end = 18, threshold = 60) {
+  const id = ++windowRowId;
+  const container = document.getElementById('window-rows');
+  const row = document.createElement('div');
+  row.className = 'window-row';
+  row.dataset.rowId = id;
+  row.innerHTML = `
+    <select class="window-select" data-field="day">
+      ${DAYS_ORDER.map(d => `<option${d === day ? ' selected' : ''}>${d}</option>`).join('')}
+    </select>
+    <select class="window-select" data-field="start">${hourOptions(start)}</select>
+    <span class="window-arrow">→</span>
+    <select class="window-select" data-field="end">${hourOptions(end)}</select>
+    <span class="window-threshold-label">&lt;</span>
+    <select class="window-select" data-field="threshold">
+      ${[30,40,50,60,70,80].map(p =>
+        `<option value="${p}"${p === threshold ? ' selected' : ''}>${p}%</option>`
+      ).join('')}
+    </select>
+    <button class="window-remove" onclick="removeWindowRow(${id})" title="Remove">&times;</button>
+  `;
+  container.appendChild(row);
+}
+// Default starter row
+addWindowRow();
+
+function removeWindowRow(id) {
+  const row = document.querySelector(`[data-row-id="${id}"]`);
+  if (row) row.remove();
+}
+
+function collectWindows() {
+  const rows = document.querySelectorAll('#window-rows .window-row');
+  return Array.from(rows).map(row => ({
+    day_of_week:   row.querySelector('[data-field="day"]').value,
+    window_start:  parseInt(row.querySelector('[data-field="start"]').value),
+    window_end:    parseInt(row.querySelector('[data-field="end"]').value),
+    threshold_pct: parseInt(row.querySelector('[data-field="threshold"]').value),
+  }));
+}
+
+// ── Card expand / collapse ────────────────────────────────────
+function toggleCard(name) {
+  const body    = document.getElementById(`body-${name}`);
+  const toggle  = document.getElementById(`toggle-${name}`);
+  const isOpen  = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if (toggle) toggle.textContent = isOpen ? '▶' : '▼';
+}
+
+// ── Returning user prefill ────────────────────────────────────
+let _isReturningUser = false;
+
+async function prefillIfReturning(phone) {
+  if (!phone || phone.replace(/\D/g, '').length < 10) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/subscribers?phone_number=eq.${encodeURIComponent(phone)}&select=*`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    const rows = await res.json();
+    if (!rows || rows.length === 0) return;
+    const sub = rows[0];
+
+    document.getElementById('chk-window').checked  = sub.receive_window_threshold;
+    document.getElementById('chk-quiet').checked   = sub.receive_quiet;
+    document.getElementById('chk-digest').checked  = sub.receive_digest;
+    buildDigestHourPicker(sub.digest_hour ?? 6);
+
+    // Fetch their windows
+    const winRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/subscriber_windows?phone_number=eq.${encodeURIComponent(phone)}&select=*`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    const wins = await winRes.json();
+    document.getElementById('window-rows').innerHTML = '';
+    windowRowId = 0;
+    if (wins && wins.length > 0) {
+      wins.forEach(w => addWindowRow(w.day_of_week, w.window_start, w.window_end, w.threshold_pct));
+    } else {
+      addWindowRow();
+    }
+
+    _isReturningUser = true;
+    document.getElementById('sub-btn').textContent = 'Save Changes';
+    document.getElementById('unsub-link').style.display = 'block';
+  } catch (_) { /* ignore prefill errors */ }
+}
+
+document.getElementById('sub-phone').addEventListener('blur', e => {
+  prefillIfReturning(e.target.value.trim());
+});
+
+// ── Subscribe / save ──────────────────────────────────────────
+function setStatus(msg, type) {
+  const el = document.getElementById('sub-status');
+  el.textContent = msg;
+  el.className   = `subscribe-status ${type}`;
+  el.style.display = 'block';
+}
+
+async function handleSubscribe() {
+  const phone = document.getElementById('sub-phone').value.trim();
+  if (!phone) { setStatus('Please enter your phone number.', 'error'); return; }
+
+  const btn = document.getElementById('sub-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  try {
+    const payload = {
+      phone,
+      receive_window_threshold: document.getElementById('chk-window').checked,
+      receive_quiet:            document.getElementById('chk-quiet').checked,
+      receive_digest:           document.getElementById('chk-digest').checked,
+      digest_hour:              parseInt(document.getElementById('digest-hour-select').value),
+      windows:                  collectWindows(),
+      is_update:                _isReturningUser,
+    };
+
+    const res = await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${res.status}`);
+    }
+
+    setStatus(
+      _isReturningUser ? 'Preferences updated! Check your texts.' : "You're subscribed! Check your texts for confirmation.",
+      'success'
+    );
+    btn.textContent = _isReturningUser ? 'Save Changes' : 'Subscribe';
+  } catch (err) {
+    setStatus(`Error: ${err.message}`, 'error');
+    btn.textContent = _isReturningUser ? 'Save Changes' : 'Subscribe';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Unsubscribe ───────────────────────────────────────────────
+async function handleUnsubscribe() {
+  const phone = document.getElementById('sub-phone').value.trim();
+  if (!phone) { setStatus('Please enter your phone number.', 'error'); return; }
+  if (!confirm('Unsubscribe from all RSF alerts?')) return;
+
+  const link = document.getElementById('unsub-link');
+  link.textContent = 'Unsubscribing…';
+
+  try {
+    const res = await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unsubscribe', phone }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${res.status}`);
+    }
+
+    setStatus("You've been unsubscribed. You can re-subscribe anytime.", 'success');
+    link.style.display = 'none';
+    document.getElementById('sub-btn').textContent = 'Subscribe';
+    _isReturningUser = false;
+  } catch (err) {
+    setStatus(`Error: ${err.message}`, 'error');
+    link.textContent = 'Unsubscribe';
+  }
+}
 </script>
 </body>
 </html>
