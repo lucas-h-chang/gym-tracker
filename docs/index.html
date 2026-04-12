@@ -54,14 +54,14 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 48px;
-      height: 64px;
+      height: 88px;
       border-bottom: 1px solid var(--border);
     }
 
     .logo {
-      font-size: 18px;
+      font-size: 26px;
       font-weight: 700;
-      letter-spacing: -0.01em;
+      letter-spacing: -0.02em;
       color: var(--text);
     }
 
@@ -73,10 +73,12 @@
 
     /* Status pill */
     .status-badge {
-      display: flex;
+      display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 7px;
-      padding: 4px 12px;
+      height: 28px;
+      padding: 0 12px;
       border-radius: 100px;
       border: 1px solid var(--border);
       background: transparent;
@@ -118,6 +120,8 @@
       letter-spacing: 0.1em;
       color: var(--muted);
       transition: color 0.3s;
+      line-height: 28px;
+      display: block;
     }
     .status-badge.open   .status-label { color: var(--open-color); }
     .status-badge.closed .status-label { color: var(--closed-color); }
@@ -516,8 +520,8 @@
   <div style="display:flex; align-items:center; gap:14px;">
     <div class="logo">RSF Crowd Level Predictor</div>
     <div class="status-badge" id="status-badge" style="display:inline-flex;">
-      <div class="status-dot"></div>
       <span class="status-label" id="status-text">—</span>
+      <span class="status-label" id="live-count" style="margin-left:4px;"></span>
     </div>
   </div>
   <div class="header-right"></div>
@@ -654,8 +658,25 @@ function updateStatusBar() {
   const isOpen = pt.getHours() >= open && pt.getHours() < close;
   const badge = document.getElementById('status-badge');
   const label = document.getElementById('status-text');
+  const liveCount = document.getElementById('live-count');
   badge.className = `status-badge ${isOpen ? 'open' : 'closed'}`;
   label.textContent = isOpen ? 'OPEN' : 'CLOSED';
+
+  if (isOpen) {
+    liveCount.style.display = '';
+    fetch('https://api.density.io/v2/spaces/spc_863128347956216317/count', {
+      headers: { 'Authorization': 'Bearer shr_o69HxjQ0BYrY2FPD9HxdirhJYcFDCeRolEd744Uj88e' }
+    })
+      .then(r => r.json())
+      .then(d => {
+        const pct = Math.round((d.count / 150) * 100);
+        liveCount.textContent = `· ${d.count} people (${pct}%)`;
+      })
+      .catch(() => {});
+  } else {
+    liveCount.textContent = '';
+    liveCount.style.display = 'none';
+  }
 }
 
 // ── Number animation ───────────────────────────────────────────
