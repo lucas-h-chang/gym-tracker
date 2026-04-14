@@ -511,8 +511,19 @@
     #subscribe {
       border-top: 1px solid var(--border);
       padding: 64px 48px 72px;
-      max-width: 640px;
-      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 0 80px;
+      align-items: start;
+    }
+
+    .subscribe-left {
+      position: sticky;
+      top: 36px;
+    }
+
+    .subscribe-right {
+      min-width: 0;
     }
 
     .subscribe-eyebrow {
@@ -615,7 +626,7 @@
     .notif-card-desc {
       font-size: 11px;
       color: var(--sub);
-      margin-top: 1px;
+      margin-top: 4px;
     }
 
     .notif-card-toggle {
@@ -724,6 +735,40 @@
     .digest-hour-row label {
       font-size: 12px;
       color: var(--sub);
+    }
+
+    /* SMS preview bubble */
+    .notif-card-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      align-items: start;
+    }
+
+    .notif-card-preview {
+      padding: 16px 18px;
+      border-left: 1px solid var(--border);
+    }
+
+    .sms-preview-label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .sms-bubble {
+      display: inline-block;
+      max-width: 88%;
+      background: #1c1e33;
+      border-radius: 18px 18px 18px 4px;
+      padding: 10px 14px;
+      font-family: var(--font);
+      font-size: 12px;
+      color: #d0d2e8;
+      line-height: 1.55;
+      white-space: pre-wrap;
     }
 
     /* Subscribe button */
@@ -909,79 +954,108 @@
 
 <!-- ── Subscribe Section ── -->
 <section id="subscribe">
-  <div class="subscribe-eyebrow">GET RSF ALERTS</div>
-  <div class="subscribe-title">Stay in the loop.</div>
-  <p class="subscribe-sub">
-    Enter your number to subscribe. Already signed up? Enter it again to
-    edit your preferences or unsubscribe.
-  </p>
 
-  <div class="phone-field">
-    <label>PHONE NUMBER</label>
-    <input
-      class="phone-input"
-      id="sub-phone"
-      type="tel"
-      placeholder="+1 (555) 000-0000"
-      autocomplete="tel"
-    />
+  <!-- Left: intro + phone + button -->
+  <div class="subscribe-left">
+    <div class="section-title">Stay in the loop.</div>
+    <p class="subscribe-sub">
+      Enter your number to subscribe. Already signed up? Enter it again to
+      edit your preferences or unsubscribe.
+    </p>
+
+    <div class="phone-field">
+      <label>PHONE NUMBER</label>
+      <input
+        class="phone-input"
+        id="sub-phone"
+        type="tel"
+        placeholder="+1 (555) 000-0000"
+        autocomplete="tel"
+      />
+    </div>
+
+    <button class="subscribe-btn" id="sub-btn" onclick="handleSubscribe()">Subscribe</button>
+    <div class="unsubscribe-link" id="unsub-link" onclick="handleUnsubscribe()">Unsubscribe</div>
+    <div class="subscribe-status" id="sub-status"></div>
   </div>
 
-  <!-- Window Threshold card -->
-  <div class="notif-card" id="card-window">
-    <div class="notif-card-header" onclick="toggleCard('window')">
-      <div class="notif-card-left">
-        <input type="checkbox" class="notif-checkbox" id="chk-window" checked onclick="event.stopPropagation()">
+  <!-- Right: notification cards -->
+  <div class="subscribe-right">
+
+    <!-- Daily Digest card -->
+    <div class="notif-card" id="card-digest">
+      <div class="notif-card-inner">
         <div>
-          <div class="notif-card-name">Window Threshold</div>
-          <div class="notif-card-desc">Notify me when it drops below my target during my free hours</div>
+          <div class="notif-card-header">
+            <div class="notif-card-left">
+              <input type="checkbox" class="notif-checkbox" id="chk-digest" checked>
+              <div>
+                <div class="notif-card-name">Daily Digest</div>
+                <div class="notif-card-desc">Morning summary: peak time, best windows, special academic periods</div>
+              </div>
+            </div>
+          </div>
+          <div class="notif-card-body open" id="body-digest">
+            <div class="digest-hour-row">
+              <label for="digest-hour-select">Send at</label>
+              <select class="window-select" id="digest-hour-select"></select>
+            </div>
+          </div>
+        </div>
+        <div class="notif-card-preview">
+          <div class="sms-bubble">Good morning! RSF outlook for today (Monday):
+Peak: ~5 PM (92% full)
+Best times: 8–9 AM (~25%), 1–2 PM (~48%), 8–9 PM (~55%)</div>
         </div>
       </div>
-      <span class="notif-card-toggle" id="toggle-window">▼</span>
     </div>
-    <div class="notif-card-body open" id="body-window">
-      <div class="notif-card-body-label">MY FREE WINDOWS</div>
-      <div class="window-rows" id="window-rows"></div>
-      <button class="add-window-btn" onclick="addWindowRow()">+ Add a day</button>
-    </div>
-  </div>
 
-  <!-- Quieter Than Usual card -->
-  <div class="notif-card" id="card-quiet">
-    <div class="notif-card-header">
-      <div class="notif-card-left">
-        <input type="checkbox" class="notif-checkbox" id="chk-quiet" checked>
+    <!-- Quieter Than Usual card -->
+    <div class="notif-card" id="card-quiet">
+      <div class="notif-card-inner">
         <div>
-          <div class="notif-card-name">Quieter Than Usual</div>
-          <div class="notif-card-desc">When it's 25%+ emptier than the semester average for this time of day</div>
+          <div class="notif-card-header">
+            <div class="notif-card-left">
+              <input type="checkbox" class="notif-checkbox" id="chk-quiet" checked>
+              <div>
+                <div class="notif-card-name">Quieter Than Usual</div>
+                <div class="notif-card-desc">When it's 25%+ emptier than the semester average for this time of day</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="notif-card-preview">
+          <div class="sms-bubble">RSF is unusually quiet right now — 58% full vs. the typical 80% for Monday at this hour. Great time to go!</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Daily Digest card -->
-  <div class="notif-card" id="card-digest">
-    <div class="notif-card-header" onclick="toggleCard('digest')">
-      <div class="notif-card-left">
-        <input type="checkbox" class="notif-checkbox" id="chk-digest" checked onclick="event.stopPropagation()">
+    <!-- Window Threshold card -->
+    <div class="notif-card" id="card-window">
+      <div class="notif-card-inner">
         <div>
-          <div class="notif-card-name">Daily Digest</div>
-          <div class="notif-card-desc">Morning summary: peak time, best windows, special academic periods</div>
+          <div class="notif-card-header">
+            <div class="notif-card-left">
+              <input type="checkbox" class="notif-checkbox" id="chk-window" checked>
+              <div>
+                <div class="notif-card-name">Window Threshold</div>
+                <div class="notif-card-desc">Notify me when it drops below my target during my free hours</div>
+              </div>
+            </div>
+          </div>
+          <div class="notif-card-body open" id="body-window">
+            <div class="notif-card-body-label">MY FREE WINDOWS</div>
+            <div class="window-rows" id="window-rows"></div>
+            <button class="add-window-btn" onclick="addWindowRow()">+ Add a day</button>
+          </div>
+        </div>
+        <div class="notif-card-preview">
+          <div class="sms-bubble">RSF is at 55% right now — below your 60% target for this 3 PM–6 PM window. Good time to go!</div>
         </div>
       </div>
-      <span class="notif-card-toggle" id="toggle-digest">▼</span>
     </div>
-    <div class="notif-card-body open" id="body-digest">
-      <div class="digest-hour-row">
-        <label for="digest-hour-select">Send at</label>
-        <select class="window-select" id="digest-hour-select"></select>
-      </div>
-    </div>
-  </div>
 
-  <button class="subscribe-btn" id="sub-btn" onclick="handleSubscribe()">Subscribe</button>
-  <div class="unsubscribe-link" id="unsub-link" onclick="handleUnsubscribe()">Unsubscribe</div>
-  <div class="subscribe-status" id="sub-status"></div>
+  </div>
 </section>
 
 <footer>

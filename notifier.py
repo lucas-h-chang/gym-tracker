@@ -5,7 +5,7 @@ Runs after scraper.py in the GitHub Action every 15 minutes.
 
 import os
 import sqlite3
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -191,16 +191,23 @@ def compute_today_peak(date_str: str, open_hour: int, close_hour: int) -> tuple[
     return best_hour, round(best_pct)
 
 
-def compute_best_windows(date_str: str, open_hour: int, close_hour: int, n: int = 3) -> list:
-    """Return top n 1-hour slots with lowest MLP-predicted capacity."""
-    slots = []
-    for h in range(open_hour, close_hour):
-        _, mlp = predict(f"{date_str} {h:02d}:00")
-        slots.append((mlp, h))
-    slots.sort()
+def compute_best_windows(date_str: str, open_hour: int, close_hour: int) -> list:
+    """Return the best 1-hour slot from each third of the day (morning, afternoon, evening)."""
+    total = close_hour - open_hour
+    third = total // 3
+    boundaries = [
+        (open_hour,          open_hour + third),
+        (open_hour + third,  open_hour + 2 * third),
+        (open_hour + 2 * third, close_hour),
+    ]
     result = []
-    for pct, h in slots[:n]:
-        result.append(f"{fmt_hour(h)}–{fmt_hour(h + 1)} (~{round(pct)}%)")
+    for seg_start, seg_end in boundaries:
+        best_pct, best_hour = float("inf"), seg_start
+        for h in range(seg_start, seg_end):
+            _, mlp = predict(f"{date_str} {h:02d}:00")
+            if mlp < best_pct:
+                best_pct, best_hour = mlp, h
+        result.append(f"{fmt_hour(best_hour)}–{fmt_hour(best_hour + 1)} (~{round(best_pct)}%)")
     return result
 
 
