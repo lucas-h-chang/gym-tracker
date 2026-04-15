@@ -128,17 +128,50 @@
 
     /* ── Main ── */
     main {
-      display: grid;
-      grid-template-columns: 1fr 2fr;
+      display: flex;
+      flex-direction: column;
     }
 
-    .panel-left {
-      padding: 52px 52px 60px 48px;
-      border-right: 1px solid var(--border);
+    .section-pred {
+      padding: 52px 48px 56px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .panel-right {
-      padding: 52px 48px 60px 44px;
+    .section-weekly {
+      padding: 52px 48px 60px;
+    }
+
+    /* Prediction date nav */
+    .pred-nav {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .pred-nav-btn {
+      background: none;
+      border: 1px solid var(--border2);
+      color: var(--sub);
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
+      line-height: 1;
+    }
+    .pred-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .pred-nav-btn:disabled { opacity: 0.25; cursor: default; }
+
+    .pred-date-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      min-width: 180px;
     }
 
     /* ── Eyebrow + title ── */
@@ -257,240 +290,6 @@
       letter-spacing: 0.03em;
     }
 
-    /* ── Custom pickers ── */
-    .custom-picker-trigger {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 7px 0;
-      border-bottom: 1px solid var(--border2);
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text);
-      min-width: 130px;
-      transition: border-color 0.15s;
-      user-select: none;
-    }
-    .custom-picker-trigger:hover { border-bottom-color: var(--accent); }
-    .custom-picker-trigger svg { color: var(--muted); flex-shrink: 0; }
-
-    .picker-popup {
-      display: none;
-      position: absolute;
-      z-index: 100;
-      background: #13141f;
-      border: 1px solid var(--border2);
-      border-radius: 8px;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
-      margin-top: 4px;
-    }
-    .picker-popup.open { display: block; }
-
-    /* Calendar */
-    .cal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px 10px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .cal-nav {
-      background: none;
-      border: none;
-      color: var(--sub);
-      cursor: pointer;
-      padding: 4px 8px;
-      font-size: 14px;
-      border-radius: 4px;
-      transition: background 0.12s, color 0.12s;
-    }
-    .cal-nav:hover { background: var(--panel2); color: var(--text); }
-    .cal-month-label { color: var(--text); font-size: 13px; }
-
-    .cal-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 2px;
-      padding: 0 10px 12px;
-    }
-    .cal-dow {
-      text-align: center;
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      padding: 4px 0;
-    }
-    .cal-day {
-      text-align: center;
-      padding: 6px 4px;
-      font-size: 12px;
-      border-radius: 5px;
-      cursor: pointer;
-      color: var(--sub);
-      transition: background 0.1s, color 0.1s;
-    }
-    .cal-day:hover { background: var(--panel2); color: var(--text); }
-    .cal-day.today { color: var(--accent); font-weight: 600; }
-    .cal-day.selected { background: var(--accent); color: #09090f; font-weight: 700; }
-    .cal-day.selected:hover { background: var(--accent); }
-    .cal-day.empty { pointer-events: none; }
-    .cal-day.other-month { color: var(--muted); opacity: 0.4; }
-
-    /* Time picker */
-    .time-list {
-      max-height: 220px;
-      overflow-y: auto;
-      padding: 6px;
-      width: 140px;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border2) transparent;
-    }
-    .time-list::-webkit-scrollbar { width: 4px; }
-    .time-list::-webkit-scrollbar-track { background: transparent; }
-    .time-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-    .time-option {
-      padding: 7px 12px;
-      font-size: 13px;
-      font-family: var(--mono);
-      color: var(--sub);
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.1s, color 0.1s;
-    }
-    .time-option:hover { background: var(--panel2); color: var(--text); }
-    .time-option.selected { background: var(--accent); color: #09090f; font-weight: 600; }
-    .time-option.selected:hover { background: var(--accent); }
-
-
-
-    .pred-inputs {
-      display: flex;
-      gap: 24px;
-      margin-bottom: 28px;
-    }
-
-    /* Hero prediction card */
-    .pred-hero {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 26px 28px 22px;
-      margin-bottom: 10px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .pred-hero-label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    .pred-hero-number {
-      font-size: 64px;
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: -0.01em;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* Capacity bar */
-    .cap-track {
-      height: 3px;
-      background: var(--panel2);
-      border-radius: 2px;
-      margin-top: 18px;
-      overflow: hidden;
-    }
-    .cap-fill {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 2px;
-      width: 0%;
-      transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
-    }
-    .cap-fill.high { background: #fbbf24; }
-    .cap-fill.over { background: var(--closed-color); }
-
-    .pred-hero-sub {
-      font-size: 11px;
-      color: var(--sub);
-      margin-top: 10px;
-      line-height: 1.5;
-    }
-
-    /* Model cards */
-    .model-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 22px;
-    }
-
-    .model-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
-    }
-
-    .model-card-label {
-      font-size: 9px;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin-bottom: 8px;
-      white-space: nowrap;
-    }
-
-    .model-card-value {
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      color: var(--sub);
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .model-card-meta {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 6px;
-    }
-
-    /* Metrics table */
-    .metrics-block {
-      border-top: 1px solid var(--border);
-      padding-top: 18px;
-    }
-
-    .metric-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 5px 0;
-    }
-
-    .metric-key {
-      font-size: 10px;
-      font-weight: 400;
-      letter-spacing: 0.04em;
-      color: var(--muted);
-    }
-
-    .metric-val {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--sub);
-    }
 
     /* ── Footer ── */
     footer {
@@ -505,343 +304,6 @@
       font-family: var(--mono);
       font-size: 10px;
       color: var(--muted);
-    }
-
-    /* ── Subscribe section ── */
-    #subscribe {
-      border-top: 1px solid var(--border);
-      padding: 64px 48px 72px;
-      display: grid;
-      grid-template-columns: 1fr 2fr;
-      gap: 0 80px;
-      align-items: start;
-    }
-
-    .subscribe-left {
-      position: sticky;
-      top: 36px;
-    }
-
-    .subscribe-right {
-      min-width: 0;
-    }
-
-    .subscribe-eyebrow {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.18em;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-
-    .subscribe-title {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    .subscribe-sub {
-      font-size: 13px;
-      color: var(--sub);
-      line-height: 1.6;
-      margin-bottom: 28px;
-    }
-
-    /* Phone input */
-    .phone-field {
-      position: relative;
-      margin-bottom: 20px;
-    }
-
-    .phone-field label {
-      display: block;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-      margin-bottom: 7px;
-    }
-
-    .phone-input {
-      width: 100%;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 14px;
-      padding: 12px 16px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .phone-input::placeholder { color: var(--muted); }
-    .phone-input:focus { border-color: var(--accent); }
-
-    /* Notification cards */
-    .notif-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      overflow: hidden;
-      transition: border-color 0.15s;
-    }
-    .notif-card:has(.notif-checkbox:checked) {
-      border-color: rgba(147, 164, 245, 0.22);
-    }
-
-    .notif-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 18px;
-      cursor: pointer;
-      user-select: none;
-      gap: 12px;
-    }
-
-    .notif-card-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-    }
-
-    .notif-checkbox {
-      accent-color: var(--accent);
-      width: 14px;
-      height: 14px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .notif-card-name {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .notif-card-desc {
-      font-size: 11px;
-      color: var(--sub);
-      margin-top: 4px;
-    }
-
-    .notif-card-toggle {
-      font-size: 11px;
-      color: var(--muted);
-      flex-shrink: 0;
-      transition: color 0.15s;
-    }
-    .notif-card-header:hover .notif-card-toggle { color: var(--sub); }
-
-    .notif-card-body {
-      padding: 0 18px 16px;
-      display: none;
-    }
-    .notif-card-body.open { display: block; }
-
-    .notif-card-body-label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-
-    /* Window rows */
-    .window-rows { display: flex; flex-direction: column; gap: 8px; }
-
-    .window-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .window-row-day {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--sub);
-      width: 80px;
-      flex-shrink: 0;
-    }
-
-    .window-select {
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 12px;
-      padding: 5px 8px;
-      cursor: pointer;
-      outline: none;
-      transition: border-color 0.15s;
-      min-width: 0;
-    }
-    .window-select:focus { border-color: var(--accent); }
-    .window-select option { background: #1c1d2e; }
-
-    .window-arrow {
-      color: var(--muted);
-      font-size: 11px;
-      flex-shrink: 0;
-    }
-
-    .window-threshold-label {
-      font-size: 11px;
-      color: var(--muted);
-      margin-left: 4px;
-      flex-shrink: 0;
-    }
-
-    .window-remove {
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 16px;
-      line-height: 1;
-      padding: 0 4px;
-      transition: color 0.12s;
-      flex-shrink: 0;
-    }
-    .window-remove:hover { color: var(--closed-color); }
-
-    .add-window-btn {
-      background: none;
-      border: none;
-      color: var(--accent);
-      cursor: pointer;
-      font-size: 12px;
-      font-family: var(--font);
-      padding: 6px 0;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: opacity 0.15s;
-    }
-    .add-window-btn:hover { opacity: 0.75; }
-
-    /* Digest hour select */
-    .digest-hour-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .digest-hour-row label {
-      font-size: 12px;
-      color: var(--sub);
-    }
-
-    /* SMS preview bubble */
-    .notif-card-inner {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
-      align-items: start;
-    }
-
-    .notif-card-preview {
-      padding: 16px 18px;
-      border-left: 1px solid var(--border);
-    }
-
-    .sms-preview-label {
-      font-size: 9px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .sms-bubble {
-      display: inline-block;
-      max-width: 88%;
-      background: #1c1e33;
-      border-radius: 18px 18px 18px 4px;
-      padding: 10px 14px;
-      font-family: var(--font);
-      font-size: 12px;
-      color: #d0d2e8;
-      line-height: 1.55;
-      white-space: pre-wrap;
-    }
-
-    /* Subscribe button */
-    .subscribe-btn {
-      width: 100%;
-      margin-top: 20px;
-      padding: 13px 24px;
-      background: var(--accent);
-      color: #09090f;
-      border: none;
-      border-radius: 100px;
-      font-family: var(--font);
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .subscribe-btn:hover:not(:disabled) { opacity: 0.85; }
-    .subscribe-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-    .unsubscribe-link {
-      display: none;
-      text-align: center;
-      margin-top: 12px;
-      font-size: 12px;
-      color: var(--muted);
-      cursor: pointer;
-      transition: color 0.15s;
-    }
-    .unsubscribe-link:hover { color: var(--closed-color); }
-
-    .subscribe-status {
-      display: none;
-      margin-top: 14px;
-      font-size: 12px;
-      font-family: var(--mono);
-      text-align: center;
-      padding: 10px 16px;
-      border-radius: 6px;
-    }
-    .subscribe-status.success {
-      color: var(--open-color);
-      background: rgba(110, 231, 183, 0.06);
-      border: 1px solid rgba(110, 231, 183, 0.15);
-    }
-    .subscribe-status.error {
-      color: var(--closed-color);
-      background: rgba(248, 113, 113, 0.06);
-      border: 1px solid rgba(248, 113, 113, 0.15);
-    }
-
-    /* Header subscribe button */
-    .header-subscribe-btn {
-      display: inline-flex;
-      align-items: center;
-      height: 36px;
-      padding: 0 16px;
-      border-radius: 100px;
-      border: 1px solid var(--border2);
-      background: transparent;
-      color: var(--sub);
-      font-family: var(--font);
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      cursor: pointer;
-      text-decoration: none;
-      transition: border-color 0.15s, color 0.15s;
-    }
-    .header-subscribe-btn:hover {
-      border-color: rgba(147, 164, 245, 0.3);
-      color: var(--accent);
     }
   </style>
 </head>
@@ -858,65 +320,29 @@
     </div>
   </div>
   <div class="header-right">
-    <a href="#subscribe" class="header-subscribe-btn">Subscribe</a>
   </div>
 </header>
 
 <main>
 
-  <!-- LEFT: Predictor -->
-  <div class="panel-left" id="section-predict">
-    <div class="pred-sticky">
-      <div class="section-title">Predict Occupancy</div>
+  <!-- PREDICTION CHART: full-width -->
+  <div class="section-pred" id="section-predict">
+    <div class="section-title">Predicted Occupancy</div>
 
-      <div class="pred-inputs">
-        <div class="field">
-          <label>DATE</label>
-          <div class="custom-picker-trigger" id="date-trigger">
-            <span id="date-display">—</span>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 5h10" stroke="currentColor" stroke-width="1.2"/><path d="M4 1v2M8 1v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-          </div>
-          <input type="hidden" id="date-input">
-          <div class="picker-popup" id="cal-popup"></div>
-        </div>
-        <div class="field">
-          <label>TIME</label>
-          <div class="custom-picker-trigger" id="time-trigger">
-            <span id="time-display">—</span>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.5V5l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-          </div>
-          <input type="hidden" id="time-select">
-          <div class="picker-popup" id="time-popup"></div>
-        </div>
-      </div>
-
-      <div class="pred-hero">
-        <div class="pred-hero-label">AVERAGE PREDICTION</div>
-        <div class="pred-hero-number" id="avg-value">—</div>
-        <div class="cap-track">
-          <div class="cap-fill" id="capacity-fill"></div>
-        </div>
-      </div>
-
-      <div class="model-row">
-        <div class="model-card">
-          <div class="model-card-label">NEURAL NETWORK</div>
-          <div class="model-card-value" id="mlp-value">—</div>
-          <div class="model-card-meta" id="mlp-sub">PyTorch MLP</div>
-        </div>
-        <div class="model-card">
-          <div class="model-card-label">RANDOM FOREST</div>
-          <div class="model-card-value" id="rf-value">—</div>
-          <div class="model-card-meta" id="rf-sub">100 trees</div>
-        </div>
-      </div>
-
-      <div class="metrics-block" id="metrics-block"></div>
+    <div class="pred-nav">
+      <button class="pred-nav-btn" id="pred-prev">&#8592;</button>
+      <span class="pred-date-label" id="pred-date-label">—</span>
+      <button class="pred-nav-btn" id="pred-next">&#8594;</button>
     </div>
+
+    <div class="chart-card">
+      <canvas id="pred-chart" height="290"></canvas>
+    </div>
+    <div class="chart-caption" id="pred-caption"></div>
   </div>
 
-  <!-- RIGHT: Weekly Patterns -->
-  <div class="panel-right" id="section-weekly">
+  <!-- WEEKLY PATTERNS: full-width -->
+  <div class="section-weekly" id="section-weekly">
     <div class="section-title">Weekly Patterns</div>
 
     <div class="chart-card">
@@ -952,114 +378,8 @@
 
 </main>
 
-<!-- ── Subscribe Section ── -->
-<section id="subscribe">
-
-  <!-- Left: intro + phone + button -->
-  <div class="subscribe-left">
-    <div class="section-title">Stay in the loop.</div>
-    <p class="subscribe-sub">
-      Enter your number to subscribe. Already signed up? Enter it again to
-      edit your preferences or unsubscribe.
-    </p>
-
-    <div class="phone-field">
-      <label>PHONE NUMBER</label>
-      <input
-        class="phone-input"
-        id="sub-phone"
-        type="tel"
-        placeholder="+1 (555) 000-0000"
-        autocomplete="tel"
-      />
-    </div>
-
-    <button class="subscribe-btn" id="sub-btn" onclick="handleSubscribe()">Subscribe</button>
-    <div class="unsubscribe-link" id="unsub-link" onclick="handleUnsubscribe()">Unsubscribe</div>
-    <div class="subscribe-status" id="sub-status"></div>
-  </div>
-
-  <!-- Right: notification cards -->
-  <div class="subscribe-right">
-
-    <!-- Daily Digest card -->
-    <div class="notif-card" id="card-digest">
-      <div class="notif-card-inner">
-        <div>
-          <div class="notif-card-header">
-            <div class="notif-card-left">
-              <input type="checkbox" class="notif-checkbox" id="chk-digest" checked>
-              <div>
-                <div class="notif-card-name">Daily Digest</div>
-                <div class="notif-card-desc">Morning summary: peak time, best windows, special academic periods</div>
-              </div>
-            </div>
-          </div>
-          <div class="notif-card-body open" id="body-digest">
-            <div class="digest-hour-row">
-              <label for="digest-hour-select">Send at</label>
-              <select class="window-select" id="digest-hour-select"></select>
-            </div>
-          </div>
-        </div>
-        <div class="notif-card-preview">
-          <div class="sms-bubble">Good morning! RSF outlook for today (Monday):
-Peak: ~5 PM (92% full)
-Best times: 8–9 AM (~25%), 1–2 PM (~48%), 8–9 PM (~55%)</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quieter Than Usual card -->
-    <div class="notif-card" id="card-quiet">
-      <div class="notif-card-inner">
-        <div>
-          <div class="notif-card-header">
-            <div class="notif-card-left">
-              <input type="checkbox" class="notif-checkbox" id="chk-quiet" checked>
-              <div>
-                <div class="notif-card-name">Quieter Than Usual</div>
-                <div class="notif-card-desc">When it's 25%+ emptier than the semester average for this time of day</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="notif-card-preview">
-          <div class="sms-bubble">RSF is unusually quiet right now — 58% full vs. the typical 80% for Monday at this hour. Great time to go!</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Window Threshold card -->
-    <div class="notif-card" id="card-window">
-      <div class="notif-card-inner">
-        <div>
-          <div class="notif-card-header">
-            <div class="notif-card-left">
-              <input type="checkbox" class="notif-checkbox" id="chk-window" checked>
-              <div>
-                <div class="notif-card-name">Window Threshold</div>
-                <div class="notif-card-desc">Notify me when it drops below my target during my free hours</div>
-              </div>
-            </div>
-          </div>
-          <div class="notif-card-body open" id="body-window">
-            <div class="notif-card-body-label">MY FREE WINDOWS</div>
-            <div class="window-rows" id="window-rows"></div>
-            <button class="add-window-btn" onclick="addWindowRow()">+ Add a day</button>
-          </div>
-        </div>
-        <div class="notif-card-preview">
-          <div class="sms-bubble">RSF is at 55% right now — below your 60% target for this 3 PM–6 PM window. Good time to go!</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</section>
-
 <footer>
-  <div class="footer-r" id="footer-sub"></div>
+  <div class="footer-r" id="footer-built"></div>
 </footer>
 
 <script>
@@ -1120,191 +440,205 @@ function updateStatusBar() {
   }
 }
 
-// ── Number animation ───────────────────────────────────────────
-function animateValue(el, from, to, suffix = '%') {
-  if (typeof from !== 'number' || isNaN(from)) from = 0;
-  const duration = 480;
-  const startTime = performance.now();
-  function tick(now) {
-    const t = Math.min((now - startTime) / duration, 1);
-    const ease = 1 - Math.pow(1 - t, 3);
-    el.textContent = Math.round(from + (to - from) * ease) + suffix;
-    if (t < 1) requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
+// ── Prediction Chart ───────────────────────────────────────────
+let predChart = null;
+let predDate  = '';
+
+function shiftDate(dateStr, delta) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// ── Custom Pickers ─────────────────────────────────────────────
-
-let calYear, calMonth;
-
-function closeAllPickers() {
-  document.getElementById('cal-popup').classList.remove('open');
-  document.getElementById('time-popup').classList.remove('open');
-}
-
-// Calendar
-function renderCalendar() {
-  const popup = document.getElementById('cal-popup');
-  const selectedVal = document.getElementById('date-input').value;
+function formatPredLabel(dateStr) {
   const today = todayPT();
-  const firstDay = new Date(calYear, calMonth, 1).getDay();
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const monthNames = ['January','February','March','April','May','June',
-                      'July','August','September','October','November','December'];
-
-  let html = `<div class="cal-header">
-    <button class="cal-nav" id="cal-prev">&#8592;</button>
-    <span class="cal-month-label">${monthNames[calMonth]} ${calYear}</span>
-    <button class="cal-nav" id="cal-next">&#8594;</button>
-  </div><div class="cal-grid">`;
-
-  for (const d of ['Su','Mo','Tu','We','Th','Fr','Sa']) {
-    html += `<div class="cal-dow">${d}</div>`;
-  }
-  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const val = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const cls = [
-      'cal-day',
-      val === selectedVal ? 'selected' : '',
-      val === today ? 'today' : '',
-    ].filter(Boolean).join(' ');
-    html += `<div class="${cls}" data-val="${val}">${d}</div>`;
-  }
-  html += `</div>`;
-  popup.innerHTML = html;
-
-  popup.querySelector('#cal-prev').addEventListener('click', (e) => {
-    e.stopPropagation();
-    calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
-    renderCalendar();
-  });
-  popup.querySelector('#cal-next').addEventListener('click', (e) => {
-    e.stopPropagation();
-    calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
-    renderCalendar();
-  });
-  popup.querySelectorAll('.cal-day[data-val]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const val = el.dataset.val;
-      document.getElementById('date-input').value = val;
-      document.getElementById('date-display').textContent = formatDateDisplay(val);
-      closeAllPickers();
-      populateTimePicker(val);
-      if (window._predData) updatePrediction(window._predData);
-    });
-  });
-}
-
-function formatDateDisplay(val) {
-  const [y, m, d] = val.split('-');
+  if (dateStr === today) return 'Today';
+  const d = new Date(dateStr + 'T12:00:00');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
+  return `${DAYS[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 }
 
-// Time picker
-function populateTimePicker(dateStr) {
+function buildPredPoints(data, dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   const { open, close } = getOpenHours(d.getDay());
-  const prevVal = document.getElementById('time-select').value;
-
-  // Build time slots
-  const slots = [];
+  const points = [];
   for (let h = open; h < close; h++) {
     for (const m of [0, 15, 30, 45]) {
-      slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+      const key = `${dateStr}_${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      const pred = data.predictions[key];
+      if (!pred) continue;
+      points.push({ x: h + m / 60, y: Math.round((pred[0] + pred[1]) / 2 * 10) / 10, label: formatTime(h, m) });
     }
   }
-
-  // Pick best default
-  let selected = slots.includes(prevVal) ? prevVal : null;
-  if (!selected) {
-    const pt = getPTNow();
-    const cur = pt.getHours() * 60 + pt.getMinutes();
-    let bestDiff = Infinity;
-    for (const s of slots) {
-      const [h, m] = s.split(':').map(Number);
-      const diff = Math.abs(h * 60 + m - cur);
-      if (diff < bestDiff) { bestDiff = diff; selected = s; }
-    }
-  }
-
-  document.getElementById('time-select').value = selected;
-  document.getElementById('time-display').textContent = formatTime(...selected.split(':').map(Number));
-
-  // Render popup list
-  const popup = document.getElementById('time-popup');
-  popup.innerHTML = `<div class="time-list">${
-    slots.map(s => `<div class="time-option${s === selected ? ' selected' : ''}" data-val="${s}">${
-      formatTime(...s.split(':').map(Number))
-    }</div>`).join('')
-  }</div>`;
-
-  popup.querySelectorAll('.time-option').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const val = el.dataset.val;
-      document.getElementById('time-select').value = val;
-      document.getElementById('time-display').textContent = formatTime(...val.split(':').map(Number));
-      popup.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
-      el.classList.add('selected');
-      closeAllPickers();
-      if (window._predData) updatePrediction(window._predData);
-    });
-  });
-
-  // Scroll selected into view when popup opens
-  const listEl = popup.querySelector('.time-list');
-  const selEl = popup.querySelector('.time-option.selected');
-  if (selEl && listEl) {
-    setTimeout(() => {
-      selEl.scrollIntoView({ block: 'center' });
-    }, 10);
-  }
+  // closing zero
+  points.push({ x: close, y: 0, label: formatTime(close, 0) });
+  return points;
 }
 
-// ── Prediction ─────────────────────────────────────────────────
-let lastAvg = null;
+// Custom plugin: draws a vertical "Now" line
+const nowLinePlugin = {
+  id: 'nowLine',
+  afterDatasetsDraw(chart) {
+    const opts = chart.options.plugins.nowLine;
+    if (!opts?.show || opts.value == null) return;
+    const { ctx, chartArea, scales } = chart;
+    const x = scales.x.getPixelForValue(opts.value);
+    if (x < chartArea.left || x > chartArea.right) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(147, 164, 245, 0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, chartArea.top);
+    ctx.lineTo(x, chartArea.bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(147, 164, 245, 0.65)';
+    ctx.font = `500 10px 'Inter', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Now', x, chartArea.top - 6);
+    ctx.restore();
+  }
+};
+Chart.register(nowLinePlugin);
 
-function updatePrediction(data) {
-  const date = document.getElementById('date-input').value;
-  const time = document.getElementById('time-select').value;
-  const pred = data.predictions[`${date}_${time}`];
+function updatePredChart(data) {
+  const today    = todayPT();
+  const isToday  = predDate === today;
+  const pt       = getPTNow();
+  const nowVal   = pt.getHours() + pt.getMinutes() / 60;
 
-  const avgEl   = document.getElementById('avg-value');
-  const fillEl  = document.getElementById('capacity-fill');
-  const mlpEl   = document.getElementById('mlp-value');
-  const rfEl    = document.getElementById('rf-value');
-  const mlpSub  = document.getElementById('mlp-sub');
-  const rfSub   = document.getElementById('rf-sub');
+  const allPredPoints = buildPredPoints(data, predDate);
+  // On today: clip actual to <= now, clip predicted to >= now
+  const actualPoints = isToday
+    ? (data.today_actuals || []).filter(p => p.x <= nowVal)
+    : [];
+  let predPoints = isToday
+    ? allPredPoints.filter(p => p.x >= nowVal)
+    : allPredPoints;
 
-  if (!pred) {
-    avgEl.textContent = '—';
-    fillEl.style.width = '0%';
-    fillEl.className = 'cap-fill';
-    mlpEl.textContent = '—'; rfEl.textContent = '—';
-    mlpSub.textContent = 'PyTorch MLP'; rfSub.textContent = '100 trees';
-    lastAvg = null;
+  // Blend base ML with similarity signal for today's remaining predictions
+  if (isToday && data.today_blend_weight > 0 && data.today_similarity_preds?.length) {
+    const w      = data.today_blend_weight;
+    const simMap = {};
+    data.today_similarity_preds.forEach(p => { simMap[p.x] = p.y; });
+    predPoints = predPoints.map(p => {
+      const simY = simMap[p.x];
+      if (simY == null) return p;
+      return { ...p, y: Math.round(((1 - w) * p.y + w * simY) * 10) / 10 };
+    });
+  }
+
+  // Nav buttons
+  const minDate = today;
+  const maxDate = shiftDate(today, 179);
+  document.getElementById('pred-prev').disabled = predDate <= minDate;
+  document.getElementById('pred-next').disabled = predDate >= maxDate;
+  document.getElementById('pred-date-label').textContent = formatPredLabel(predDate);
+
+  // Closed zones for selected day
+  const d = new Date(predDate + 'T12:00:00');
+  const closedRanges = getClosedRanges(DAYS[d.getDay()]);
+
+  // Caption
+  const avgErr = ((data.metrics.rf_mae + data.metrics.mlp_mae) / 2).toFixed(1);
+  document.getElementById('pred-caption').textContent = `Avg model error ±${avgErr}%`;
+
+  if (predChart) {
+    predChart.data.datasets[0].data = actualPoints;
+    predChart.data.datasets[1].data = predPoints;
+    predChart.options.plugins.nowLine.show  = isToday;
+    predChart.options.plugins.nowLine.value = nowVal;
+    predChart.options.plugins.closedZone.ranges = closedRanges;
+    predChart.update();
     return;
   }
 
-  const [rf, mlp] = pred;
-  const avg = Math.round((mlp + rf) / 2);
+  const ctx = document.getElementById('pred-chart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 290);
+  gradient.addColorStop(0, 'rgba(147, 164, 245, 0.2)');
+  gradient.addColorStop(1, 'rgba(147, 164, 245, 0)');
 
-  animateValue(avgEl, lastAvg !== null ? lastAvg : avg, avg);
-  lastAvg = avg;
-
-  const pct = Math.min(avg, 100);
-  fillEl.style.width = `${pct}%`;
-  fillEl.className = `cap-fill${avg >= 90 ? ' over' : avg >= 70 ? ' high' : ''}`;
-
-  mlpEl.textContent = `${mlp}%`;
-  rfEl.textContent  = `${rf}%`;
-  mlpSub.textContent = mlp >= 100 ? 'At capacity' : `±${data.metrics.mlp_mae}% avg err`;
-  rfSub.textContent  = rf  >= 100 ? 'At capacity' : `±${data.metrics.rf_mae}% avg err`;
-
+  predChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Actual',
+          data: actualPoints,
+          borderColor: '#93a4f5',
+          backgroundColor: gradient,
+          borderWidth: 1.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#93a4f5',
+          pointBorderColor: 'transparent',
+          tension: 0.35,
+          fill: true,
+          order: 1,
+        },
+        {
+          label: 'Predicted',
+          data: predPoints,
+          borderColor: '#9ca3af',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [5, 4],
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#9ca3af',
+          pointBorderColor: 'transparent',
+          tension: 0.35,
+          fill: false,
+          order: 2,
+        }
+      ]
+    },
+    options: {
+      parsing: false,
+      animation: { duration: 320 },
+      plugins: {
+        nowLine:    { show: isToday, value: nowVal },
+        closedZone: { ranges: closedRanges },
+        legend:     { display: false },
+        tooltip: {
+          backgroundColor: '#1a1b2e',
+          titleColor: '#8f92aa',
+          bodyColor: '#e2e3ee',
+          borderColor: 'rgba(147,164,245,0.18)',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            title: (items) => items[0].raw.label || '',
+            label: (item) => ` ${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear', min: 7, max: 23,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+          ticks: {
+            color: '#8f92aa',
+            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
+            stepSize: 1,
+            callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
+          }
+        },
+        y: {
+          min: 0, max: 110,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+          ticks: {
+            color: '#8f92aa',
+            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
+            callback: (v) => `${v}%`
+          }
+        }
+      }
+    }
+  });
 }
 
 // ── Weekly Chart ───────────────────────────────────────────────
@@ -1471,275 +805,32 @@ async function init() {
     }
   }
 
-  window._predData = data;
-
   const today = todayPT();
-  document.getElementById('date-input').value = today;
-  document.getElementById('date-display').textContent = formatDateDisplay(today);
   const pt = getPTNow();
-  calYear = pt.getFullYear(); calMonth = pt.getMonth();
+  predDate = today;
   document.getElementById('day-select').value = DAYS[pt.getDay()];
-  populateTimePicker(today);
 
-  // Calendar trigger
-  document.getElementById('date-trigger').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const calPopup = document.getElementById('cal-popup');
-    const timePopup = document.getElementById('time-popup');
-    const isOpen = calPopup.classList.contains('open');
-    timePopup.classList.remove('open');
-    if (!isOpen) { renderCalendar(); calPopup.classList.add('open'); }
-    else calPopup.classList.remove('open');
+  document.getElementById('pred-prev').addEventListener('click', () => {
+    predDate = shiftDate(predDate, -1);
+    updatePredChart(data);
   });
-
-  // Time trigger
-  document.getElementById('time-trigger').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const calPopup = document.getElementById('cal-popup');
-    const timePopup = document.getElementById('time-popup');
-    const isOpen = timePopup.classList.contains('open');
-    calPopup.classList.remove('open');
-    if (!isOpen) {
-      timePopup.classList.add('open');
-      const selEl = timePopup.querySelector('.time-option.selected');
-      if (selEl) setTimeout(() => selEl.scrollIntoView({ block: 'center' }), 10);
-    } else {
-      timePopup.classList.remove('open');
-    }
+  document.getElementById('pred-next').addEventListener('click', () => {
+    predDate = shiftDate(predDate, 1);
+    updatePredChart(data);
   });
-
-  // Close on outside click
-  document.addEventListener('click', closeAllPickers);
 
   document.getElementById('day-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('semester-check').addEventListener('change', () => updateWeeklyChart(data));
 
-  updatePrediction(data);
+  updatePredChart(data);
   updateWeeklyChart(data);
 
-  const m = data.metrics;
-  document.getElementById('metrics-block').innerHTML = `
-    <div class="metric-row"><span class="metric-key">TRAINED</span><span class="metric-val">${m.trained_at}</span></div>
-    <div class="metric-row"><span class="metric-key">TRAINING ROWS</span><span class="metric-val">${m.training_rows.toLocaleString()}</span></div>
-  `;
-
-  const endYear = data.built_at ? data.built_at.slice(0, 4) : '—';
-  document.getElementById('footer-end').textContent = endYear;
-  document.getElementById('footer-sub').textContent = `UPDATED ${data.built_at}`;
+  document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
 }
 
 init();
 
-// ── Subscribe ──────────────────────────────────────────────────
-
-// Replace these with your actual Supabase project values.
-// The anon key is safe to expose — it only allows SELECT on the
-// subscriber's own row (scoped by RLS to matching phone_number).
-const SUPABASE_URL     = 'https://njhxcwcvyorwqlfacnal.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_in5UWgu0ZCkriOULxBZ8GA_kKJ0qUvA';
-
-const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-function fmtHour(h) {
-  if (h === 0)  return '12 AM';
-  if (h === 12) return '12 PM';
-  return h > 12 ? `${h - 12} PM` : `${h} AM`;
-}
-
-// ── Digest hour picker ────────────────────────────────────────
-function buildDigestHourPicker(selectedHour = 6) {
-  const sel = document.getElementById('digest-hour-select');
-  sel.innerHTML = HOURS.map(h =>
-    `<option value="${h}"${h === selectedHour ? ' selected' : ''}>${fmtHour(h)}</option>`
-  ).join('');
-}
-buildDigestHourPicker();
-
-// ── Window rows ───────────────────────────────────────────────
-let windowRowId = 0;
-
-function hourOptions(selected) {
-  return HOURS.map(h =>
-    `<option value="${h}"${h === selected ? ' selected' : ''}>${fmtHour(h)}</option>`
-  ).join('');
-}
-
-function addWindowRow(day = 'Monday', start = 15, end = 18, threshold = 60) {
-  const id = ++windowRowId;
-  const container = document.getElementById('window-rows');
-  const row = document.createElement('div');
-  row.className = 'window-row';
-  row.dataset.rowId = id;
-  row.innerHTML = `
-    <select class="window-select" data-field="day">
-      ${DAYS_ORDER.map(d => `<option${d === day ? ' selected' : ''}>${d}</option>`).join('')}
-    </select>
-    <select class="window-select" data-field="start">${hourOptions(start)}</select>
-    <span class="window-arrow">→</span>
-    <select class="window-select" data-field="end">${hourOptions(end)}</select>
-    <span class="window-threshold-label">&lt;</span>
-    <select class="window-select" data-field="threshold">
-      ${[30,40,50,60,70,80].map(p =>
-        `<option value="${p}"${p === threshold ? ' selected' : ''}>${p}%</option>`
-      ).join('')}
-    </select>
-    <button class="window-remove" onclick="removeWindowRow(${id})" title="Remove">&times;</button>
-  `;
-  container.appendChild(row);
-}
-// Default starter row
-addWindowRow();
-
-function removeWindowRow(id) {
-  const row = document.querySelector(`[data-row-id="${id}"]`);
-  if (row) row.remove();
-}
-
-function collectWindows() {
-  const rows = document.querySelectorAll('#window-rows .window-row');
-  return Array.from(rows).map(row => ({
-    day_of_week:   row.querySelector('[data-field="day"]').value,
-    window_start:  parseInt(row.querySelector('[data-field="start"]').value),
-    window_end:    parseInt(row.querySelector('[data-field="end"]').value),
-    threshold_pct: parseInt(row.querySelector('[data-field="threshold"]').value),
-  }));
-}
-
-// ── Card expand / collapse ────────────────────────────────────
-function toggleCard(name) {
-  const body    = document.getElementById(`body-${name}`);
-  const toggle  = document.getElementById(`toggle-${name}`);
-  const isOpen  = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  if (toggle) toggle.textContent = isOpen ? '▶' : '▼';
-}
-
-// ── Returning user prefill ────────────────────────────────────
-let _isReturningUser = false;
-
-async function prefillIfReturning(phone) {
-  if (!phone || phone.replace(/\D/g, '').length < 10) return;
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/subscribers?phone_number=eq.${encodeURIComponent(phone)}&select=*`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-    );
-    const rows = await res.json();
-    if (!rows || rows.length === 0) return;
-    const sub = rows[0];
-
-    document.getElementById('chk-window').checked  = sub.receive_window_threshold;
-    document.getElementById('chk-quiet').checked   = sub.receive_quiet;
-    document.getElementById('chk-digest').checked  = sub.receive_digest;
-    buildDigestHourPicker(sub.digest_hour ?? 6);
-
-    // Fetch their windows
-    const winRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/subscriber_windows?phone_number=eq.${encodeURIComponent(phone)}&select=*`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-    );
-    const wins = await winRes.json();
-    document.getElementById('window-rows').innerHTML = '';
-    windowRowId = 0;
-    if (wins && wins.length > 0) {
-      wins.forEach(w => addWindowRow(w.day_of_week, w.window_start, w.window_end, w.threshold_pct));
-    } else {
-      addWindowRow();
-    }
-
-    _isReturningUser = true;
-    document.getElementById('sub-btn').textContent = 'Save Changes';
-    document.getElementById('unsub-link').style.display = 'block';
-  } catch (_) { /* ignore prefill errors */ }
-}
-
-document.getElementById('sub-phone').addEventListener('blur', e => {
-  prefillIfReturning(e.target.value.trim());
-});
-
-// ── Subscribe / save ──────────────────────────────────────────
-function setStatus(msg, type) {
-  const el = document.getElementById('sub-status');
-  el.textContent = msg;
-  el.className   = `subscribe-status ${type}`;
-  el.style.display = 'block';
-}
-
-async function handleSubscribe() {
-  const phone = document.getElementById('sub-phone').value.trim();
-  if (!phone) { setStatus('Please enter your phone number.', 'error'); return; }
-
-  const btn = document.getElementById('sub-btn');
-  btn.disabled = true;
-  btn.textContent = 'Sending…';
-
-  try {
-    const payload = {
-      phone,
-      receive_window_threshold: document.getElementById('chk-window').checked,
-      receive_quiet:            document.getElementById('chk-quiet').checked,
-      receive_digest:           document.getElementById('chk-digest').checked,
-      digest_hour:              parseInt(document.getElementById('digest-hour-select').value),
-      windows:                  collectWindows(),
-      is_update:                _isReturningUser,
-    };
-
-    const res = await fetch('/api/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server error ${res.status}`);
-    }
-
-    setStatus(
-      _isReturningUser ? 'Preferences updated! Check your texts.' : "You're subscribed! Check your texts for confirmation.",
-      'success'
-    );
-    btn.textContent = _isReturningUser ? 'Save Changes' : 'Subscribe';
-  } catch (err) {
-    setStatus(`Error: ${err.message}`, 'error');
-    btn.textContent = _isReturningUser ? 'Save Changes' : 'Subscribe';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// ── Unsubscribe ───────────────────────────────────────────────
-async function handleUnsubscribe() {
-  const phone = document.getElementById('sub-phone').value.trim();
-  if (!phone) { setStatus('Please enter your phone number.', 'error'); return; }
-  if (!confirm('Unsubscribe from all RSF alerts?')) return;
-
-  const link = document.getElementById('unsub-link');
-  link.textContent = 'Unsubscribing…';
-
-  try {
-    const res = await fetch('/api/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'unsubscribe', phone }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server error ${res.status}`);
-    }
-
-    setStatus("You've been unsubscribed. You can re-subscribe anytime.", 'success');
-    link.style.display = 'none';
-    document.getElementById('sub-btn').textContent = 'Subscribe';
-    _isReturningUser = false;
-  } catch (err) {
-    setStatus(`Error: ${err.message}`, 'error');
-    link.textContent = 'Unsubscribe';
-  }
-}
 </script>
 </body>
 </html>

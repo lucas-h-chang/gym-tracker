@@ -9,6 +9,7 @@ import sqlite3
 import pickle
 import json
 import os
+import time
 import numpy as np
 import pandas as pd
 import torch
@@ -41,6 +42,18 @@ def get_open_hours(day_name):
         return 7, 23
 
 
+def is_semester_day(d):
+    """True if date d falls during an active semester (not summer, winter break, or spring recess)."""
+    month, dom = d.month, d.day
+    is_summer = month in [6, 7, 8]
+    is_winter = (month == 12 and dom >= 16) or (month == 1 and dom <= 12)
+    is_sb = any(
+        pd.Timestamp(s).date() <= d <= pd.Timestamp(e).date()
+        for s, e in SPRING_BREAKS
+    )
+    return not (is_summer or is_winter or is_sb)
+
+
 def load_models():
     with open('models/rf_model.pkl', 'rb') as f:
         rf = pickle.load(f)
@@ -54,6 +67,30 @@ def load_models():
     model.load_state_dict(torch.load('models/pytorch_model.pt', weights_only=True))
     model.eval()
     return rf, scaler, model, feature_names
+
+
+PREDICTIONS_CACHE = 'models/predictions_cache.json'
+WEEKLY_CACHE      = 'models/weekly_cache.json'
+WEEKLY_MAX_AGE    = 24 * 3600  # seconds
+
+MODEL_FILES = [
+    'models/rf_model.pkl',
+    'models/pytorch_model.pt',
+    'models/scaler.pkl',
+    'models/model_config.pkl',
+]
+
+def needs_predictions_rebuild():
+    if not os.path.exists(PREDICTIONS_CACHE):
+        return True
+    cache_mtime = os.path.getmtime(PREDICTIONS_CACHE)
+    return any(os.path.getmtime(f) > cache_mtime for f in MODEL_FILES)
+
+def needs_weekly_rebuild():
+    if not os.path.exists(WEEKLY_CACHE):
+        return True
+    age = time.time() - os.path.getmtime(WEEKLY_CACHE)
+    return age > WEEKLY_MAX_AGE
 
 
 def compute_predictions(rf, scaler, mlp_model, days=180):
@@ -175,27 +212,185 @@ def compute_weekly_averages():
     return result
 
 
+def compute_similarity_predictions():
+    """
+    Find the K=5 historical days most similar to today's observed pattern so far
+    (same day-of-week, same semester status, closest morning fingerprint by RMSE).
+    Returns distance-weighted average trajectories for remaining slots today,
+    plus a blend weight that grows as more of today is observed (max 0.9).
+    """
+    K              = 5
+    BLEND_CEIL     = 0.9
+    OVERLAP_THRESH = 0.70
+    EXCLUDE_WINDOW = 7   # days to exclude around today to avoid leakage
+    MIN_SLOTS      = 4   # need at least 1 hour of data (4 × 15-min slots)
+
+    conn = sqlite3.connect('gym_history.db')
+    df = pd.read_sql_query('SELECT timestamp, percent_full FROM capacity_log', conn)
+    conn.close()
+
+    df['timestamp']    = pd.to_datetime(df['timestamp'])
+    df['date']         = df['timestamp'].dt.date
+    df['hour_numeric'] = ((df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60) * 4).round() / 4
+    df['day_name']     = df['timestamp'].dt.day_name()
+    df['is_semester']  = df['date'].apply(is_semester_day)
+
+    today         = now.date()
+    today_name    = pd.Timestamp(today).day_name()
+    today_is_sem  = is_semester_day(today)
+    now_hour      = now.hour + now.minute / 60
+    open_h, close_h = get_open_hours(today_name)
+
+    # Today's fingerprint: observed slots up to now
+    today_rows   = df[df['date'] == today]
+    today_finger = (
+        today_rows[today_rows['hour_numeric'] <= now_hour]
+        .groupby('hour_numeric')['percent_full'].mean()
+    )
+    finger_slots = sorted(today_finger.index.tolist())
+
+    if len(finger_slots) < MIN_SLOTS:
+        return [], 0.0
+
+    # Candidate pool: same day-of-week, same semester status, outside exclusion window
+    target_ts  = pd.Timestamp(today)
+    candidates_df = df[
+        (df['date'] != today) &
+        (abs((pd.to_datetime(df['date']) - target_ts).dt.days) > EXCLUDE_WINDOW) &
+        (df['day_name'] == today_name) &
+        (df['is_semester'] == today_is_sem)
+    ]
+
+    candidates = []
+    for _, group in candidates_df.groupby('date'):
+        cf        = group.groupby('hour_numeric')['percent_full'].mean()
+        available = [s for s in finger_slots if s in cf.index]
+        if len(available) < len(finger_slots) * OVERLAP_THRESH:
+            continue
+        hist_vec  = np.array([cf[s]               for s in available])
+        today_sub = np.array([today_finger[s]      for s in available])
+        dist      = float(np.sqrt(np.mean((hist_vec - today_sub) ** 2)))
+        candidates.append((dist, group))
+
+    if not candidates:
+        return [], 0.0
+
+    candidates.sort(key=lambda x: x[0])
+    top_k = candidates[:K]
+
+    # Distance-weighted averaging
+    dists   = np.array([c[0] for c in top_k])
+    weights = 1.0 / (dists + 1e-6)
+    weights /= weights.sum()
+
+    # Future slots: now_hour → close_h
+    future_slots = [
+        h + m / 60
+        for h in range(open_h, close_h)
+        for m in (0, 15, 30, 45)
+        if h + m / 60 >= now_hour
+    ]
+
+    similarity_preds = []
+    for slot in future_slots:
+        vals, wts = [], []
+        for (_, grp), w in zip(top_k, weights):
+            gf = grp.groupby('hour_numeric')['percent_full'].mean()
+            if slot in gf.index:
+                vals.append(gf[slot])
+                wts.append(w)
+        if vals:
+            wa    = np.array(wts); wa /= wa.sum()
+            h_int = int(slot)
+            m_int = round((slot - h_int) * 60)
+            label_h   = h_int % 12 or 12
+            label_sfx = 'AM' if h_int < 12 else 'PM'
+            similarity_preds.append({
+                'x':     slot,
+                'y':     round(float(np.dot(wa, vals)), 1),
+                'label': f'{label_h}:{m_int:02d} {label_sfx}',
+            })
+
+    # Closing zero
+    ch_label = f"{close_h % 12 or 12}:00 {'AM' if close_h < 12 else 'PM'}"
+    similarity_preds.append({'x': float(close_h), 'y': 0.0, 'label': ch_label})
+
+    blend_weight = round(min((now_hour - open_h) / 6.0, BLEND_CEIL), 3)
+    return similarity_preds, blend_weight
+
+
+def compute_today_actuals():
+    """Return today's real capacity readings as [{x, y, label}], quantized to 15-min bins."""
+    conn = sqlite3.connect('gym_history.db')
+    df = pd.read_sql_query('SELECT * FROM capacity_log', conn)
+    conn.close()
+
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    today_str = now.strftime('%Y-%m-%d')
+    df = df[df['timestamp'].dt.strftime('%Y-%m-%d') == today_str].copy()
+
+    if df.empty:
+        return []
+
+    df['hour_numeric'] = df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60
+    df['hour_numeric'] = (df['hour_numeric'] * 4).round() / 4
+    df['hour_label'] = (
+        df['timestamp'].dt.round('15min').dt.strftime('%I:%M %p').str.lstrip('0')
+    )
+
+    avg = df.groupby('hour_numeric').agg(
+        percent_full=('percent_full', 'mean'),
+        hour_label=('hour_label', 'first'),
+    ).reset_index()
+
+    return [
+        {'x': row['hour_numeric'], 'y': round(row['percent_full'], 1), 'label': row['hour_label']}
+        for _, row in avg.iterrows()
+    ]
+
+
 def main():
     os.makedirs('docs', exist_ok=True)
 
-    print('Loading models...')
-    rf, scaler, mlp_model, feature_names = load_models()
+    # ── Predictions (rebuild only when models change) ──────────
+    if needs_predictions_rebuild():
+        print('Computing predictions (models changed or no cache)...')
+        rf, scaler, mlp_model, _ = load_models()
+        predictions = compute_predictions(rf, scaler, mlp_model, days=180)
+        with open(PREDICTIONS_CACHE, 'w') as f:
+            json.dump(predictions, f, separators=(',', ':'))
+    else:
+        print('Loading cached predictions...')
+        with open(PREDICTIONS_CACHE) as f:
+            predictions = json.load(f)
 
-    print('Computing predictions for next 180 days...')
-    predictions = compute_predictions(rf, scaler, mlp_model, days=180)
+    # ── Weekly averages (rebuild at most once per 24 hours) ────
+    if needs_weekly_rebuild():
+        print('Computing weekly averages...')
+        weekly = compute_weekly_averages()
+        with open(WEEKLY_CACHE, 'w') as f:
+            json.dump(weekly, f, separators=(',', ':'))
+    else:
+        print('Loading cached weekly averages...')
+        with open(WEEKLY_CACHE) as f:
+            weekly = json.load(f)
 
-    print('Computing weekly averages...')
-    weekly = compute_weekly_averages()
+    # ── Always recompute (live data) ───────────────────────────
+    print("Computing today's actuals...")
+    today_actuals = compute_today_actuals()
+
+    print('Computing similarity predictions...')
+    similarity_preds, blend_weight = compute_similarity_predictions()
 
     with open('models/metrics.json') as f:
         metrics = json.load(f)
 
-    importances = sorted(
-        metrics['feature_importances'].items(), key=lambda x: -x[1]
-    )[:10]
-
     data = {
         'built_at': now.strftime('%Y-%m-%d %H:%M PT'),
+        'today_date': now.strftime('%Y-%m-%d'),
+        'today_actuals': today_actuals,
+        'today_similarity_preds': similarity_preds,
+        'today_blend_weight': blend_weight,
         'predictions': predictions,
         'weekly': weekly,
         'metrics': {
@@ -204,7 +399,6 @@ def main():
             'rf_mae': metrics['rf']['mae'],
             'mlp_mae': metrics['mlp']['mae'],
         },
-        'feature_importances': [{'name': k, 'value': v} for k, v in importances],
     }
 
     out = 'docs/data.json'
