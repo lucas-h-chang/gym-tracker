@@ -144,7 +144,7 @@ def compute_weekly_averages():
 
     DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     TIME_RANGES = {
-        'Last week':     timedelta(days=7),
+        'Last 7 days':   timedelta(days=7),
         'Last month':    timedelta(days=30),
         'Last 6 months': timedelta(days=182),
         'Last year':     timedelta(days=365),
