@@ -291,6 +291,7 @@
     }
 
 
+
     /* ── Footer ── */
     footer {
       display: flex;
@@ -385,6 +386,9 @@
 <script>
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+let liveCapacity  = null; // { count, pct } — set when Density fetch succeeds
+let nowHoverState = { active: false, title: '', label: '' };
+
 function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
@@ -432,6 +436,7 @@ function updateStatusBar() {
       .then(d => {
         const pct = Math.round((d.count / 150) * 100);
         liveCount.textContent = `· ${d.count} people (${pct}%)`;
+        liveCapacity = { count: d.count, pct };
       })
       .catch(() => {});
   } else {
@@ -502,6 +507,62 @@ const nowLinePlugin = {
 };
 Chart.register(nowLinePlugin);
 
+// Inline plugin (pred chart only): intercepts Chart.js event pipeline to show
+// the native tooltip when hovering near the Now line.
+const nowHoverPlugin = {
+  id: 'nowHover',
+  afterEvent(chart, args) {
+    const { event } = args;
+    if (event.type !== 'mousemove' && event.type !== 'mouseout') return;
+    const opts = chart.options.plugins.nowLine;
+    if (!opts?.show || opts.value == null) { nowHoverState.active = false; return; }
+    const nowX = chart.scales.x.getPixelForValue(opts.value);
+
+    if (event.type === 'mousemove' && Math.abs(event.x - nowX) <= 10) {
+      // If a real data point is at least as close to the cursor as the Now line,
+      // let Chart.js show its normal tooltip instead.
+      const nearest = chart.getElementsAtEventForMode(
+        event.native, 'nearest', { intersect: false }, false
+      );
+      if (nearest.length > 0) {
+        const ptX = chart.getDatasetMeta(nearest[0].datasetIndex).data[nearest[0].index].x;
+        if (Math.abs(event.x - ptX) <= Math.abs(event.x - nowX)) {
+          nowHoverState.active = false;
+          return;
+        }
+      }
+
+      const actualData = chart.data.datasets[0].data;
+      if (!actualData.length) { nowHoverState.active = false; return; }
+
+      // Nearest actual point to "now" for tooltip anchoring
+      let closestIdx = 0, minDist = Infinity;
+      actualData.forEach((p, i) => {
+        const d = Math.abs(p.x - opts.value);
+        if (d < minDist) { minDist = d; closestIdx = i; }
+      });
+
+      const pt = getPTNow();
+      nowHoverState.active = true;
+      nowHoverState.title  = formatTime(pt.getHours(), pt.getMinutes());
+      nowHoverState.label  = liveCapacity
+        ? ` Actual: ${liveCapacity.pct.toFixed(1)}%`
+        : ' Live data unavailable';
+
+      chart.tooltip.setActiveElements(
+        [{ datasetIndex: 0, index: closestIdx }],
+        { x: event.x, y: event.y }
+      );
+      args.changed = true;
+    } else {
+      if (nowHoverState.active) {
+        nowHoverState.active = false;
+        args.changed = true;
+      }
+    }
+  }
+};
+
 function updatePredChart(data) {
   const today    = todayPT();
   const isToday  = predDate === today;
@@ -561,6 +622,7 @@ function updatePredChart(data) {
 
   predChart = new Chart(ctx, {
     type: 'line',
+    plugins: [nowHoverPlugin],
     data: {
       datasets: [
         {
@@ -597,6 +659,7 @@ function updatePredChart(data) {
     options: {
       parsing: false,
       animation: { duration: 320 },
+      layout: { padding: { top: 20 } },
       plugins: {
         nowLine:    { show: isToday, value: nowVal },
         closedZone: { ranges: closedRanges },
@@ -609,8 +672,8 @@ function updatePredChart(data) {
           borderWidth: 1,
           padding: 10,
           callbacks: {
-            title: (items) => items[0].raw.label || '',
-            label: (item) => ` ${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
+            title: (items) => nowHoverState.active ? nowHoverState.title : (items[0].raw.label || ''),
+            label: (item)  => nowHoverState.active ? nowHoverState.label : ` ${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
           }
         }
       },

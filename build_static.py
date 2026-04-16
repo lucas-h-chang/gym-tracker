@@ -311,6 +311,25 @@ def compute_similarity_predictions():
                 'label': f'{label_h}:{m_int:02d} {label_sfx}',
             })
 
+    # Anchor correction: shift sim predictions to start from today's actual level.
+    # Computes the gap between what similarity predicts at the last observed slot
+    # vs what actually happened, then applies it with decay over 4 hours.
+    last_slot = max(finger_slots)
+    vals, wts = [], []
+    for (_, grp), w in zip(top_k, weights):
+        gf = grp.groupby('hour_numeric')['percent_full'].mean()
+        if last_slot in gf.index:
+            vals.append(gf[last_slot])
+            wts.append(w)
+    if vals:
+        wa = np.array(wts); wa /= wa.sum()
+        sim_at_last    = float(np.dot(wa, vals))
+        actual_at_last = float(today_finger[last_slot])
+        offset         = actual_at_last - sim_at_last
+        for p in similarity_preds:
+            decay = max(0.0, 1.0 - (p['x'] - last_slot) / 4.0)
+            p['y'] = round(max(0.0, min(100.0, p['y'] + offset * decay)), 1)
+
     # Closing zero
     ch_label = f"{close_h % 12 or 12}:00 {'AM' if close_h < 12 else 'PM'}"
     similarity_preds.append({'x': float(close_h), 'y': 0.0, 'label': ch_label})
