@@ -133,46 +133,128 @@
     }
 
     .section-pred {
-      padding: 52px 48px 56px;
-      border-bottom: 1px solid var(--border);
+      position: relative;
+      padding: 32px 48px 0;
     }
 
     .section-weekly {
-      padding: 52px 48px 60px;
+      padding: 50px 48px 60px;
+    }
+    .section-weekly .section-title {
+      margin-bottom: 38px;
     }
 
+    /* Calendar popup */
+    .cal-popup {
+      position: absolute;
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 16px;
+      z-index: 100;
+      width: 260px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .cal-month-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .cal-nav-btn {
+      background: none;
+      border: none;
+      color: var(--sub);
+      cursor: pointer;
+      font-size: 15px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    .cal-nav-btn:hover { color: var(--text); }
+    .cal-nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .cal-dow {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      padding: 4px 0;
+      font-weight: 600;
+    }
+    .cal-day {
+      text-align: center;
+      padding: 6px 2px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--sub);
+      transition: background 0.12s, color 0.12s;
+    }
+    .cal-day:hover:not(.cal-day-disabled):not(.cal-day-selected) { background: var(--border2); color: var(--text); }
+    .cal-day-disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+    .cal-day-selected { background: var(--accent); color: #fff; font-weight: 700; }
+    .cal-day-today { color: var(--accent); font-weight: 700; }
+    .cal-day-selected.cal-day-today { color: #fff; }
+    .cal-day-empty { pointer-events: none; }
     /* Prediction date nav */
+    .pred-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 32px;
+      margin-bottom: 20px;
+    }
     .pred-nav {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 20px;
+      gap: 0;
+      width: 280px;
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      overflow: hidden;
     }
 
     .pred-nav-btn {
       background: none;
-      border: 1px solid var(--border2);
-      color: var(--sub);
+      border: none;
+      color: var(--text);
       cursor: pointer;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
+      width: 44px;
+      height: 38px;
       font-size: 15px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: border-color 0.15s, color 0.15s;
+      transition: background 0.15s, color 0.15s;
       line-height: 1;
     }
-    .pred-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .pred-nav-btn:hover:not(:disabled) { background: var(--border2); color: var(--accent); }
     .pred-nav-btn:disabled { opacity: 0.25; cursor: default; }
-
     .pred-date-label {
       font-size: 14px;
       font-weight: 600;
       color: var(--text);
-      min-width: 180px;
+      flex: 1;
+      text-align: center;
+      border-left: 1px solid var(--border2);
+      border-right: 1px solid var(--border2);
+      line-height: 38px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+
 
     /* ── Eyebrow + title ── */
     .eyebrow {
@@ -188,8 +270,9 @@
       font-weight: 700;
       letter-spacing: 0.01em;
       color: var(--text);
-      margin-bottom: 32px;
+      margin-bottom: 20px;
     }
+    .pred-header-row .section-title { margin-bottom: 0; }
 
     /* ── Chart card ── */
     .chart-card {
@@ -219,6 +302,20 @@
     }
 
     /* ── Controls ── */
+    .weekly-header-row {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      margin-bottom: 20px;
+    }
+    .weekly-controls-inline {
+      display: flex;
+      align-items: flex-end;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .weekly-header-row .section-title { margin-bottom: 0; }
+    .weekly-header-row .check-row { margin-top: 0; }
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -246,7 +343,7 @@
       border: none;
       border-bottom: 1px solid var(--border2);
       color: var(--text);
-      padding: 6px 0;
+      padding: 6px 20px 6px 0;
       font-size: 13px;
       font-family: var(--font);
       cursor: pointer;
@@ -256,6 +353,16 @@
       min-width: 120px;
       transition: border-color 0.15s;
     }
+    .field::after {
+      content: '▾';
+      position: absolute;
+      right: 2px;
+      bottom: 8px;
+      font-size: 11px;
+      color: var(--sub);
+      pointer-events: none;
+      line-height: 1;
+    }
     select:focus { border-bottom-color: var(--accent); }
     select option { background: #1c1d2e; color: var(--text); }
     input[type="hidden"] { display: none; }
@@ -264,7 +371,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-top: 20px;
+      margin-top: 0;
     }
     .check-row label {
       font-size: 12px;
@@ -306,6 +413,228 @@
       font-size: 10px;
       color: var(--muted);
     }
+
+    /* ── Insight Cards ── */
+    .insight-row {
+      display: flex;
+      gap: 12px;
+      padding: 28px 48px 0;
+    }
+    .insight-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 29px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: 158px;
+    }
+    #insight-status { flex: 1; justify-content: center; gap: 20px; padding: 40px 30px 28px; }
+    .status-row { display: flex; align-items: center; gap: 12px; min-height: 34px; }
+    .live-dot {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      margin-right: -6px;
+    }
+    .live-dot::before, .live-dot::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .live-dot::before {
+      width: 11px; height: 11px;
+      background: currentColor;
+    }
+    .live-dot::after {
+      width: 20px; height: 20px;
+      background: currentColor;
+      opacity: 0.3;
+      animation: live-pulse 1.8s ease-out infinite;
+    }
+    @keyframes live-pulse {
+      0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.4; }
+      70%  { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+      100% { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+    }
+    .open-pill {
+      font-size: 34px;
+      font-weight: 700;
+      font-family: var(--font);
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .open-pill.open   { color: #6ee7b7; }
+    .open-pill.closed { color: #f87171; }
+    .status-row { display: flex; align-items: center; gap: 16px; }
+    .status-sep { color: var(--muted); font-size: 24px; font-weight: 300; }
+    #insight-status-pct { font-size: 34px; font-weight: 700; font-family: var(--font); }
+    #insight-comparison { flex: 1; gap: 16px; justify-content: center; padding: 26px 26px; }
+    #insight-trend      { flex: 1; gap: 16px; justify-content: center; padding: 26px 30px; }
+    .insight-card-label {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--sub);
+      text-transform: uppercase;
+    }
+    /* Card 2: comparison columns */
+    #insight-status-badge { width: fit-content; }
+    .comp-verdict {
+      font-size: 26px;
+      font-weight: 700;
+      font-family: var(--font);
+      line-height: 1;
+    }
+    .comp-verdict.much-busier  { color: #dc2626; }
+    .comp-verdict.busier       { color: #f87171; }
+    .comp-verdict.bit-busier   { color: #fca5a5; }
+    .comp-verdict.much-quieter { color: #059669; }
+    .comp-verdict.quieter      { color: #6ee7b7; }
+    .comp-verdict.bit-quieter  { color: #a7f3d0; }
+    .comp-verdict.average      { color: var(--text); }
+    .comp-deltas {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .comp-delta-item {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--sub);
+    }
+    .comp-delta-item span {
+      font-weight: 600;
+    }
+    .comp-delta-item span.much-busier  { color: #dc2626; }
+    .comp-delta-item span.busier       { color: #f87171; }
+    .comp-delta-item span.bit-busier   { color: #fca5a5; }
+    .comp-delta-item span.much-quieter { color: #059669; }
+    .comp-delta-item span.quieter      { color: #6ee7b7; }
+    .comp-delta-item span.bit-quieter  { color: #a7f3d0; }
+    .comp-delta-sep {
+      font-size: 11px;
+      color: var(--border);
+    }
+    .comp-header {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--sub);
+      text-transform: uppercase;
+    }
+    /* Card 1: status */
+    .cap-bar-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
+    .cap-bar-track {
+      height: 5px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .cap-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: #6ee7b7;
+      transition: width 0.6s ease, background 0.4s;
+    }
+    .cap-bar-fill.mid      { background: #fbbf24; }
+    .cap-bar-fill.high     { background: #f87171; }
+    .cap-bar-fill.critical { background: #b91c1c; }
+    .cap-bar-label {
+      font-size: 13px;
+      font-family: var(--font);
+      color: var(--sub);
+    }
+    .cap-time {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    /* Card 2: trend */
+    .trend-main {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 26px;
+    }
+    .trend-line {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .trend-arrow {
+      font-size: 26px;
+      line-height: 1;
+    }
+    .trend-arrow.up   { color: #f87171; }
+    .trend-arrow.down { color: #6ee7b7; }
+    .trend-arrow.flat { color: var(--text); }
+    .trend-label {
+      font-size: 26px;
+      font-weight: 700;
+      font-family: var(--font);
+      line-height: 1;
+      color: var(--text);
+    }
+    .trend-label.up   { color: #f87171; }
+    .trend-label.down { color: #6ee7b7; }
+    .trend-delta {
+      font-size: 15px;
+      font-weight: 600;
+      font-family: var(--font);
+    }
+    .trend-delta.up   { color: #f87171; }
+    .trend-delta.down { color: #6ee7b7; }
+    .trend-delta.flat { color: var(--sub); }
+    .trend-sub {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--sub);
+      min-height: 15px;
+    }
+    /* Card 3: quiet window */
+    .quiet-main {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .quiet-time {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      font-family: var(--mono);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .quiet-sub {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .quiet-avg {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--mono);
+      color: #6ee7b7;
+    }
+    .quiet-dur {
+      font-size: 12px;
+      color: var(--sub);
+    }
+    .quiet-dash {
+      font-size: 22px;
+      font-weight: 300;
+      color: var(--muted);
+      line-height: 1;
+    }
+    .insight-row.hidden { display: none; }
+    @media (max-width: 768px) {
+      .insight-row { flex-direction: column; padding: 20px 24px 0; }
+    }
   </style>
 </head>
 <body>
@@ -313,12 +642,8 @@
 <div id="data-warning"></div>
 
 <header>
-  <div style="display:flex; align-items:center; gap:28px;">
+  <div style="display:flex; align-items:center;">
     <div class="logo">RSF Crowd Level Predictor</div>
-    <div class="status-badge" id="status-badge" style="display:inline-flex;">
-      <span class="status-label" id="status-text">—</span>
-      <span class="status-label" id="live-count" style="margin-left:4px;"></span>
-    </div>
   </div>
   <div class="header-right">
   </div>
@@ -326,53 +651,77 @@
 
 <main>
 
+  <!-- INSIGHT CARDS -->
+  <div class="insight-row hidden" id="insight-row">
+    <div class="insight-card" id="insight-status">
+      <div class="status-row">
+        <span class="live-dot" id="insight-live-dot" style="display:none"></span>
+        <span class="open-pill" id="insight-open-pill">—</span>
+        <span class="status-sep" id="insight-status-sep"></span>
+        <span id="insight-status-pct"></span>
+      </div>
+      <div class="cap-bar-wrap" id="insight-cap-wrap">
+        <div class="cap-bar-track"><div class="cap-bar-fill" id="insight-cap-fill" style="width:0%"></div></div>
+        <span class="cap-bar-label" id="insight-cap-label">—</span>
+      </div>
+    </div>
+    <div class="insight-card" id="insight-comparison">
+      <span class="comp-header" id="insight-comp-header">COMPARED TO PREVIOUS —</span>
+      <div id="insight-comp-verdict" class="comp-verdict">—</div>
+      <div id="insight-comp-deltas" class="comp-deltas"></div>
+    </div>
+    <div class="insight-card" id="insight-trend">
+      <span class="insight-card-label">CROWD IN NEXT HOUR</span>
+      <div id="insight-trend-val" class="trend-main"></div>
+      <span id="insight-trend-sub" class="trend-sub"></span>
+    </div>
+  </div>
+
   <!-- PREDICTION CHART: full-width -->
   <div class="section-pred" id="section-predict">
-    <div class="section-title">Predicted Occupancy</div>
-
-    <div class="pred-nav">
-      <button class="pred-nav-btn" id="pred-prev">&#8592;</button>
-      <span class="pred-date-label" id="pred-date-label">—</span>
-      <button class="pred-nav-btn" id="pred-next">&#8594;</button>
+    <div class="pred-header-row">
+      <div class="section-title">Predicted Occupancy</div>
+      <div class="pred-nav">
+        <button class="pred-nav-btn" id="pred-prev">&#8592;</button>
+        <span class="pred-date-label" id="pred-date-label" style="cursor:pointer">—</span>
+        <button class="pred-nav-btn" id="pred-next">&#8594;</button>
+      </div>
     </div>
+    <div id="cal-popup" class="cal-popup" style="display:none"></div>
 
     <div class="chart-card">
       <canvas id="pred-chart" height="290"></canvas>
     </div>
-    <div class="chart-caption" id="pred-caption"></div>
+
   </div>
 
   <!-- WEEKLY PATTERNS: full-width -->
   <div class="section-weekly" id="section-weekly">
-    <div class="section-title">Weekly Patterns</div>
+    <div class="weekly-header-row">
+      <div class="section-title">Weekly Patterns</div>
+      <div class="weekly-controls-inline">
+        <div class="field">
+          <select id="day-select">
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+          </select>
+        </div>
+        <div class="field">
+          <select id="range-select">
+            <option>Last 7 days</option><option>Last month</option>
+            <option>Last 6 months</option><option>Last year</option><option>All time</option>
+          </select>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="semester-check" checked>
+          <label for="semester-check">Semester only</label>
+        </div>
+      </div>
+    </div>
 
     <div class="chart-card">
       <canvas id="weekly-chart" height="290"></canvas>
-      <div id="weekly-no-data" class="no-data-overlay">
-        No data for this combination —<br>try a wider range or uncheck Semester only.
-      </div>
-    </div>
-
-    <div class="controls">
-      <div class="field">
-        <label>DAY</label>
-        <select id="day-select">
-          <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-          <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>DATE RANGE</label>
-        <select id="range-select">
-          <option>Last 7 days</option><option>Last month</option>
-          <option>Last 6 months</option><option>Last year</option><option>All time</option>
-        </select>
-      </div>
-    </div>
-    <div class="check-row">
-      <input type="checkbox" id="semester-check" checked>
-      <label for="semester-check">Semester only</label>
-      <span class="hint">— excludes breaks</span>
+      <div id="weekly-no-data" class="no-data-overlay"></div>
     </div>
     <div class="chart-caption" id="weekly-meta"></div>
   </div>
@@ -421,27 +770,17 @@ function updateStatusBar() {
   const pt = getPTNow();
   const { open, close } = getOpenHours(pt.getDay());
   const isOpen = pt.getHours() >= open && pt.getHours() < close;
-  const badge = document.getElementById('status-badge');
-  const label = document.getElementById('status-text');
-  const liveCount = document.getElementById('live-count');
-  badge.className = `status-badge ${isOpen ? 'open' : 'closed'}`;
-  label.textContent = isOpen ? 'OPEN' : 'CLOSED';
-
   if (isOpen) {
-    liveCount.style.display = '';
     fetch('https://api.density.io/v2/spaces/spc_863128347956216317/count', {
       headers: { 'Authorization': 'Bearer shr_o69HxjQ0BYrY2FPD9HxdirhJYcFDCeRolEd744Uj88e' }
     })
       .then(r => r.json())
       .then(d => {
         const pct = Math.round((d.count / 150) * 100);
-        liveCount.textContent = `· ${d.count} people (${pct}%)`;
         liveCapacity = { count: d.count, pct };
+        if (window._insightData) renderInsightCards(window._insightData);
       })
       .catch(() => {});
-  } else {
-    liveCount.textContent = '';
-    liveCount.style.display = 'none';
   }
 }
 
@@ -457,7 +796,11 @@ function shiftDate(dateStr, delta) {
 
 function formatPredLabel(dateStr) {
   const today = todayPT();
-  if (dateStr === today) return 'Today';
+  if (dateStr === today) {
+    const d = new Date(dateStr + 'T12:00:00');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
+  }
   const d = new Date(dateStr + 'T12:00:00');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${DAYS[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
@@ -597,20 +940,12 @@ function updatePredChart(data) {
   document.getElementById('pred-next').disabled = predDate >= maxDate;
   document.getElementById('pred-date-label').textContent = formatPredLabel(predDate);
 
-  // Closed zones for selected day
-  const d = new Date(predDate + 'T12:00:00');
-  const closedRanges = getClosedRanges(DAYS[d.getDay()]);
-
-  // Caption
-  const avgErr = ((data.metrics.rf_mae + data.metrics.mlp_mae) / 2).toFixed(1);
-  document.getElementById('pred-caption').textContent = `Avg model error ±${avgErr}%`;
 
   if (predChart) {
     predChart.data.datasets[0].data = actualPoints;
     predChart.data.datasets[1].data = predPoints;
     predChart.options.plugins.nowLine.show  = isToday;
     predChart.options.plugins.nowLine.value = nowVal;
-    predChart.options.plugins.closedZone.ranges = closedRanges;
     predChart.update();
     return;
   }
@@ -661,9 +996,8 @@ function updatePredChart(data) {
       animation: { duration: 320 },
       layout: { padding: { top: 20 } },
       plugins: {
-        nowLine:    { show: isToday, value: nowVal },
-        closedZone: { ranges: closedRanges },
-        legend:     { display: false },
+        nowLine: { show: isToday, value: nowVal },
+        legend:  { display: false },
         tooltip: {
           backgroundColor: '#1a1b2e',
           titleColor: '#8f92aa',
@@ -707,47 +1041,6 @@ function updatePredChart(data) {
 // ── Weekly Chart ───────────────────────────────────────────────
 let weeklyChart = null;
 
-// Returns closed hour ranges within the 8–23 window for a given day name
-function getClosedRanges(dayName) {
-  const jsDay = DAYS.indexOf(dayName);
-  const { open, close } = getOpenHours(jsDay);
-  const ranges = [];
-  if (open > 7)  ranges.push([7, open]);
-  if (close < 23) ranges.push([close, 23]);
-  return ranges;
-}
-
-// Custom plugin: draws red transparent zones for closed hours
-const closedZonePlugin = {
-  id: 'closedZone',
-  beforeDatasetsDraw(chart) {
-    const ranges = chart.options.plugins.closedZone?.ranges;
-    if (!ranges || ranges.length === 0) return;
-    const { ctx, chartArea, scales } = chart;
-    ctx.save();
-    ctx.fillStyle = 'rgba(248, 113, 113, 0.10)';
-    for (const [from, to] of ranges) {
-      const x1 = Math.max(scales.x.getPixelForValue(from), chartArea.left);
-      const x2 = Math.min(scales.x.getPixelForValue(to), chartArea.right);
-      if (x2 > x1) ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.height);
-    }
-    // Draw a subtle red top border on each zone
-    ctx.strokeStyle = 'rgba(248, 113, 113, 0.22)';
-    ctx.lineWidth = 1;
-    for (const [from, to] of ranges) {
-      const x1 = Math.max(scales.x.getPixelForValue(from), chartArea.left);
-      const x2 = Math.min(scales.x.getPixelForValue(to), chartArea.right);
-      if (x2 > x1) {
-        ctx.beginPath();
-        ctx.moveTo(x1, chartArea.top);
-        ctx.lineTo(x1, chartArea.bottom);
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
-};
-Chart.register(closedZonePlugin);
 
 function updateWeeklyChart(data) {
   const day      = document.getElementById('day-select').value;
@@ -760,13 +1053,10 @@ function updateWeeklyChart(data) {
   document.getElementById('weekly-no-data').style.display = hasData ? 'none' : 'flex';
 
   const semStr = semester ? ', semester weeks' : '';
-  document.getElementById('weekly-meta').textContent = `${day}s · ${range}${semStr}`;
-
-  const closedRanges = getClosedRanges(day);
+  // weekly-meta intentionally left blank
 
   if (weeklyChart) {
     weeklyChart.data.datasets[0].data = points;
-    weeklyChart.options.plugins.closedZone.ranges = closedRanges;
     weeklyChart.update();
     return;
   }
@@ -796,7 +1086,6 @@ function updateWeeklyChart(data) {
       parsing: false,
       animation: { duration: 320 },
       plugins: {
-        closedZone: { ranges: closedRanges },
         legend: { display: false },
         tooltip: {
           backgroundColor: '#1a1b2e',
@@ -845,6 +1134,304 @@ function showDataWarning(msg) {
   el.style.display = 'block';
 }
 
+// ── Insight Cards ─────────────────────────────────────────────
+
+function getBlendedSlots(data, fromH, toH, date) {
+  const dateStr = date || todayPT();
+  const isToday = dateStr === todayPT();
+  const simMap = {};
+  if (isToday && data.today_similarity_preds) {
+    data.today_similarity_preds.forEach(p => { simMap[p.x] = p.y; });
+  }
+  const w = isToday ? (data.today_blend_weight || 0) : 0;
+  const slots = [];
+  for (let h = Math.floor(fromH); h <= Math.floor(toH); h++) {
+    for (const m of [0, 15, 30, 45]) {
+      const slotH = h + m / 60;
+      if (slotH < fromH || slotH >= toH) continue;
+      const key  = `${dateStr}_${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      const pred = data.predictions[key];
+      if (!pred) continue;
+      const mlAvg   = (pred[0] + pred[1]) / 2;
+      const simY    = simMap[slotH];
+      const blended = simY != null ? (1 - w) * mlAvg + w * simY : mlAvg;
+      slots.push({ h, m, slotH, y: blended });
+    }
+  }
+  return slots;
+}
+
+function computeTrend(data, livePct) {
+  const isToday = predDate === todayPT();
+  const d = new Date(predDate + 'T12:00:00');
+  const { open, close } = getOpenHours(d.getDay());
+
+  let fromH, toH, sub;
+  if (isToday) {
+    const pt  = getPTNow();
+    const nowH = pt.getHours() + pt.getMinutes() / 60;
+    if (close - nowH < 1) return null;
+    fromH = nowH;
+    toH   = Math.min(nowH + 1, close);
+    sub   = null;
+  } else {
+    fromH = open;
+    toH   = Math.min(open + 1, close);
+    sub   = 'first hour · projected';
+  }
+
+  const slots = getBlendedSlots(data, fromH, toH, predDate);
+  if (slots.length < 2) return null;
+
+  const startY = (isToday && livePct != null) ? livePct : slots[0].y;
+  const endY   = slots[slots.length - 1].y;
+  const delta  = endY - startY;
+
+  const dir = Math.abs(delta) < 5 ? 'flat' : delta > 0 ? 'up' : 'down';
+  return { dir, delta: Math.round(Math.abs(delta)), startY: Math.round(startY), sub };
+}
+
+function computeQuietWindow(data) {
+  if (predDate !== todayPT()) return null;
+  const pt  = getPTNow();
+  const nowH = pt.getHours() + pt.getMinutes() / 60;
+  const { open, close } = getOpenHours(pt.getDay());
+  const THRESHOLD = 50;
+
+  const slots = getBlendedSlots(data, nowH, close);
+  if (!slots.length) return null;
+
+  let bestWindow = null, bestLen = 0, bestAvg = Infinity;
+  let runStart = null, runSlots = [];
+
+  function evalRun() {
+    if (!runSlots.length) return;
+    const avg = runSlots.reduce((s, r) => s + r.y, 0) / runSlots.length;
+    if (runSlots.length > bestLen || (runSlots.length === bestLen && avg < bestAvg)) {
+      bestLen = runSlots.length;
+      bestAvg = avg;
+      bestWindow = { startH: runSlots[0].h, startM: runSlots[0].m,
+                     endSlotH: runSlots[runSlots.length - 1].slotH + 0.25, avg };
+    }
+  }
+
+  for (const s of slots) {
+    if (s.y <= THRESHOLD) {
+      runSlots.push(s);
+    } else {
+      evalRun();
+      runSlots = [];
+    }
+  }
+  evalRun();
+
+  if (!bestWindow) {
+    // No sub-threshold window — find quietest single hour instead
+    let minAvg = Infinity, minStart = null;
+    for (let i = 0; i <= slots.length - 4; i++) {
+      const block = slots.slice(i, i + 4);
+      const avg = block.reduce((s, r) => s + r.y, 0) / block.length;
+      if (avg < minAvg) { minAvg = avg; minStart = block[0]; }
+    }
+    if (!minStart) return null;
+    const endH = minStart.slotH + 1;
+    return { startH: minStart.h, startM: minStart.m, endSlotH: endH, avg: Math.round(minAvg), fallback: true };
+  }
+
+  return { ...bestWindow, avg: Math.round(bestWindow.avg), fallback: false };
+}
+
+function computeDayComparisonAt(dayName, qH, data) {
+  function getWeeklyAt(key, h) {
+    const arr = data.weekly[key];
+    if (!arr) return null;
+    const pt = arr.find(p => p.x === h);
+    return pt ? pt.y : null;
+  }
+
+  return {
+    lastWeek:     getWeeklyAt(`${dayName}|Last 7 days|false`, qH),
+    thisSemester: getWeeklyAt(`${dayName}|This semester|true`, qH),
+    allTime:      getWeeklyAt(`${dayName}|All time|true`, qH),
+  };
+}
+
+function renderInsightCards(data) {
+  const row = document.getElementById('insight-row');
+  row.classList.remove('hidden');
+
+  const isToday   = predDate === todayPT();
+  const pt        = getPTNow();
+  const predDay   = new Date(predDate + 'T12:00:00');
+  const dayName   = DAYS[predDay.getDay()];
+  const livePct   = liveCapacity ? liveCapacity.pct : null;
+  const liveCount = liveCapacity ? liveCapacity.count : null;
+
+  const { open: openH, close: closeH } = getOpenHours(predDay.getDay());
+
+  // Card 1: Status
+  const liveDot   = document.getElementById('insight-live-dot');
+  const openPill  = document.getElementById('insight-open-pill');
+  const statusSep = document.getElementById('insight-status-sep');
+  const insightPct = document.getElementById('insight-status-pct');
+  const capFill   = document.getElementById('insight-cap-fill');
+  const capLabel  = document.getElementById('insight-cap-label');
+
+  function pctColor(p) {
+    return p >= 90 ? '#b91c1c' : p >= 80 ? '#f87171' : p >= 60 ? '#fbbf24' : '#6ee7b7';
+  }
+
+  if (isToday) {
+    const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
+    openPill.className = `open-pill ${gymIsOpen ? 'open' : 'closed'}`;
+    openPill.style.fontSize = '';
+    if (gymIsOpen) {
+      if (livePct != null) {
+        const col = pctColor(livePct);
+        liveDot.style.display  = 'inline-block';
+        liveDot.style.color    = col;
+        openPill.textContent   = `${livePct.toFixed(0)}% Full`;
+        openPill.style.color   = col;
+        statusSep.textContent  = '';
+        insightPct.textContent = '';
+      } else {
+        liveDot.style.display  = 'none';
+        openPill.textContent   = '—';
+        openPill.style.color   = 'var(--sub)';
+        statusSep.textContent  = '';
+        insightPct.textContent = '';
+      }
+      if (livePct != null) {
+        const fillCls = livePct >= 90 ? 'critical' : livePct >= 80 ? 'high' : livePct >= 60 ? 'mid' : '';
+        capFill.style.width = `${Math.min(livePct, 100)}%`;
+        capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
+        capLabel.textContent = `${liveCount} / 150 people`;
+      } else {
+        capFill.style.width = '0%';
+        capLabel.textContent = 'Live count unavailable';
+      }
+    } else {
+      const nowH = pt.getHours() + pt.getMinutes() / 60;
+      const isBeforeOpen = nowH < openH;
+      const nextOpen = isBeforeOpen ? openH : getOpenHours((pt.getDay() + 1) % 7).open;
+      const prefix   = isBeforeOpen ? 'Opens at' : 'Opens tomorrow at';
+      openPill.textContent   = 'CLOSED';
+      statusSep.textContent  = '—';
+      insightPct.textContent  = `${prefix} ${formatTime(nextOpen, 0)}`;
+      insightPct.style.color  = 'var(--sub)';
+      insightPct.style.fontSize = '16px';
+      capFill.style.width    = '0%';
+      capLabel.textContent   = '—';
+    }
+  } else {
+    liveDot.style.display  = 'none';
+    openPill.className     = 'open-pill open';
+    openPill.textContent   = `${formatTime(openH, 0)} – ${formatTime(closeH, 0)}`;
+    openPill.style.color   = 'var(--text)';
+    openPill.style.fontSize = '28px';
+    openPill.style.borderColor = 'rgba(147,164,245,0.2)';
+    openPill.style.background  = 'rgba(147,164,245,0.05)';
+    statusSep.textContent  = '';
+    insightPct.textContent = '';
+
+    const allSlots = getBlendedSlots(data, openH, closeH, predDate);
+    if (allSlots.length) {
+      const avg  = allSlots.reduce((s, p) => s + p.y, 0) / allSlots.length;
+      const peak = allSlots.reduce((a, b) => b.y > a.y ? b : a);
+      const fillCls = avg >= 90 ? 'critical' : avg >= 80 ? 'high' : avg >= 60 ? 'mid' : '';
+      capFill.style.width = `${Math.min(avg, 100)}%`;
+      capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
+      capLabel.textContent = `avg ${Math.round(avg)}% · peak ${Math.round(peak.y)}%`;
+    } else {
+      capFill.style.width  = '0%';
+      capLabel.textContent = '—';
+    }
+  }
+
+  // Card 2: Comparison — use viewed day, noon as representative hour for non-today
+  const cmpH  = isToday
+    ? Math.round((pt.getHours() + pt.getMinutes() / 60) * 4) / 4
+    : 12;
+  const cmp = computeDayComparisonAt(dayName, cmpH, data);
+  const verdictEl = document.getElementById('insight-comp-verdict');
+  const deltasEl  = document.getElementById('insight-comp-deltas');
+  const compHeaderEl = document.getElementById('insight-comp-header');
+  if (compHeaderEl) compHeaderEl.textContent = `NOW VS PREVIOUS ${dayName.toUpperCase()}S`;
+  const refPct = isToday ? livePct : null;
+
+  const pairs = [
+    { label: 'last week',    val: cmp.lastWeek },
+    { label: 'this sem',     val: cmp.thisSemester },
+    { label: 'all time',     val: cmp.allTime },
+  ];
+
+  // Use this semester as baseline, fall back to all time
+  const baseline = cmp.thisSemester ?? cmp.allTime ?? null;
+  const avgDelta = (baseline != null && refPct != null) ? refPct - baseline : null;
+
+  if (verdictEl) {
+    if (avgDelta == null) {
+      verdictEl.textContent = '—';
+      verdictEl.className = 'comp-verdict average';
+    } else if (avgDelta > 15) {
+      verdictEl.textContent = 'Much busier than usual';
+      verdictEl.className = 'comp-verdict much-busier';
+    } else if (avgDelta > 6) {
+      verdictEl.textContent = 'Busier than usual';
+      verdictEl.className = 'comp-verdict busier';
+    } else if (avgDelta > 3) {
+      verdictEl.textContent = 'A bit busier than usual';
+      verdictEl.className = 'comp-verdict bit-busier';
+    } else if (avgDelta < -15) {
+      verdictEl.textContent = 'Much quieter than usual';
+      verdictEl.className = 'comp-verdict much-quieter';
+    } else if (avgDelta < -6) {
+      verdictEl.textContent = 'Quieter than usual';
+      verdictEl.className = 'comp-verdict quieter';
+    } else if (avgDelta < -3) {
+      verdictEl.textContent = 'A bit quieter than usual';
+      verdictEl.className = 'comp-verdict bit-quieter';
+    } else {
+      verdictEl.textContent = 'About average';
+      verdictEl.className = 'comp-verdict average';
+    }
+  }
+
+  if (deltasEl) {
+    deltasEl.innerHTML = pairs.map((p, i) => {
+      const diff = (p.val != null && refPct != null) ? Math.round(refPct - p.val) : null;
+      const cls  = diff == null ? '' : diff > 15 ? 'much-busier' : diff > 6 ? 'busier' : diff > 3 ? 'bit-busier' : diff < -15 ? 'much-quieter' : diff < -6 ? 'quieter' : diff < -3 ? 'bit-quieter' : '';
+      const sign = diff > 0 ? '+' : '';
+      const valStr = diff != null ? `${sign}${diff}%` : '—';
+      const sep = i < pairs.length - 1 ? `<span class="comp-delta-sep">·</span>` : '';
+      return `<span class="comp-delta-item"><span class="${cls}">${valStr}</span> vs ${p.label}</span>${sep}`;
+    }).join('');
+  }
+
+  // Card 3: Trend
+  const trendEl  = document.getElementById('insight-trend-val');
+  const trendSub = document.getElementById('insight-trend-sub');
+  const trend = computeTrend(data, livePct);
+  if (!trend || !isToday) {
+    trendEl.innerHTML  = `<span class="quiet-dash">—</span>`;
+    trendSub.textContent = '';
+  } else {
+    const arrows = { up: '↑', down: '↓', flat: '→' };
+    const labels = { up: 'Getting busier', down: 'Getting quieter', flat: 'Holding steady' };
+    const sign = trend.dir === 'down' ? '-' : '+';
+    const deltaStr = `${sign}${trend.delta}%`;
+    trendEl.innerHTML =
+      `<div class="trend-line">` +
+        `<span class="trend-arrow ${trend.dir}">${arrows[trend.dir]}</span>` +
+        `<span class="trend-label ${trend.dir}">${labels[trend.dir]}</span>` +
+        (deltaStr ? `<span class="trend-delta ${trend.dir}">${deltaStr}</span>` : '') +
+      `</div>`;
+    const fromPct = (isToday && livePct != null) ? Math.round(livePct) : trend.startY;
+    trendSub.textContent = trend.sub || `from ${fromPct}% now`;
+  }
+
+}
+
 // ── Boot ───────────────────────────────────────────────────────
 async function init() {
   updateStatusBar();
@@ -873,14 +1460,78 @@ async function init() {
   predDate = today;
   document.getElementById('day-select').value = DAYS[pt.getDay()];
 
+  window._insightData = data;
+
   document.getElementById('pred-prev').addEventListener('click', () => {
     predDate = shiftDate(predDate, -1);
     updatePredChart(data);
+    renderInsightCards(data);
   });
   document.getElementById('pred-next').addEventListener('click', () => {
     predDate = shiftDate(predDate, 1);
     updatePredChart(data);
+    renderInsightCards(data);
   });
+
+  // Calendar popup
+  const calPopup = document.getElementById('cal-popup');
+  const calLabel = document.getElementById('pred-date-label');
+  const minDate  = today;
+  const maxDate  = shiftDate(today, 179);
+  let calYear, calMonth;
+
+  function renderCalendar() {
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const prevMonthHasDays = new Date(calYear, calMonth - 1, 28) >= new Date(minDate + 'T00:00:00');
+    const nextMonthHasDays = new Date(calYear, calMonth + 1, 1) <= new Date(maxDate + 'T00:00:00');
+
+    let html = `<div class="cal-header">
+      <button class="cal-nav-btn" id="cal-prev-month" ${!prevMonthHasDays ? 'disabled' : ''}>&#8592;</button>
+      <span class="cal-month-label">${months[calMonth]} ${calYear}</span>
+      <button class="cal-nav-btn" id="cal-next-month" ${!nextMonthHasDays ? 'disabled' : ''}>&#8594;</button>
+    </div>
+    <div class="cal-grid">`;
+    ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => html += `<div class="cal-dow">${d}</div>`);
+    for (let i = 0; i < firstDay; i++) html += `<div class="cal-day cal-day-empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const disabled = ds < minDate || ds > maxDate;
+      const selected = ds === predDate;
+      const isToday  = ds === today;
+      const cls = ['cal-day', disabled ? 'cal-day-disabled' : '', selected ? 'cal-day-selected' : '', isToday ? 'cal-day-today' : ''].filter(Boolean).join(' ');
+      html += `<div class="${cls}" data-date="${ds}">${d}</div>`;
+    }
+    html += '</div>';
+    calPopup.innerHTML = html;
+
+    document.getElementById('cal-prev-month').addEventListener('click', () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); });
+    document.getElementById('cal-next-month').addEventListener('click', () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); });
+    calPopup.querySelectorAll('.cal-day:not(.cal-day-disabled):not(.cal-day-empty)').forEach(el => {
+      el.addEventListener('click', () => {
+        predDate = el.dataset.date;
+        calPopup.style.display = 'none';
+        updatePredChart(data);
+        renderInsightCards(data);
+      });
+    });
+  }
+
+  calLabel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (calPopup.style.display !== 'none') { calPopup.style.display = 'none'; return; }
+    const d = new Date(predDate + 'T12:00:00');
+    calYear = d.getFullYear(); calMonth = d.getMonth();
+    renderCalendar();
+    const navEl = document.querySelector('.pred-nav');
+    calPopup.style.top  = (navEl.offsetTop + navEl.offsetHeight + 8) + 'px';
+    calPopup.style.left = navEl.offsetLeft + 'px';
+    calPopup.style.display = 'block';
+  });
+
+  document.addEventListener('click', () => { calPopup.style.display = 'none'; });
+  calPopup.addEventListener('click', e => e.stopPropagation());
 
   document.getElementById('day-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
@@ -888,6 +1539,7 @@ async function init() {
 
   updatePredChart(data);
   updateWeeklyChart(data);
+  renderInsightCards(data);
 
   document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
 }

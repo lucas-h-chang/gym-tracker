@@ -54,6 +54,14 @@ def is_semester_day(d):
     return not (is_summer or is_winter or is_sb)
 
 
+def get_semester_start(today):
+    """Walk backward from today until we leave a semester period."""
+    d = today
+    while is_semester_day(d):
+        d -= timedelta(days=1)
+    return d + timedelta(days=1)
+
+
 def load_models():
     with open('models/rf_model.pkl', 'rb') as f:
         rf = pickle.load(f)
@@ -90,7 +98,16 @@ def needs_weekly_rebuild():
     if not os.path.exists(WEEKLY_CACHE):
         return True
     age = time.time() - os.path.getmtime(WEEKLY_CACHE)
-    return age > WEEKLY_MAX_AGE
+    if age > WEEKLY_MAX_AGE:
+        return True
+    try:
+        with open(WEEKLY_CACHE) as f:
+            cached = json.load(f)
+        if 'Monday|This semester|true' not in cached:
+            return True
+    except Exception:
+        return True
+    return False
 
 
 def compute_predictions(rf, scaler, mlp_model, days=180):
@@ -143,12 +160,17 @@ def compute_weekly_averages():
     df['hour_numeric'] = df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60
 
     DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+    semester_start = get_semester_start(now.date())
+    semester_days  = (now.date() - semester_start).days
+
     TIME_RANGES = {
         'Last 7 days':   timedelta(days=7),
         'Last month':    timedelta(days=30),
         'Last 6 months': timedelta(days=182),
         'Last year':     timedelta(days=365),
         'All time':      None,
+        'This semester': timedelta(days=max(semester_days, 1)),
     }
 
     result = {}
