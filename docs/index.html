@@ -1422,7 +1422,9 @@ function renderInsightCards(data) {
   if (isToday) {
     const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
     openPill.className = `open-pill ${gymIsOpen ? 'open' : 'closed'}`;
-    openPill.style.fontSize = '';
+    openPill.style.fontSize    = '';
+    openPill.style.background  = '';
+    openPill.style.borderColor = '';
     if (gymIsOpen) {
       if (livePct != null) {
         const col = pctColor(livePct);
@@ -1471,8 +1473,8 @@ function renderInsightCards(data) {
     openPill.textContent   = `${formatTime(openH, 0)} – ${formatTime(closeH, 0)}`;
     openPill.style.color   = 'var(--text)';
     openPill.style.fontSize = '28px';
-    openPill.style.borderColor = 'rgba(147,164,245,0.2)';
-    openPill.style.background  = 'rgba(147,164,245,0.05)';
+    openPill.style.borderColor = '';
+    openPill.style.background  = '';
     statusSep.textContent  = '';
     insightPct.textContent = '';
 

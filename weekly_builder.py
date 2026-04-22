@@ -178,14 +178,14 @@ def main():
     records = compute_weekly_averages(df)
     print(f"  {len(records):,} records computed")
 
-    print("Upserting to Supabase weekly_averages table...")
+    print("Truncating weekly_averages table...")
+    sb.table("weekly_averages").delete().neq("day_of_week", "").execute()
+
+    print("Inserting weekly averages...")
     for i in range(0, len(records), BATCH_SIZE):
         batch = records[i:i + BATCH_SIZE]
-        sb.table("weekly_averages").upsert(
-            batch,
-            on_conflict="day_of_week,hour_slot,range_type,semester_only"
-        ).execute()
-        print(f"  Upserted {min(i + BATCH_SIZE, len(records))}/{len(records)}")
+        sb.table("weekly_averages").insert(batch).execute()
+        print(f"  Inserted {min(i + BATCH_SIZE, len(records))}/{len(records)}")
 
     print(f"[{now.isoformat()}] weekly_averages updated: {len(records)} rows")
 
