@@ -49,7 +49,7 @@ def is_semester_day(d):
 def fetch_history():
     """Fetch last 2 years of capacity_log from Supabase (paginated)."""
     cutoff = (now - timedelta(days=730)).isoformat()
-    BATCH  = 10000
+    BATCH  = 9000
     offset = 0
     rows   = []
     while True:
@@ -183,7 +183,7 @@ def main():
     print(f"  {len(rows):,} rows loaded")
 
     df = pd.DataFrame(rows)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True).dt.tz_convert(PT)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
 
     print("Computing similarity predictions...")
     preds, blend_weight = compute_similarity_predictions(df)

@@ -66,7 +66,7 @@ def get_semester_start(today):
 
 def fetch_all_history():
     """Fetch all capacity_log from Supabase (paginated)."""
-    BATCH  = 10000
+    BATCH  = 9000
     offset = 0
     rows   = []
     while True:
@@ -171,7 +171,7 @@ def main():
 
     df = pd.DataFrame(rows)
     # Keep a naive copy for timezone-naive cutoff comparisons
-    df['timestamp']       = pd.to_datetime(df['timestamp'], utc=True).dt.tz_convert(PT)
+    df['timestamp']       = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
     df['timestamp_naive'] = df['timestamp'].dt.tz_localize(None)
 
     print("Computing weekly averages...")
