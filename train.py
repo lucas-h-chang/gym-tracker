@@ -1,4 +1,3 @@
-import sqlite3
 import os
 import json
 import pickle
@@ -338,12 +337,31 @@ if __name__ == "__main__":
     #   - dropna(): removes the 4 null rows we found in our data audit
     # --------------------------------------------------------------------------
 
-    print("Loading data from gym_history.db...")
-    conn = sqlite3.connect("gym_history.db")
-    df = pd.read_sql_query("SELECT timestamp, people_count FROM capacity_log", conn)
-    conn.close()
+    from supabase import create_client
+    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    print("Loading data from Supabase capacity_log...")
+    BATCH  = 10000
+    offset = 0
+    rows   = []
+    while True:
+        batch = (
+            sb.table("capacity_log")
+            .select("timestamp,people_count")
+            .range(offset, offset + BATCH - 1)
+            .order("timestamp")
+            .execute()
+            .data
+        )
+        rows.extend(batch)
+        if len(batch) < BATCH:
+            break
+        offset += BATCH
+        print(f"  Fetched {len(rows):,} rows...")
+
+    df = pd.DataFrame(rows)
+    df['timestamp']    = pd.to_datetime(df['timestamp'], utc=True).dt.tz_localize(None)
+    df['people_count'] = df['people_count'].astype(float)
     df = df[df['people_count'] > 5].dropna()
     df = df.sort_values('timestamp').reset_index(drop=True)
 

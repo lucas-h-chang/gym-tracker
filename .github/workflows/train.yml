@@ -20,10 +20,13 @@ jobs:
 
       - name: Install ML tools
         run: |
-          pip install scikit-learn pandas numpy
+          pip install scikit-learn pandas numpy supabase
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Train models
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python train.py
 
       - name: Commit and push

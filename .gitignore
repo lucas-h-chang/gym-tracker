@@ -3,3 +3,13 @@ __pycache__/
 .claude/
 *.pdf
 *.pyc
+
+# Local SQLite — no longer committed; Supabase is source of truth
+gym_history.db
+
+# Pre-built static data — no longer generated locally
+docs/data.json
+
+# Model caches replaced by Supabase tables
+models/predictions_cache.json
+models/weekly_cache.json

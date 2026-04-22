@@ -735,6 +735,61 @@
 <script>
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+// ── Supabase config ────────────────────────────────────────────
+const SB_URL      = 'https://njhxcwcvyorwqlfacnal.supabase.co';
+const SB_ANON_KEY = 'sb_publishable_in5UWgu0ZCkriOULxBZ8GA_kKJ0qUvA';
+
+async function sbFetch(path) {
+  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { 'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}` }
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${path}`);
+  return res.json();
+}
+
+function slotTsToKey(slotTs) {
+  const d  = new Date(slotTs);
+  const pt = new Date(d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const date = `${pt.getFullYear()}-${String(pt.getMonth()+1).padStart(2,'0')}-${String(pt.getDate()).padStart(2,'0')}`;
+  const time = `${String(pt.getHours()).padStart(2,'0')}:${String(pt.getMinutes()).padStart(2,'0')}`;
+  return `${date}_${time}`;
+}
+
+function slotToLabel(h) {
+  const hour   = Math.floor(h);
+  const min    = Math.round((h - hour) * 60);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const dh     = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+  return min === 0 ? `${dh}:00 ${period}` : `${dh}:${String(min).padStart(2,'0')} ${period}`;
+}
+
+const RANGE_DB_TO_DISPLAY = {
+  'last_week': 'Last 7 days', 'last_month': 'Last month',
+  'last_6_months': 'Last 6 months', 'last_year': 'Last year',
+  'all_time': 'All time', 'this_semester': 'This semester',
+};
+
+function buildTodayActuals(rows, today) {
+  const bins = {};
+  rows.forEach(row => {
+    const d  = new Date(row.timestamp);
+    const pt = new Date(d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const ds = `${pt.getFullYear()}-${String(pt.getMonth()+1).padStart(2,'0')}-${String(pt.getDate()).padStart(2,'0')}`;
+    if (ds !== today) return;
+    const total   = pt.getHours() * 60 + pt.getMinutes();
+    const rounded = Math.round(total / 15) * 15;
+    const h = Math.floor(rounded / 60), m = rounded % 60;
+    const key = h + m / 60;
+    if (!bins[key]) bins[key] = { sum: 0, n: 0, h, m };
+    bins[key].sum += row.percent_full;
+    bins[key].n   += 1;
+  });
+  return Object.values(bins)
+    .sort((a, b) => (a.h + a.m/60) - (b.h + b.m/60))
+    .map(b => ({ x: b.h + b.m/60, y: Math.round(b.sum/b.n*10)/10, label: formatTime(b.h, b.m) }));
+}
+// ──────────────────────────────────────────────────────────────
+
 let liveCapacity  = null; // { count, pct } — set when Density fetch succeeds
 let nowHoverState = { active: false, title: '', label: '' };
 
@@ -1436,26 +1491,55 @@ function renderInsightCards(data) {
 async function init() {
   updateStatusBar();
 
-  let data;
+  const today     = todayPT();
+  const yesterday = shiftDate(today, -1);
+
+  let predRows, weeklyRows, actualsRows, todaySummaryRows;
   try {
-    const res = await fetch('data.json');
-    data = await res.json();
+    [predRows, weeklyRows, actualsRows, todaySummaryRows] = await Promise.all([
+      sbFetch(`predictions?slot_ts=gte.${today}T00:00:00&order=slot_ts.asc&limit=10000`),
+      sbFetch(`weekly_averages?select=*&limit=10000`),
+      sbFetch(`capacity_log?timestamp=gte.${yesterday}T12:00:00+00:00&order=timestamp.asc&limit=2000`),
+      sbFetch(`today_summary?date=eq.${today}&select=similarity_preds,blend_weight,computed_at`),
+    ]);
   } catch (e) {
-    showDataWarning('⚠  Could not load gym data. The data file may be missing or the last scrape failed. Please check back later.');
+    showDataWarning('⚠  Could not load gym data. Please try again later.');
     return;
   }
 
-  const predCount = Object.keys(data.predictions || {}).length;
-  if (predCount === 0) {
-    showDataWarning('⚠  Prediction data is unavailable — the last data collection may have failed or is still in progress.');
-  } else {
-    const builtAt = data.built_at ? new Date(data.built_at.replace(' PT', '')) : null;
-    if (builtAt && (Date.now() - builtAt.getTime()) / 3600000 > 48) {
-      showDataWarning(`⚠  Data may be outdated — last updated ${data.built_at}.`);
-    }
+  // predictions dict: "2026-04-21_07:00" → [rf_pct, mlp_pct]
+  const predictions = {};
+  predRows.forEach(r => { predictions[slotTsToKey(r.slot_ts)] = [r.rf_pct, r.mlp_pct]; });
+
+  // weekly dict: "Monday|Last 7 days|false" → [{x, y, label}]
+  const weekly = {};
+  weeklyRows.forEach(r => {
+    const disp = RANGE_DB_TO_DISPLAY[r.range_type] || r.range_type;
+    const key  = `${r.day_of_week}|${disp}|${r.semester_only}`;
+    if (!weekly[key]) weekly[key] = [];
+    weekly[key].push({ x: r.hour_slot, y: r.avg_pct, label: slotToLabel(r.hour_slot) });
+  });
+  Object.values(weekly).forEach(arr => arr.sort((a, b) => a.x - b.x));
+
+  const ts = todaySummaryRows[0] || {};
+  const built_at = ts.computed_at
+    ? new Date(ts.computed_at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles',
+        month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' PT'
+    : today;
+
+  const data = {
+    predictions,
+    weekly,
+    today_actuals:           buildTodayActuals(actualsRows, today),
+    today_similarity_preds:  ts.similarity_preds || [],
+    today_blend_weight:      ts.blend_weight || 0,
+    built_at,
+  };
+
+  if (Object.keys(predictions).length === 0) {
+    showDataWarning('⚠  Prediction data is unavailable — the daily build may not have run yet.');
   }
 
-  const today = todayPT();
   const pt = getPTNow();
   predDate = today;
   document.getElementById('day-select').value = DAYS[pt.getDay()];

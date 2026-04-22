@@ -1,10 +1,12 @@
-name: Scrape Gym Data
+name: Daily Data Build
 
 on:
-  workflow_dispatch:  # triggered externally by cron-job.org every 15 minutes
+  schedule:
+    - cron: '0 8 * * *'  # midnight PT (PDT = UTC-7, so 8:00 UTC ≈ midnight PT)
+  workflow_dispatch:       # manual trigger
 
 jobs:
-  scrape:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,19 +22,21 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-scrape-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-daily-${{ hashFiles('requirements.txt') }}
 
       - name: Install dependencies
-        run: pip install requests supabase scikit-learn torch --extra-index-url https://download.pytorch.org/whl/cpu pandas numpy pytz
+        run: |
+          pip install supabase scikit-learn pandas numpy pytz
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Scrape live count → Supabase
+      - name: Build 180-day predictions → Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scraper.py
+        run: python predictions_builder.py
 
-      - name: Build today similarity preds → Supabase
+      - name: Build weekly averages → Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python today_builder.py
+        run: python weekly_builder.py
