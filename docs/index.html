@@ -1499,11 +1499,12 @@ async function init() {
     [predRows, weeklyRows, actualsRows, todaySummaryRows] = await Promise.all([
       sbFetch(`predictions?slot_ts=gte.${today}T00:00:00&order=slot_ts.asc&limit=10000`),
       sbFetch(`weekly_averages?select=*&limit=10000`),
-      sbFetch(`capacity_log?timestamp=gte.${yesterday}T12:00:00+00:00&order=timestamp.asc&limit=2000`),
+      sbFetch(`capacity_log?timestamp=gte.${yesterday}T12:00:00Z&order=timestamp.asc&limit=2000`),
       sbFetch(`today_summary?date=eq.${today}&select=similarity_preds,blend_weight,computed_at`),
     ]);
   } catch (e) {
-    showDataWarning('⚠  Could not load gym data. Please try again later.');
+    console.error('Supabase load failed:', e);
+    showDataWarning(`⚠  Could not load gym data: ${e.message}`);
     return;
   }
 
