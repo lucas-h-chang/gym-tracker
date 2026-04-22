@@ -5,7 +5,7 @@ Runs every 15 min alongside scraper.py.
 import os
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta, date
+from datetime import datetime
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
@@ -47,8 +47,7 @@ def is_semester_day(d):
 
 
 def fetch_history():
-    """Fetch last 2 years of capacity_log from Supabase (paginated)."""
-    cutoff = (now - timedelta(days=730)).isoformat()
+    """Fetch all capacity_log from Supabase (paginated). Full history improves similarity matching."""
     BATCH  = 9000
     offset = 0
     rows   = []
@@ -56,7 +55,6 @@ def fetch_history():
         batch = (
             sb.table("capacity_log")
             .select("timestamp,percent_full")
-            .gte("timestamp", cutoff)
             .range(offset, offset + BATCH - 1)
             .order("timestamp")
             .execute()
