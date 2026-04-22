@@ -632,12 +632,41 @@
       line-height: 1;
     }
     .insight-row.hidden { display: none; }
+
+    /* ── Skeleton loading ── */
+    @keyframes skel-pulse {
+      0%, 100% { opacity: 0.4; }
+      50%       { opacity: 0.85; }
+    }
+    .skel {
+      background: var(--panel2);
+      border-radius: 5px;
+      animation: skel-pulse 1.5s ease-in-out infinite;
+    }
+    .insight-card { position: relative; }
+    .skel-overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--panel);
+      border-radius: inherit;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+      padding: 28px;
+      z-index: 2;
+    }
+    body.loading .skel-overlay      { display: flex; }
+    body.loading #insight-row       { display: flex !important; }
+    body.loading .chart-card canvas { visibility: hidden; }
+    body.loading #weekly-no-data    { display: none !important; }
+
     @media (max-width: 768px) {
       .insight-row { flex-direction: column; padding: 20px 24px 0; }
     }
   </style>
 </head>
-<body>
+<body class="loading">
 
 <div id="data-warning"></div>
 
@@ -654,6 +683,16 @@
   <!-- INSIGHT CARDS -->
   <div class="insight-row hidden" id="insight-row">
     <div class="insight-card" id="insight-status">
+      <div class="skel-overlay">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="skel" style="width:11px;height:11px;border-radius:50%;flex-shrink:0"></div>
+          <div class="skel" style="width:62px;height:36px"></div>
+          <div class="skel" style="width:3px;height:28px;border-radius:2px;animation-delay:.1s"></div>
+          <div class="skel" style="width:62px;height:36px;animation-delay:.1s"></div>
+        </div>
+        <div class="skel" style="width:100%;height:5px;animation-delay:.15s"></div>
+        <div class="skel" style="width:50%;height:13px;animation-delay:.25s"></div>
+      </div>
       <div class="status-row">
         <span class="live-dot" id="insight-live-dot" style="display:none"></span>
         <span class="open-pill" id="insight-open-pill">—</span>
@@ -666,11 +705,28 @@
       </div>
     </div>
     <div class="insight-card" id="insight-comparison">
+      <div class="skel-overlay">
+        <div class="skel" style="width:72%;height:12px"></div>
+        <div class="skel" style="width:48%;height:28px;animation-delay:.1s"></div>
+        <div style="display:flex;gap:8px">
+          <div class="skel" style="width:72px;height:12px;animation-delay:.2s"></div>
+          <div class="skel" style="width:60px;height:12px;animation-delay:.25s"></div>
+        </div>
+      </div>
       <span class="comp-header" id="insight-comp-header">COMPARED TO PREVIOUS —</span>
       <div id="insight-comp-verdict" class="comp-verdict">—</div>
       <div id="insight-comp-deltas" class="comp-deltas"></div>
     </div>
     <div class="insight-card" id="insight-trend">
+      <div class="skel-overlay">
+        <div class="skel" style="width:62%;height:12px"></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="skel" style="width:26px;height:28px;border-radius:4px;animation-delay:.1s"></div>
+          <div class="skel" style="width:130px;height:28px;animation-delay:.1s"></div>
+          <div class="skel" style="width:46px;height:28px;animation-delay:.15s"></div>
+        </div>
+        <div class="skel" style="width:45%;height:12px;animation-delay:.2s"></div>
+      </div>
       <span class="insight-card-label">CROWD IN NEXT HOUR</span>
       <div id="insight-trend-val" class="trend-main"></div>
       <span id="insight-trend-sub" class="trend-sub"></span>
@@ -690,6 +746,9 @@
     <div id="cal-popup" class="cal-popup" style="display:none"></div>
 
     <div class="chart-card">
+      <div class="skel-overlay" style="padding:20px">
+        <div class="skel" style="flex:1;width:100%;border-radius:6px"></div>
+      </div>
       <canvas id="pred-chart" height="290"></canvas>
     </div>
 
@@ -720,6 +779,9 @@
     </div>
 
     <div class="chart-card">
+      <div class="skel-overlay" style="padding:20px">
+        <div class="skel" style="flex:1;width:100%;border-radius:6px"></div>
+      </div>
       <canvas id="weekly-chart" height="290"></canvas>
       <div id="weekly-no-data" class="no-data-overlay"></div>
     </div>
@@ -1525,6 +1587,7 @@ async function init() {
     ]);
   } catch (e) {
     console.error('Supabase load failed:', e);
+    document.body.classList.remove('loading');
     showDataWarning(`⚠  Could not load gym data: ${e.message}`);
     return;
   }
@@ -1542,7 +1605,6 @@ async function init() {
     weekly[key].push({ x: r.hour_slot, y: r.avg_pct, label: slotToLabel(r.hour_slot) });
   });
   Object.values(weekly).forEach(arr => arr.sort((a, b) => a.x - b.x));
-  console.log('weekly rows:', weeklyRows.length, '| keys:', Object.keys(weekly).length, '| sample key:', Object.keys(weekly)[0]);
 
   const ts = todaySummaryRows[0] || {};
   const built_at = ts.computed_at
@@ -1649,6 +1711,7 @@ async function init() {
   renderInsightCards(data);
 
   document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
+  document.body.classList.remove('loading');
 }
 
 init();
