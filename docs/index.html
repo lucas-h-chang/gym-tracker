@@ -747,10 +747,33 @@ async function sbFetch(path) {
   return res.json();
 }
 
+// Supabase returns TIMESTAMPTZ as UTC (+00:00). Convert UTC → PT using manual
+// DST arithmetic instead of toLocaleString (~100µs/call × 7200 rows = 720ms).
+const _ptBounds = {};
+function _getPTBounds(year) {
+  if (_ptBounds[year]) return _ptBounds[year];
+  const mar1       = Date.UTC(year, 2, 1);
+  const mar1dow    = new Date(mar1).getUTCDay();
+  const firstSunMar = mar1 + (mar1dow === 0 ? 0 : (7 - mar1dow)) * 86400000;
+  const dstStart   = firstSunMar + 7 * 86400000 + 10 * 3600000; // 2nd Sun Mar 10:00 UTC
+  const nov1       = Date.UTC(year, 10, 1);
+  const nov1dow    = new Date(nov1).getUTCDay();
+  const firstSunNov = nov1 + (nov1dow === 0 ? 0 : (7 - nov1dow)) * 86400000;
+  const dstEnd     = firstSunNov + 9 * 3600000;                  // 1st Sun Nov 09:00 UTC
+  return (_ptBounds[year] = { dstStart, dstEnd });
+}
 function slotTsToKey(slotTs) {
-  // Timestamps are stored as PT-local ISO strings ("2026-04-21T07:00:00-07:00")
-  // so the date and HH:MM are already in PT — no timezone conversion needed.
-  return slotTs.slice(0, 10) + '_' + slotTs.slice(11, 16);
+  const ms = Date.parse(slotTs);
+  const { dstStart, dstEnd } = _getPTBounds(new Date(ms).getUTCFullYear());
+  const ptMs = ms + ((ms >= dstStart && ms < dstEnd) ? -7 : -8) * 3600000;
+  const d = new Date(ptMs);
+  return (
+    d.getUTCFullYear() + '-' +
+    String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getUTCDate()).padStart(2, '0') + '_' +
+    String(d.getUTCHours()).padStart(2, '0') + ':' +
+    String(d.getUTCMinutes()).padStart(2, '0')
+  );
 }
 
 function slotToLabel(h) {
