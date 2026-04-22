@@ -421,7 +421,7 @@
       padding: 28px 48px 0;
     }
     .insight-card {
-      background: var(--panel);
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 29px 28px;
@@ -647,7 +647,7 @@
     .skel-overlay {
       position: absolute;
       inset: 0;
-      background: var(--panel);
+      background: var(--bg);
       border-radius: inherit;
       display: none;
       flex-direction: column;
@@ -1326,7 +1326,7 @@ function computeTrend(data, livePct) {
   const delta  = endY - startY;
 
   const dir = Math.abs(delta) < 5 ? 'flat' : delta > 0 ? 'up' : 'down';
-  return { dir, delta: Math.round(Math.abs(delta)), startY: Math.round(startY), sub };
+  return { dir, delta: Math.round(delta), startY: Math.round(startY), sub };
 }
 
 function computeQuietWindow(data) {
@@ -1443,7 +1443,11 @@ function renderInsightCards(data) {
         const fillCls = livePct >= 90 ? 'critical' : livePct >= 80 ? 'high' : livePct >= 60 ? 'mid' : '';
         capFill.style.width = `${Math.min(livePct, 100)}%`;
         capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
-        capLabel.textContent = `${liveCount} / 150 people`;
+        if (livePct >= 95) {
+          capLabel.innerHTML = `${liveCount} / 150 people · <a href="https://417804.waitwell.us/join/48" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px">Join virtual queue</a>`;
+        } else {
+          capLabel.textContent = `${liveCount} / 150 people`;
+        }
       } else {
         capFill.style.width = '0%';
         capLabel.textContent = 'Live count unavailable';
@@ -1556,7 +1560,7 @@ function renderInsightCards(data) {
   } else {
     const arrows = { up: '↑', down: '↓', flat: '→' };
     const labels = { up: 'Getting busier', down: 'Getting quieter', flat: 'Holding steady' };
-    const sign = trend.dir === 'down' ? '-' : '+';
+    const sign = trend.delta >= 0 ? '+' : '';
     const deltaStr = `${sign}${trend.delta}%`;
     trendEl.innerHTML =
       `<div class="trend-line">` +
