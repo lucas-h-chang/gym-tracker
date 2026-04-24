@@ -230,9 +230,9 @@
       border: none;
       color: var(--text);
       cursor: pointer;
-      width: 44px;
-      height: 38px;
-      font-size: 15px;
+      width: 36px;
+      height: 30px;
+      font-size: 13px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -242,14 +242,14 @@
     .pred-nav-btn:hover:not(:disabled) { background: var(--border2); color: var(--accent); }
     .pred-nav-btn:disabled { opacity: 0.25; cursor: default; }
     .pred-date-label {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       color: var(--text);
       flex: 1;
       text-align: center;
       border-left: 1px solid var(--border2);
       border-right: 1px solid var(--border2);
-      line-height: 38px;
+      line-height: 30px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -273,6 +273,56 @@
       margin-bottom: 20px;
     }
     .pred-header-row .section-title { margin-bottom: 0; }
+
+    /* ── Info tooltip ── */
+    .info-tip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid var(--muted);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 600;
+      font-style: normal;
+      cursor: default;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: border-color 0.15s, color 0.15s;
+      user-select: none;
+    }
+
+    .info-tip:hover .info-icon {
+      border-color: var(--sub);
+      color: var(--sub);
+    }
+
+    .info-popup {
+      display: none;
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 0;
+      width: 300px;
+      background: var(--panel2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--sub);
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .info-tip:hover .info-popup { display: block; }
 
     /* ── Chart card ── */
     .chart-card {
@@ -310,7 +360,7 @@
     }
     .weekly-controls-inline {
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       gap: 24px;
       flex-wrap: wrap;
     }
@@ -672,9 +722,10 @@
 
 <header>
   <div style="display:flex; align-items:center;">
-    <div class="logo">RSF Crowd Level Predictor</div>
+    <div class="logo">RSF Now</div>
   </div>
   <div class="header-right">
+    <a href="about.html" style="font-size:18px;font-weight:500;color:var(--sub);text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--sub)'">About</a>
   </div>
 </header>
 
@@ -704,19 +755,6 @@
         <span class="cap-bar-label" id="insight-cap-label">—</span>
       </div>
     </div>
-    <div class="insight-card" id="insight-comparison">
-      <div class="skel-overlay">
-        <div class="skel" style="width:72%;height:12px"></div>
-        <div class="skel" style="width:48%;height:28px;animation-delay:.1s"></div>
-        <div style="display:flex;gap:8px">
-          <div class="skel" style="width:72px;height:12px;animation-delay:.2s"></div>
-          <div class="skel" style="width:60px;height:12px;animation-delay:.25s"></div>
-        </div>
-      </div>
-      <span class="comp-header" id="insight-comp-header">COMPARED TO PREVIOUS —</span>
-      <div id="insight-comp-verdict" class="comp-verdict">—</div>
-      <div id="insight-comp-deltas" class="comp-deltas"></div>
-    </div>
     <div class="insight-card" id="insight-trend">
       <div class="skel-overlay">
         <div class="skel" style="width:62%;height:12px"></div>
@@ -727,16 +765,35 @@
         </div>
         <div class="skel" style="width:45%;height:12px;animation-delay:.2s"></div>
       </div>
-      <span class="insight-card-label">CROWD IN NEXT HOUR</span>
+      <span class="insight-card-label">CROWD IN NEXT 30 MIN</span>
       <div id="insight-trend-val" class="trend-main"></div>
       <span id="insight-trend-sub" class="trend-sub"></span>
+    </div>
+    <div class="insight-card" id="insight-comparison">
+      <div class="skel-overlay">
+        <div class="skel" style="width:72%;height:12px"></div>
+        <div class="skel" style="width:48%;height:28px;animation-delay:.1s"></div>
+        <div style="display:flex;gap:8px">
+          <div class="skel" style="width:72px;height:12px;animation-delay:.2s"></div>
+          <div class="skel" style="width:60px;height:12px;animation-delay:.25s"></div>
+        </div>
+      </div>
+      <span class="comp-header" id="insight-comp-header">COMPARED TO PREVIOUS —</span>
+      <div id="insight-comp-verdict" class="comp-verdict"><span class="quiet-dash">—</span></div>
+      <div id="insight-comp-deltas" class="comp-deltas"></div>
     </div>
   </div>
 
   <!-- PREDICTION CHART: full-width -->
   <div class="section-pred" id="section-predict">
     <div class="pred-header-row">
-      <div class="section-title">Predicted Occupancy</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="section-title">Predicted Occupancy</div>
+        <div class="info-tip">
+          <span class="info-icon">i</span>
+          <div class="info-popup">Today's predictions blend two ML models (a Random Forest and a neural network) with a similarity signal. Using occupancy data already collected today, the app finds the most historically similar days and weights their curves against the model output.</div>
+        </div>
+      </div>
       <div class="pred-nav">
         <button class="pred-nav-btn" id="pred-prev">&#8592;</button>
         <span class="pred-date-label" id="pred-date-label" style="cursor:pointer">—</span>
@@ -773,7 +830,7 @@
         </div>
         <div class="check-row">
           <input type="checkbox" id="semester-check" checked>
-          <label for="semester-check">Semester only</label>
+          <label for="semester-check">Exclude breaks</label>
         </div>
       </div>
     </div>
@@ -878,6 +935,23 @@ let nowHoverState = { active: false, title: '', label: '' };
 
 function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+}
+
+function isSemesterDay(date) {
+  const pt    = new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const month = pt.getMonth() + 1;
+  const dom   = pt.getDate();
+  if (month >= 6 && month <= 8)          return false; // summer
+  if (month === 12 && dom >= 16)         return false; // winter break
+  if (month === 1  && dom <= 12)         return false; // winter break
+  const ds = pt.toLocaleDateString('en-CA'); // yyyy-MM-dd
+  const breaks = [
+    ['2021-03-20','2021-03-28'], ['2022-03-19','2022-03-27'],
+    ['2023-03-25','2023-04-02'], ['2024-03-23','2024-03-31'],
+    ['2025-03-22','2025-03-30'], ['2026-03-21','2026-03-29'],
+    ['2027-03-20','2027-03-28'], ['2028-03-25','2028-04-02'],
+  ];
+  return !breaks.some(([s, e]) => ds >= s && ds <= e);
 }
 
 function getOpenHours(jsDay) {
@@ -1044,6 +1118,27 @@ const nowHoverPlugin = {
   }
 };
 
+// Scrubber: thin vertical line that tracks the active tooltip element on hover
+const scrubLinePlugin = {
+  id: 'scrubLine',
+  afterDraw(chart) {
+    const active = chart.tooltip?.getActiveElements();
+    if (!active || !active.length) return;
+    const { ctx, chartArea: a } = chart;
+    const x = active[0].element.x;
+    if (x < a.left || x > a.right) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, a.top);
+    ctx.lineTo(x, a.bottom);
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+Chart.register(scrubLinePlugin);
+
 function updatePredChart(data) {
   const today    = todayPT();
   const isToday  = predDate === today;
@@ -1133,6 +1228,7 @@ function updatePredChart(data) {
       parsing: false,
       animation: { duration: 320 },
       layout: { padding: { top: 20 } },
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         nowLine: { show: isToday, value: nowVal },
         legend:  { display: false },
@@ -1223,6 +1319,7 @@ function updateWeeklyChart(data) {
     options: {
       parsing: false,
       animation: { duration: 320 },
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1308,14 +1405,14 @@ function computeTrend(data, livePct) {
   if (isToday) {
     const pt  = getPTNow();
     const nowH = pt.getHours() + pt.getMinutes() / 60;
-    if (close - nowH < 1) return null;
+    if (close - nowH < 0.5) return null;
     fromH = nowH;
-    toH   = Math.min(nowH + 1, close);
+    toH   = Math.min(nowH + 0.5, close);
     sub   = null;
   } else {
     fromH = open;
-    toH   = Math.min(open + 1, close);
-    sub   = 'first hour · projected';
+    toH   = Math.min(open + 0.5, close);
+    sub   = 'first 30 min · projected';
   }
 
   const slots = getBlendedSlots(data, fromH, toH, predDate);
@@ -1326,7 +1423,8 @@ function computeTrend(data, livePct) {
   const delta  = endY - startY;
 
   const dir = Math.abs(delta) < 5 ? 'flat' : delta > 0 ? 'up' : 'down';
-  return { dir, delta: Math.round(delta), startY: Math.round(startY), sub };
+  const lastSlot = slots[slots.length - 1];
+  return { dir, delta: Math.round(delta), startY: Math.round(startY), endY: Math.round(endY), toH: lastSlot.h, toMin: lastSlot.m, sub };
 }
 
 function computeQuietWindow(data) {
@@ -1379,7 +1477,7 @@ function computeQuietWindow(data) {
   return { ...bestWindow, avg: Math.round(bestWindow.avg), fallback: false };
 }
 
-function computeDayComparisonAt(dayName, qH, data) {
+function computeDayComparisonAt(dayName, qH, data, forDate) {
   function getWeeklyAt(key, h) {
     const arr = data.weekly[key];
     if (!arr) return null;
@@ -1387,10 +1485,11 @@ function computeDayComparisonAt(dayName, qH, data) {
     return pt ? pt.y : null;
   }
 
+  const semOnly = isSemesterDay(forDate || new Date()) ? 'true' : 'false';
   return {
     lastWeek:     getWeeklyAt(`${dayName}|Last 7 days|false`, qH),
     thisSemester: getWeeklyAt(`${dayName}|This semester|true`, qH),
-    allTime:      getWeeklyAt(`${dayName}|All time|true`, qH),
+    allTime:      getWeeklyAt(`${dayName}|All time|${semOnly}`, qH),
   };
 }
 
@@ -1460,12 +1559,12 @@ function renderInsightCards(data) {
       const nextOpen = isBeforeOpen ? openH : getOpenHours((pt.getDay() + 1) % 7).open;
       const prefix   = isBeforeOpen ? 'Opens at' : 'Opens tomorrow at';
       openPill.textContent   = 'CLOSED';
-      statusSep.textContent  = '—';
-      insightPct.textContent  = `${prefix} ${formatTime(nextOpen, 0)}`;
-      insightPct.style.color  = 'var(--sub)';
-      insightPct.style.fontSize = '16px';
+      statusSep.textContent  = '';
+      insightPct.textContent  = '';
+      insightPct.style.color  = '';
+      insightPct.style.fontSize = '';
       capFill.style.width    = '0%';
-      capLabel.textContent   = '—';
+      capLabel.textContent   = `${prefix} ${formatTime(nextOpen, 0)}`;
     }
   } else {
     liveDot.style.display  = 'none';
@@ -1496,7 +1595,7 @@ function renderInsightCards(data) {
   const cmpH  = isToday
     ? Math.round((pt.getHours() + pt.getMinutes() / 60) * 4) / 4
     : 12;
-  const cmp = computeDayComparisonAt(dayName, cmpH, data);
+  const cmp = computeDayComparisonAt(dayName, cmpH, data, new Date(predDate + 'T12:00:00'));
   const verdictEl = document.getElementById('insight-comp-verdict');
   const deltasEl  = document.getElementById('insight-comp-deltas');
   const compHeaderEl = document.getElementById('insight-comp-header');
@@ -1515,7 +1614,7 @@ function renderInsightCards(data) {
 
   if (verdictEl) {
     if (avgDelta == null) {
-      verdictEl.textContent = '—';
+      verdictEl.innerHTML = '<span class="quiet-dash">—</span>';
       verdictEl.className = 'comp-verdict average';
     } else if (avgDelta > 15) {
       verdictEl.textContent = 'Much busier than usual';
@@ -1570,8 +1669,11 @@ function renderInsightCards(data) {
         `<span class="trend-label ${trend.dir}">${labels[trend.dir]}</span>` +
         (deltaStr ? `<span class="trend-delta ${trend.dir}">${deltaStr}</span>` : '') +
       `</div>`;
-    const fromPct = (isToday && livePct != null) ? Math.round(livePct) : trend.startY;
-    trendSub.textContent = trend.sub || `from ${fromPct}% now`;
+    if (trend.sub) {
+      trendSub.textContent = trend.sub;
+    } else {
+      trendSub.textContent = `${trend.endY}% at ${formatTime(trend.toH, trend.toMin)}`;
+    }
   }
 
 }
