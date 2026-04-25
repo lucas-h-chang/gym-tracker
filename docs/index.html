@@ -480,7 +480,7 @@
       gap: 14px;
       height: 158px;
     }
-    #insight-status { flex: 1; justify-content: center; gap: 20px; padding: 40px 30px 28px; }
+    #insight-status { flex: 1; justify-content: center; gap: 20px; padding: 28px 30px; }
     .status-row { display: flex; align-items: center; gap: 12px; min-height: 34px; }
     .live-dot {
       position: relative;
@@ -523,11 +523,12 @@
     .status-row { display: flex; align-items: center; gap: 16px; }
     .status-sep { color: var(--muted); font-size: 24px; font-weight: 300; }
     #insight-status-pct { font-size: 34px; font-weight: 700; font-family: var(--font); }
-    #insight-comparison { flex: 1; gap: 16px; justify-content: center; padding: 26px 26px; }
-    #insight-trend      { flex: 1; gap: 16px; justify-content: center; padding: 26px 30px; }
+    #insight-comparison { flex: 1; gap: 16px; justify-content: flex-start; padding: 35px 26px; }
+    #insight-trend      { flex: 1; gap: 16px; justify-content: flex-start; padding: 35px 30px; }
     .insight-card-label {
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 600;
+      line-height: 1;
       letter-spacing: 0.06em;
       color: var(--sub);
       text-transform: uppercase;
@@ -535,7 +536,7 @@
     /* Card 2: comparison columns */
     #insight-status-badge { width: fit-content; }
     .comp-verdict {
-      font-size: 26px;
+      font-size: 29px;
       font-weight: 700;
       font-family: var(--font);
       line-height: 1;
@@ -554,7 +555,7 @@
       flex-wrap: wrap;
     }
     .comp-delta-item {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 500;
       color: var(--sub);
     }
@@ -572,8 +573,9 @@
       color: var(--border);
     }
     .comp-header {
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 600;
+      line-height: 1;
       letter-spacing: 0.06em;
       color: var(--sub);
       text-transform: uppercase;
@@ -606,10 +608,7 @@
     }
     /* Card 2: trend */
     .trend-main {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-height: 26px;
+      display: block;
     }
     .trend-line {
       display: flex;
@@ -617,14 +616,14 @@
       gap: 8px;
     }
     .trend-arrow {
-      font-size: 26px;
+      font-size: 29px;
       line-height: 1;
     }
     .trend-arrow.up   { color: #f87171; }
     .trend-arrow.down { color: #6ee7b7; }
     .trend-arrow.flat { color: var(--text); }
     .trend-label {
-      font-size: 26px;
+      font-size: 29px;
       font-weight: 700;
       font-family: var(--font);
       line-height: 1;
@@ -633,15 +632,15 @@
     .trend-label.up   { color: #f87171; }
     .trend-label.down { color: #6ee7b7; }
     .trend-delta {
-      font-size: 15px;
-      font-weight: 600;
+      font-size: 29px;
+      font-weight: 700;
       font-family: var(--font);
     }
     .trend-delta.up   { color: #f87171; }
     .trend-delta.down { color: #6ee7b7; }
-    .trend-delta.flat { color: var(--sub); }
+    .trend-delta.flat { color: var(--text); }
     .trend-sub {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 500;
       color: var(--sub);
       min-height: 15px;
@@ -991,6 +990,14 @@ function updateStatusBar() {
         const pct = Math.round((d.count / 150) * 100);
         liveCapacity = { count: d.count, pct };
         if (window._insightData) renderInsightCards(window._insightData);
+        fetch(`${SB_URL}/rest/v1/live_capacity`, {
+          method: 'POST',
+          headers: {
+            'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}`,
+            'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({ id: 1, capacity_pct: pct, recorded_at: new Date().toISOString() })
+        }).catch(() => {});
       })
       .catch(() => {});
   }

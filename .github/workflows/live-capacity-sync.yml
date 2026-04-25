@@ -1,0 +1,57 @@
+name: Live Capacity Sync
+
+on:
+  repository_dispatch:
+    types: [live-sync]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Density → upsert live_capacity
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import os, requests, json
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+
+          PT = ZoneInfo("America/Los_Angeles")
+          now_pt = datetime.now(PT)
+          weekday = now_pt.weekday()  # 0=Mon … 6=Sun
+          hour = now_pt.hour
+
+          # Mon-Fri: 7-23, Sat: 8-18, Sun: 8-23
+          if weekday < 5:   open_h, close_h = 7, 23
+          elif weekday == 5: open_h, close_h = 8, 18
+          else:              open_h, close_h = 8, 23
+
+          if not (open_h <= hour < close_h):
+              print(f"Gym closed ({now_pt.strftime('%a %H:%M PT')}) — skipping")
+              exit(0)
+
+          density = requests.get(
+              "https://api.density.io/v2/spaces/spc_863128347956216317/count",
+              headers={"Authorization": "Bearer shr_o69HxjQ0BYrY2FPD9HxdirhJYcFDCeRolEd744Uj88e"},
+              timeout=10
+          ).json()
+
+          count = density["count"]
+          pct   = round((count / 150) * 100, 1)
+          now   = datetime.now(timezone.utc).isoformat()
+
+          resp = requests.post(
+              f"{os.environ['SUPABASE_URL']}/rest/v1/live_capacity",
+              headers={
+                  "apikey":        os.environ["SUPABASE_SERVICE_KEY"],
+                  "Authorization": f"Bearer {os.environ['SUPABASE_SERVICE_KEY']}",
+                  "Content-Type":  "application/json",
+                  "Prefer":        "resolution=merge-duplicates",
+              },
+              data=json.dumps({"id": 1, "capacity_pct": pct, "recorded_at": now}),
+              timeout=10
+          )
+          print(f"[{now}] {count} people ({pct}%) → Supabase {resp.status_code}")
+          EOF
