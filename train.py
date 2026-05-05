@@ -359,6 +359,9 @@ if __name__ == "__main__":
         offset += BATCH
         print(f"  Fetched {len(rows):,} rows...")
 
+    if len(rows) < 10000:
+        raise RuntimeError(f"Supabase returned only {len(rows):,} rows — aborting to protect existing models.")
+
     df = pd.DataFrame(rows)
     df['timestamp']    = pd.to_datetime(df['timestamp'], utc=True).dt.tz_localize(None)
     df['people_count'] = df['people_count'].astype(float)
