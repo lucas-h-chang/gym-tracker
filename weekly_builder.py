@@ -5,7 +5,7 @@ Runs daily at midnight PT via daily.yml.
 import os
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
@@ -25,6 +25,13 @@ SPRING_BREAKS = [
     ('2028-03-25', '2028-04-02'),
 ]
 
+SUMMER_RANGES = [
+    (date(2024, 5, 10), date(2024, 8, 24)),
+    (date(2025, 5, 16), date(2025, 8, 23)),
+    (date(2026, 5, 15), date(2026, 8, 22)),
+    (date(2027, 5, 14), date(2027, 8, 21)),
+]
+
 RANGE_TYPE_MAP = {
     'last_week':       timedelta(days=7),
     'last_month':      timedelta(days=30),
@@ -37,13 +44,17 @@ RANGE_TYPE_MAP = {
 BATCH_SIZE = 500
 
 
-def get_open_hours(day_name):
+def is_summer_day(d):
+    return any(s <= d <= e for s, e in SUMMER_RANGES)
+
+
+def get_open_hours(day_name, d):
+    summer = is_summer_day(d)
     if day_name == 'Saturday':
         return 8, 18
-    elif day_name == 'Sunday':
-        return 8, 23
-    else:
-        return 7, 23
+    if day_name == 'Sunday':
+        return 8, (20 if summer else 23)
+    return 7, (20 if summer else 23)
 
 
 def is_semester_day(d):
@@ -132,12 +143,27 @@ def compute_weekly_averages(df):
             else:
                 filtered = range_df
 
+            # Per-row open/close bounds based on each row's date — summer dates
+            # close earlier than academic-year dates, so filter row-by-row.
+            row_dates  = filtered['timestamp'].dt.date
+            row_summer = row_dates.apply(is_summer_day).to_numpy()
+            row_days   = filtered['day_of_week'].to_numpy()
+            row_open   = np.where(np.isin(row_days, ['Saturday', 'Sunday']), 8, 7)
+            row_close  = np.where(
+                row_days == 'Saturday', 18,
+                np.where(row_summer, 20, 23),
+            )
+            filtered = filtered.assign(_open_h=row_open, _close_h=row_close)
+
             for day in DAYS:
-                open_h, close_h = get_open_hours(day)
+                # Anchor synthetic close at the widest open period contributing to averages
+                # (academic close), so the chart's right edge stays put even when summer
+                # rows drop out earlier.
+                academic_close = 18 if day == 'Saturday' else 23
                 day_data = filtered[
                     (filtered['day_of_week'] == day) &
-                    (filtered['hour_numeric'] >= open_h) &
-                    (filtered['hour_numeric'] <= close_h)
+                    (filtered['hour_numeric'] >= filtered['_open_h']) &
+                    (filtered['hour_numeric'] <  filtered['_close_h'])
                 ].copy()
 
                 day_data['hour_slot'] = (day_data['hour_numeric'] * 4).round() / 4
@@ -146,9 +172,7 @@ def compute_weekly_averages(df):
                     avg_pct=('percent_full', 'mean'),
                 ).reset_index()
 
-                # Exclude closing hour row from data, add synthetic closing zero
-                avg = avg[avg['hour_slot'] < close_h]
-                closing = pd.DataFrame([{'hour_slot': float(close_h), 'avg_pct': 0.0}])
+                closing = pd.DataFrame([{'hour_slot': float(academic_close), 'avg_pct': 0.0}])
                 avg     = pd.concat([avg, closing], ignore_index=True)
                 avg     = avg.sort_values('hour_slot')
 

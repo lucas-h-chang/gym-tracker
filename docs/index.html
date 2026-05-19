@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Berkeley RSF Weight Room</title>
+  <title>Bear Meter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
@@ -532,6 +532,7 @@
       letter-spacing: 0.06em;
       color: var(--sub);
       text-transform: uppercase;
+      white-space: nowrap;
     }
     /* Card 2: comparison columns */
     #insight-status-badge { width: fit-content; }
@@ -579,6 +580,7 @@
       letter-spacing: 0.06em;
       color: var(--sub);
       text-transform: uppercase;
+      white-space: nowrap;
     }
     /* Card 1: status */
     .cap-bar-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
@@ -721,7 +723,7 @@
 
 <header>
   <div style="display:flex; align-items:center;">
-    <div class="logo">RSF Now</div>
+    <div class="logo">Bear Meter</div>
   </div>
   <div class="header-right">
     <a href="about.html" style="font-size:18px;font-weight:500;color:var(--sub);text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--sub)'">About</a>
@@ -953,10 +955,22 @@ function isSemesterDay(date) {
   return !breaks.some(([s, e]) => ds >= s && ds <= e);
 }
 
-function getOpenHours(jsDay) {
+// Summer-hours windows: derived from train.py summer-break ranges, end-shifted -3 days.
+const SUMMER_RANGES = [
+  ['2024-05-10','2024-08-24'], ['2025-05-16','2025-08-23'],
+  ['2026-05-15','2026-08-22'], ['2027-05-14','2027-08-21'],
+];
+
+function isSummerHours(date) {
+  const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
+  return SUMMER_RANGES.some(([s, e]) => ds >= s && ds <= e);
+}
+
+function getOpenHours(jsDay, date) {
+  const summer = date != null && isSummerHours(date);
   if (jsDay === 6) return { open: 8, close: 18 };
-  if (jsDay === 0) return { open: 8, close: 23 };
-  return { open: 7, close: 23 };
+  if (jsDay === 0) return { open: 8, close: summer ? 20 : 23 };
+  return { open: 7, close: summer ? 20 : 23 };
 }
 
 function formatHour(h) {
@@ -979,7 +993,7 @@ function todayPT() {
 // ── Status ─────────────────────────────────────────────────────
 function updateStatusBar() {
   const pt = getPTNow();
-  const { open, close } = getOpenHours(pt.getDay());
+  const { open, close } = getOpenHours(pt.getDay(), pt);
   const isOpen = pt.getHours() >= open && pt.getHours() < close;
   if (isOpen) {
     fetch('https://api.density.io/v2/spaces/spc_863128347956216317/count', {
@@ -1027,7 +1041,7 @@ function formatPredLabel(dateStr) {
 
 function buildPredPoints(data, dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
-  const { open, close } = getOpenHours(d.getDay());
+  const { open, close } = getOpenHours(d.getDay(), d);
   const points = [];
   for (let h = open; h < close; h++) {
     for (const m of [0, 15, 30, 45]) {
@@ -1151,6 +1165,8 @@ function updatePredChart(data) {
   const isToday  = predDate === today;
   const pt       = getPTNow();
   const nowVal   = pt.getHours() + pt.getMinutes() / 60;
+  const predDay  = new Date(predDate + 'T12:00:00');
+  const xMax     = getOpenHours(predDay.getDay(), predDay).close;
 
   const allPredPoints = buildPredPoints(data, predDate);
   // On today: clip actual to <= now, clip predicted to >= now
@@ -1186,6 +1202,7 @@ function updatePredChart(data) {
     predChart.data.datasets[1].data = predPoints;
     predChart.options.plugins.nowLine.show  = isToday;
     predChart.options.plugins.nowLine.value = nowVal;
+    predChart.options.scales.x.max          = xMax;
     predChart.update();
     return;
   }
@@ -1254,7 +1271,7 @@ function updatePredChart(data) {
       },
       scales: {
         x: {
-          type: 'linear', min: 7, max: 23,
+          type: 'linear', min: 7, max: xMax,
           grid: { color: 'rgba(255,255,255,0.04)' },
           border: { display: false },
           ticks: {
@@ -1406,7 +1423,7 @@ function getBlendedSlots(data, fromH, toH, date) {
 function computeTrend(data, livePct) {
   const isToday = predDate === todayPT();
   const d = new Date(predDate + 'T12:00:00');
-  const { open, close } = getOpenHours(d.getDay());
+  const { open, close } = getOpenHours(d.getDay(), d);
 
   let fromH, toH, sub;
   if (isToday) {
@@ -1438,7 +1455,7 @@ function computeQuietWindow(data) {
   if (predDate !== todayPT()) return null;
   const pt  = getPTNow();
   const nowH = pt.getHours() + pt.getMinutes() / 60;
-  const { open, close } = getOpenHours(pt.getDay());
+  const { open, close } = getOpenHours(pt.getDay(), pt);
   const THRESHOLD = 50;
 
   const slots = getBlendedSlots(data, nowH, close);
@@ -1511,7 +1528,7 @@ function renderInsightCards(data) {
   const livePct   = liveCapacity ? liveCapacity.pct : null;
   const liveCount = liveCapacity ? liveCapacity.count : null;
 
-  const { open: openH, close: closeH } = getOpenHours(predDay.getDay());
+  const { open: openH, close: closeH } = getOpenHours(predDay.getDay(), predDay);
 
   // Card 1: Status
   const liveDot   = document.getElementById('insight-live-dot');
@@ -1563,7 +1580,8 @@ function renderInsightCards(data) {
     } else {
       const nowH = pt.getHours() + pt.getMinutes() / 60;
       const isBeforeOpen = nowH < openH;
-      const nextOpen = isBeforeOpen ? openH : getOpenHours((pt.getDay() + 1) % 7).open;
+      const tomorrow = new Date(pt.getTime() + 24 * 60 * 60 * 1000);
+      const nextOpen = isBeforeOpen ? openH : getOpenHours(tomorrow.getDay(), tomorrow).open;
       const prefix   = isBeforeOpen ? 'Opens at' : 'Opens tomorrow at';
       openPill.textContent   = 'CLOSED';
       statusSep.textContent  = '';

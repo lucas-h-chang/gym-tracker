@@ -7,7 +7,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import torch
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
@@ -20,14 +20,27 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"
 
 BATCH_SIZE = 500
 
+# Summer-hours windows: derived from train.py summer-break ranges, end-shifted by -3 days
+# (RSF flips back to academic hours ~3 days before classes resume).
+SUMMER_RANGES = [
+    (date(2024, 5, 10), date(2024, 8, 24)),
+    (date(2025, 5, 16), date(2025, 8, 23)),
+    (date(2026, 5, 15), date(2026, 8, 22)),
+    (date(2027, 5, 14), date(2027, 8, 21)),
+]
 
-def get_open_hours(day_name):
+
+def is_summer_day(d):
+    return any(s <= d <= e for s, e in SUMMER_RANGES)
+
+
+def get_open_hours(day_name, d):
+    summer = is_summer_day(d)
     if day_name == 'Saturday':
         return 8, 18
-    elif day_name == 'Sunday':
-        return 8, 23
-    else:
-        return 7, 23
+    if day_name == 'Sunday':
+        return 8, (20 if summer else 23)
+    return 7, (20 if summer else 23)
 
 
 def load_models():
@@ -51,7 +64,7 @@ def compute_predictions(rf, scaler, mlp_model, days=180):
     for offset in range(days):
         d        = now.date() + timedelta(days=offset)
         day_name = pd.Timestamp(d).day_name()
-        open_h, close_h = get_open_hours(day_name)
+        open_h, close_h = get_open_hours(day_name, d)
         for h in range(open_h, close_h):
             for m in (0, 15, 30, 45):
                 # Store as PT-aware ISO timestamp for Supabase TIMESTAMPTZ

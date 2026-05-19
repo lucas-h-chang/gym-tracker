@@ -5,7 +5,7 @@ Runs every 15 min alongside scraper.py.
 import os
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
@@ -25,14 +25,25 @@ SPRING_BREAKS = [
     ('2028-03-25', '2028-04-02'),
 ]
 
+SUMMER_RANGES = [
+    (date(2024, 5, 10), date(2024, 8, 24)),
+    (date(2025, 5, 16), date(2025, 8, 23)),
+    (date(2026, 5, 15), date(2026, 8, 22)),
+    (date(2027, 5, 14), date(2027, 8, 21)),
+]
 
-def get_open_hours(day_name):
+
+def is_summer_day(d):
+    return any(s <= d <= e for s, e in SUMMER_RANGES)
+
+
+def get_open_hours(day_name, d):
+    summer = is_summer_day(d)
     if day_name == 'Saturday':
         return 8, 18
-    elif day_name == 'Sunday':
-        return 8, 23
-    else:
-        return 7, 23
+    if day_name == 'Sunday':
+        return 8, (20 if summer else 23)
+    return 7, (20 if summer else 23)
 
 
 def is_semester_day(d):
@@ -83,7 +94,7 @@ def compute_similarity_predictions(df):
     today_name    = pd.Timestamp(today).day_name()
     today_is_sem  = is_semester_day(today)
     now_hour      = now.hour + now.minute / 60
-    open_h, close_h = get_open_hours(today_name)
+    open_h, close_h = get_open_hours(today_name, today)
 
     today_rows   = df[df['date'] == today]
     today_finger = (
