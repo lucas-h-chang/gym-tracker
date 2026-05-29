@@ -172,6 +172,10 @@ def compute_weekly_averages(df):
                     avg_pct=('percent_full', 'mean'),
                 ).reset_index()
 
+                # Drop any bin that rounded up to the close hour (e.g. a 22:58
+                # reading binning to 23.0) so the synthetic close-zero we add
+                # below doesn't collide with it on the primary key.
+                avg = avg[avg['hour_slot'] < academic_close]
                 closing = pd.DataFrame([{'hour_slot': float(academic_close), 'avg_pct': 0.0}])
                 avg     = pd.concat([avg, closing], ignore_index=True)
                 avg     = avg.sort_values('hour_slot')
