@@ -20,14 +20,17 @@ module.exports = async function handler(req, res) {
   // 1. Read cached row.
   let cached = null;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('live_capacity')
       .select('capacity_pct, recorded_at')
       .eq('id', 1)
       .maybeSingle();
+    if (error) {
+      console.error('[live-capacity] cache READ error:', JSON.stringify(error));
+    }
     cached = data;
   } catch (err) {
-    console.error('[live-capacity] cache read failed:', err);
+    console.error('[live-capacity] cache read threw:', err);
   }
 
   const ageSecs = cached
@@ -55,9 +58,12 @@ module.exports = async function handler(req, res) {
     const now   = new Date().toISOString();
 
     // Upsert single row (id=1) — same shape live-capacity-sync.yml used.
-    await supabase
+    const { error: upsertErr } = await supabase
       .from('live_capacity')
       .upsert({ id: 1, capacity_pct: pct, recorded_at: now }, { onConflict: 'id' });
+    if (upsertErr) {
+      console.error('[live-capacity] cache WRITE error:', JSON.stringify(upsertErr));
+    }
 
     return res.status(200).json({
       capacity_pct: pct,
