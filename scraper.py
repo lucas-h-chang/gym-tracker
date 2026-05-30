@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from supabase import create_client
 
 URL     = "https://api.density.io/v2/spaces/spc_863128347956216317/count"
-HEADERS = {"Authorization": "Bearer shr_o69HxjQ0BYrY2FPD9HxdirhJYcFDCeRolEd744Uj88e"}
+HEADERS = {"Authorization": f"Bearer {os.environ['DENSITY_TOKEN']}"}
 MAX_CAP = 150
 PT      = ZoneInfo("America/Los_Angeles")
 

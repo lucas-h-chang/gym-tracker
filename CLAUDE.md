@@ -13,6 +13,7 @@ ML web app predicting occupancy at UC Berkeley's RSF weight room. No Python at r
 | `predict.py` | One-off model inference + backtesting helper |
 | `docs/index.html` | Static frontend — queries Supabase REST API directly on page load |
 | `api/subscribe.js` | Vercel serverless function for SMS subscription management |
+| `api/live-capacity.js` | Vercel serverless function — cached live-% proxy (checks `live_capacity` row, falls through to Density on stale cache) |
 
 ## ML models
 Two models, ~177k rows (Nov 2020–present), chronological 80/20 split:
@@ -33,3 +34,10 @@ Defined in `train.py::engineer_features()`, used by `predictions_builder.py` and
 - Max capacity: 150
 - Summer windows live in `SUMMER_RANGES` (duplicated in `scraper.py`, `predictions_builder.py`, `today_builder.py`, `weekly_builder.py`, `docs/index.html`, and `RSFApp2.0/.../TimeUtils.swift`). Derived from `train.py` summer-break ranges with end date shifted −3 days (RSF flips back to academic hours ~3 days before classes resume). Keep all six copies in sync when adding a new year.
 - Cron-job.org fires the scrape webhook through academic-year hours year-round. `scraper.py` self-gates and exits early when the gym is actually closed (e.g., summer evenings), so cron does not need seasonal adjustment.
+
+## Live capacity (Density.io) — fan-out cache
+- Clients (web + iOS) never call Density directly. They call `https://rsfnow.com/api/live-capacity` instead.
+- `api/live-capacity.js` checks the `live_capacity` Supabase row (id=1). If `recorded_at` is <30s old, returns cached. Otherwise calls Density, upserts, returns fresh.
+- Vercel edge cache (`Cache-Control: s-maxage=30, stale-while-revalidate=60`) coalesces simultaneous client requests so Density gets ~2 calls/min regardless of user count.
+- `DENSITY_TOKEN` env var lives only in: Vercel project settings + `DENSITY_TOKEN` GHA secret (consumed by `scraper.py` via `scrape.yml`). Not in any committed source file.
+- `scraper.py` is the only thing that still calls Density directly — it writes raw counts to `capacity_log` for ML training. Different concern from the live-% pill.

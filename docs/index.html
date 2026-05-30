@@ -996,22 +996,15 @@ function updateStatusBar() {
   const { open, close } = getOpenHours(pt.getDay(), pt);
   const isOpen = pt.getHours() >= open && pt.getHours() < close;
   if (isOpen) {
-    fetch('https://api.density.io/v2/spaces/spc_863128347956216317/count', {
-      headers: { 'Authorization': 'Bearer shr_o69HxjQ0BYrY2FPD9HxdirhJYcFDCeRolEd744Uj88e' }
-    })
+    // Goes through Vercel function which caches via Supabase live_capacity row.
+    // Density token now only lives on the server.
+    fetch('/api/live-capacity')
       .then(r => r.json())
       .then(d => {
-        const pct = Math.round((d.count / 150) * 100);
-        liveCapacity = { count: d.count, pct };
+        const pct = Math.round(d.capacity_pct);
+        const count = Math.round((pct / 100) * 150);
+        liveCapacity = { count, pct };
         if (window._insightData) renderInsightCards(window._insightData);
-        fetch(`${SB_URL}/rest/v1/live_capacity`, {
-          method: 'POST',
-          headers: {
-            'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}`,
-            'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates'
-          },
-          body: JSON.stringify({ id: 1, capacity_pct: pct, recorded_at: new Date().toISOString() })
-        }).catch(() => {});
       })
       .catch(() => {});
   }
