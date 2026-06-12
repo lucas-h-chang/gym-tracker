@@ -43,7 +43,7 @@ if now_hour < open_h or now_hour >= close_h:
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
-data  = requests.get(URL, headers=HEADERS).json()
+data  = requests.get(URL, headers=HEADERS, timeout=10).json()
 count = data["count"]
 pct   = round((count / MAX_CAP) * 100, 1)
 ts    = now.isoformat()

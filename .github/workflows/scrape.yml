@@ -23,17 +23,32 @@ jobs:
           key: ${{ runner.os }}-pip-scrape-${{ hashFiles('requirements.txt') }}
 
       - name: Install dependencies
-        run: pip install requests supabase scikit-learn torch --extra-index-url https://download.pytorch.org/whl/cpu pandas numpy pytz
+        run: pip install requests supabase scikit-learn torch --extra-index-url https://download.pytorch.org/whl/cpu pandas numpy pytz cryptography httpx[http2]
 
       - name: Scrape live count → Supabase
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DENSITY_TOKEN: ${{ secrets.DENSITY_TOKEN }}
-        run: python scraper.py
+        run: |
+          for i in 1 2 3; do
+            python scraper.py && break
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
 
       - name: Build today similarity preds → Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python today_builder.py
+
+      - name: Send workout reminder pushes
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          APNS_KEY_P8:          ${{ secrets.APNS_KEY_P8 }}
+          APNS_KEY_ID:          ${{ secrets.APNS_KEY_ID }}
+          APNS_TEAM_ID:         ${{ secrets.APNS_TEAM_ID }}
+        run: python send_workout_notifications.py
