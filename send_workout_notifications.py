@@ -2,10 +2,6 @@ import os
 import json
 import time
 import base64
-import struct
-import hashlib
-import hmac
-import math
 import requests
 import pytz
 from datetime import datetime, timedelta, timezone
@@ -197,79 +193,182 @@ def fetch_predictions_near(sb, target_times: list[datetime]) -> dict[datetime, i
 
 
 # ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+def parse_prefs(row: dict) -> dict | None:
+    try:
+        p = row.get("prefs", {})
+        return json.loads(p) if isinstance(p, str) else p
+    except Exception:
+        return None
+
+def format_hour_py(hour: float) -> str:
+    h = int(hour)
+    m = round((hour - h) * 60)
+    suffix = "AM" if h < 12 else "PM"
+    h12 = h % 12 or 12
+    return f"{h12}:{m:02d} {suffix}" if m else f"{h12} {suffix}"
+
+def blend_ml(ml_pct: float, hour_num: float, sim_map: dict, blend_weight: float | None) -> float:
+    if sim_map and blend_weight:
+        nearest_x = min(sim_map, key=lambda x: abs(x - hour_num))
+        if abs(nearest_x - hour_num) <= 0.25:
+            return (1 - blend_weight) * ml_pct + blend_weight * sim_map[nearest_x]
+    return ml_pct
+
+
+# ---------------------------------------------------------------------------
+# Workout reminders
+# ---------------------------------------------------------------------------
+
+def send_workout_reminders(sb, rows, now, slot_h, slot_m, ios_weekday, sim_map, blend_weight):
+    matched_tokens = []
+    for row in rows:
+        prefs = parse_prefs(row)
+        if not prefs or not prefs.get("workoutReminderEnabled"):
+            continue
+        if ios_weekday not in prefs.get("workoutDays", []):
+            continue
+        today_time = next(
+            (t for t in prefs.get("workoutTimes", []) if t.get("weekday") == ios_weekday), None
+        )
+        if not today_time:
+            continue
+        user_slot_h, user_slot_m = round_to_15(
+            now.replace(hour=today_time.get("hour", 18), minute=today_time.get("minute", 0),
+                        second=0, microsecond=0)
+        )
+        if slot_matches(user_slot_h, user_slot_m, slot_h, slot_m):
+            matched_tokens.append(row["token"])
+
+    if not matched_tokens:
+        print("Workout: no tokens matched.")
+        return
+
+    print(f"Workout: {len(matched_tokens)} token(s) matched.")
+
+    live_pct = fetch_live_pct()
+    now_utc  = now.astimezone(timezone.utc)
+    t30, t60 = now_utc + timedelta(minutes=30), now_utc + timedelta(minutes=60)
+
+    # Fetch ML predictions and blend
+    earliest = t30 - timedelta(minutes=16)
+    latest   = t60 + timedelta(minutes=16)
+    ml_rows  = (
+        sb.table("predictions")
+        .select("slot_ts,rf_pct,mlp_pct")
+        .gte("slot_ts", earliest.isoformat())
+        .lte("slot_ts", latest.isoformat())
+        .execute()
+        .data
+    )
+
+    def nearest_blended(target: datetime) -> int | None:
+        best, best_diff = None, float("inf")
+        for r in ml_rows:
+            dt   = datetime.fromisoformat(r["slot_ts"].replace("Z", "+00:00"))
+            diff = abs((dt - target).total_seconds())
+            if diff < best_diff:
+                best_diff, best = diff, r
+        if not best:
+            return None
+        ml  = (best["rf_pct"] + best["mlp_pct"]) / 2
+        spt = datetime.fromisoformat(best["slot_ts"].replace("Z", "+00:00")).astimezone(PT)
+        return round(blend_ml(ml, spt.hour + spt.minute / 60.0, sim_map, blend_weight))
+
+    p30, p60 = nearest_blended(t30), nearest_blended(t60)
+    parts = []
+    if live_pct is not None: parts.append(f"{live_pct}% now")
+    if p30       is not None: parts.append(f"{p30}% in 30 min")
+    if p60       is not None: parts.append(f"{p60}% in 60 min")
+    body = " · ".join(parts) if parts else "Time to hit the gym!"
+    print(f"Workout body: {body}")
+
+    sent = sum(1 for t in matched_tokens if send_apns_push(t, "Workout Reminder", body))
+    print(f"Workout: sent {sent}/{len(matched_tokens)} pushes.")
+
+
+# ---------------------------------------------------------------------------
+# Daily summary
+# ---------------------------------------------------------------------------
+
+def send_daily_summaries(sb, rows, slot_h, slot_m, sim_map, blend_weight):
+    matched_tokens = []
+    now = now_pt()
+    for row in rows:
+        prefs = parse_prefs(row)
+        if not prefs or not prefs.get("dailySummaryEnabled"):
+            continue
+        user_slot_h, user_slot_m = round_to_15(
+            now.replace(hour=prefs.get("dailySummaryHour", 8),
+                        minute=prefs.get("dailySummaryMinute", 0),
+                        second=0, microsecond=0)
+        )
+        if slot_matches(user_slot_h, user_slot_m, slot_h, slot_m):
+            matched_tokens.append(row["token"])
+
+    if not matched_tokens:
+        print("Daily summary: no tokens matched.")
+        return
+
+    print(f"Daily summary: {len(matched_tokens)} token(s) matched.")
+
+    # Fetch all of today's ML predictions and blend
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    today_end   = now.replace(hour=23, minute=59, second=0, microsecond=0).astimezone(timezone.utc)
+    ml_rows = (
+        sb.table("predictions")
+        .select("slot_ts,rf_pct,mlp_pct")
+        .gte("slot_ts", today_start.isoformat())
+        .lte("slot_ts", today_end.isoformat())
+        .execute()
+        .data
+    )
+
+    blended = []
+    for r in ml_rows:
+        ml  = (r["rf_pct"] + r["mlp_pct"]) / 2
+        spt = datetime.fromisoformat(r["slot_ts"].replace("Z", "+00:00")).astimezone(PT)
+        hn  = spt.hour + spt.minute / 60.0
+        pct = blend_ml(ml, hn, sim_map, blend_weight)
+        if pct > 0:
+            blended.append((hn, pct))
+
+    if blended:
+        avg      = round(sum(p for _, p in blended) / len(blended))
+        peak_h, peak_p = max(blended, key=lambda x: x[1])
+        body = f"Avg {avg}% · peak around {format_hour_py(peak_h)} ({round(peak_p)}%)"
+    else:
+        body = "Open the app to see today's capacity forecast."
+
+    print(f"Daily summary body: {body}")
+    sent = sum(1 for t in matched_tokens if send_apns_push(t, "Your Daily RSF Summary", body))
+    print(f"Daily summary: sent {sent}/{len(matched_tokens)} pushes.")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    now        = now_pt()
+    now = now_pt()
     slot_h, slot_m = round_to_15(now)
-    # weekday: Python 0=Mon … 6=Sun → iOS 1=Sun … 7=Sat
-    py_weekday = now.weekday()           # 0=Mon
-    ios_weekday = (py_weekday + 2) % 7 or 7  # 2=Mon, 3=Tue … 7=Sat, 1=Sun
+    py_weekday  = now.weekday()                    # 0=Mon
+    ios_weekday = (py_weekday + 2) % 7 or 7        # 2=Mon … 7=Sat, 1=Sun
 
     print(f"[{now.strftime('%Y-%m-%d %H:%M PT')}] slot={slot_h:02d}:{slot_m:02d}, iOS weekday={ios_weekday}")
 
-    # Fetch all device tokens
     rows = sb.table("device_tokens").select("token,prefs").execute().data
 
-    matched_tokens = []
-    for row in rows:
-        try:
-            prefs = json.loads(row["prefs"]) if isinstance(row["prefs"], str) else row["prefs"]
-        except Exception:
-            continue
+    # Fetch today_summary once; reused by both notification types
+    sim_preds, blend_weight = fetch_today_summary(sb)
+    sim_map = {p["x"]: p["y"] for p in (sim_preds or [])}
 
-        if not prefs.get("workoutReminderEnabled"):
-            continue
-        workout_days = prefs.get("workoutDays", [])
-        if ios_weekday not in workout_days:
-            continue
-        workout_times = prefs.get("workoutTimes", [])
-        # Find the entry for today's weekday
-        today_time = next((t for t in workout_times if t.get("weekday") == ios_weekday), None)
-        if not today_time:
-            continue
-
-        user_h = today_time.get("hour", 18)
-        user_m = today_time.get("minute", 0)
-        # Snap user time to nearest 15-min slot for matching
-        user_slot_h, user_slot_m = round_to_15(
-            now.replace(hour=user_h, minute=user_m, second=0, microsecond=0)
-        )
-        if slot_matches(user_slot_h, user_slot_m, slot_h, slot_m):
-            matched_tokens.append(row["token"])
-
-    if not matched_tokens:
-        print("No tokens matched this time slot.")
-        return
-
-    print(f"{len(matched_tokens)} token(s) matched.")
-
-    # Fetch live capacity and predictions once for all matched users
-    live_pct = fetch_live_pct()
-
-    now_utc   = now.astimezone(timezone.utc)
-    t30       = now_utc + timedelta(minutes=30)
-    t60       = now_utc + timedelta(minutes=60)
-    pred_map  = fetch_predictions_near(sb, [t30, t60])
-    p30       = pred_map.get(t30)
-    p60       = pred_map.get(t60)
-
-    parts = []
-    if live_pct is not None: parts.append(f"{live_pct}% now")
-    if p30       is not None: parts.append(f"{p30}% in 30 min")
-    if p60       is not None: parts.append(f"{p60}% in 60 min")
-    body = " · ".join(parts) if parts else "Time to hit the gym!"
-
-    print(f"Body: {body}")
-
-    sent = 0
-    for token in matched_tokens:
-        if send_apns_push(token, "Workout Reminder", body):
-            sent += 1
-    print(f"Sent {sent}/{len(matched_tokens)} pushes.")
+    send_workout_reminders(sb, rows, now, slot_h, slot_m, ios_weekday, sim_map, blend_weight)
+    send_daily_summaries(sb, rows, slot_h, slot_m, sim_map, blend_weight)
 
 
 if __name__ == "__main__":
