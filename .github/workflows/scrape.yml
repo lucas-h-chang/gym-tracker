@@ -23,7 +23,7 @@ jobs:
           key: ${{ runner.os }}-pip-scrape-${{ hashFiles('requirements.txt') }}
 
       - name: Install dependencies
-        run: pip install requests supabase scikit-learn torch --extra-index-url https://download.pytorch.org/whl/cpu pandas numpy pytz cryptography httpx[http2]
+        run: pip install requests supabase pandas numpy pytz cryptography httpx[http2]
 
       - name: Scrape live count → Supabase
         continue-on-error: true
