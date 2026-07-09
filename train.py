@@ -26,7 +26,7 @@ def parse_supabase_timestamps(series):
     # engineer_features() sees the same naive-PT timestamps that predictions_builder
     # and predict.py feed at inference time.
     return (
-        pd.to_datetime(series, utc=True)
+        pd.to_datetime(series, utc=True, format='ISO8601')
           .dt.tz_convert('America/Los_Angeles')
           .dt.tz_localize(None)
     )
