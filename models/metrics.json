@@ -1,30 +1,30 @@
 {
-  "trained_at": "2026-05-01 06:34:21",
-  "training_rows": 3,
-  "test_rows": 1,
+  "trained_at": "2026-07-09 15:30:46",
+  "training_rows": 116872,
+  "test_rows": 29218,
   "rf": {
-    "rmse": 0.13,
-    "mae": 0.13
+    "rmse": 13.29,
+    "mae": 9.2
   },
   "mlp": {
-    "rmse": 0.03,
-    "mae": 0.03
+    "rmse": 13.79,
+    "mae": 9.71
   },
   "feature_importances": {
-    "hour_numeric": 0.1538,
-    "week_of_year": 0.0769,
-    "is_weekend": 0.0,
-    "is_finals": 0.0,
-    "is_dead_week": 0.0,
-    "is_first_week": 0.0,
-    "is_break": 0.3846,
-    "is_holiday": 0.0,
-    "day_Monday": 0.0,
-    "day_Tuesday": 0.0769,
-    "day_Wednesday": 0.1538,
-    "day_Thursday": 0.1538,
-    "day_Friday": 0.0,
-    "day_Saturday": 0.0,
-    "day_Sunday": 0.0
+    "hour_numeric": 0.2534,
+    "week_of_year": 0.1264,
+    "is_weekend": 0.0179,
+    "is_finals": 0.0232,
+    "is_dead_week": 0.0072,
+    "is_first_week": 0.0076,
+    "is_break": 0.4934,
+    "is_holiday": 0.0081,
+    "day_Monday": 0.0076,
+    "day_Tuesday": 0.0042,
+    "day_Wednesday": 0.0033,
+    "day_Thursday": 0.005,
+    "day_Friday": 0.0106,
+    "day_Saturday": 0.0028,
+    "day_Sunday": 0.0295
   }
 }
