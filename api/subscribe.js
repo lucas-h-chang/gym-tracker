@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
         .update({ is_active: false })
         .eq('phone_number', phone);
 
-      await sendSMS(phone, "You've been unsubscribed from RSF alerts.");
+      await sendSMS(phone, "You've been unsubscribed from Bear Meter alerts.");
       return res.status(200).json({ ok: true });
     }
 
@@ -83,7 +83,7 @@ module.exports = async function handler(req, res) {
 
     // Confirmation SMS
     if (is_update) {
-      await sendSMS(phone, 'Your RSF alert preferences have been updated!');
+      await sendSMS(phone, 'Your Bear Meter alert preferences have been updated!');
     } else {
       const enabled = [];
       if (rwt) enabled.push('Window Threshold');
@@ -92,7 +92,7 @@ module.exports = async function handler(req, res) {
       const list = enabled.map(e => `\u2022 ${e}`).join('\n');
       await sendSMS(
         phone,
-        `You're subscribed to RSF Weight Room alerts! You'll receive:\n${list}\nReply STOP to unsubscribe anytime.`
+        `You're subscribed to Bear Meter alerts! You'll receive:\n${list}\nReply STOP to unsubscribe anytime.`
       );
     }
 
