@@ -128,3 +128,16 @@ def test_all_features_are_numeric():
     for col in X.columns:
         assert X[col].dtype in ['float64', 'int64', 'uint8', 'bool'], \
             f"Column {col} has unexpected dtype {X[col].dtype}"
+
+
+# ==============================================================================
+# SUPABASE TIMESTAMP PARSING CONTRACT
+# Locks in that UTC timestamps from Supabase are converted to PT wall-clock.
+# ==============================================================================
+
+def test_supabase_utc_timestamps_convert_to_pt_wall_clock():
+    from train import parse_supabase_timestamps
+    s = pd.Series(['2026-07-09T02:45:29+00:00'])  # 7:45 PM PT, Wednesday July 8
+    out = parse_supabase_timestamps(s)
+    assert out.iloc[0].hour == 19 and out.iloc[0].minute == 45
+    assert out.iloc[0].day_name() == 'Wednesday'

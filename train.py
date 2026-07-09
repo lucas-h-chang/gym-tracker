@@ -21,6 +21,17 @@ from torch.utils.data import DataLoader, TensorDataset
 MAX_CAPACITY = 150
 
 
+def parse_supabase_timestamps(series):
+    # Supabase returns TIMESTAMPTZ as UTC. Convert to PT wall-clock, then drop tz so
+    # engineer_features() sees the same naive-PT timestamps that predictions_builder
+    # and predict.py feed at inference time.
+    return (
+        pd.to_datetime(series, utc=True)
+          .dt.tz_convert('America/Los_Angeles')
+          .dt.tz_localize(None)
+    )
+
+
 # ==============================================================================
 # FEATURE ENGINEERING
 # ==============================================================================
@@ -341,7 +352,7 @@ if __name__ == "__main__":
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
     print("Loading data from Supabase capacity_log...")
-    BATCH  = 10000
+    BATCH  = 9000
     offset = 0
     rows   = []
     while True:
@@ -359,11 +370,11 @@ if __name__ == "__main__":
         offset += BATCH
         print(f"  Fetched {len(rows):,} rows...")
 
-    if len(rows) < 10000:
+    if len(rows) < 50000:
         raise RuntimeError(f"Supabase returned only {len(rows):,} rows — aborting to protect existing models.")
 
     df = pd.DataFrame(rows)
-    df['timestamp']    = pd.to_datetime(df['timestamp'], utc=True).dt.tz_localize(None)
+    df['timestamp']    = parse_supabase_timestamps(df['timestamp'])
     df['people_count'] = df['people_count'].astype(float)
     df = df[df['people_count'] > 5].dropna()
     df = df.sort_values('timestamp').reset_index(drop=True)
