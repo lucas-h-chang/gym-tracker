@@ -7,7 +7,7 @@ ML web app predicting occupancy at UC Berkeley's RSF weight room. No Python at r
 |------|---------|
 | `scraper.py` | Fetches live occupancy from Density.io API → Supabase capacity_log (every 15 min) |
 | `today_builder.py` | Similarity predictions for today → Supabase today_summary (every 15 min) |
-| `predictions_builder.py` | 180-day RF+MLP predictions → Supabase predictions (daily) |
+| `predictions_builder.py` | 90-day RF+MLP predictions → Supabase predictions (daily) |
 | `weekly_builder.py` | Weekly pattern averages → Supabase weekly_averages (daily) |
 | `train.py` | Trains Random Forest + PyTorch MLP from Supabase data, commits models/ |
 | `predict.py` | One-off model inference + backtesting helper |

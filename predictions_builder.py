@@ -1,5 +1,5 @@
 """
-predictions_builder.py — compute 180-day RF+MLP predictions → Supabase predictions table.
+predictions_builder.py — compute 90-day RF+MLP predictions → Supabase predictions table.
 Runs daily at midnight PT via daily.yml.
 """
 import os
@@ -56,7 +56,7 @@ def load_models():
     return rf, scaler, model
 
 
-def compute_predictions(rf, scaler, mlp_model, days=180):
+def compute_predictions(rf, scaler, mlp_model, days=91):
     """Build (slot_ts ISO string, rf_pct, mlp_pct) for every open 15-min slot over the next N days."""
     timestamps = []
     slot_ts    = []
@@ -102,8 +102,8 @@ def main():
     print("Loading models...")
     rf, scaler, mlp_model = load_models()
 
-    print("Computing 180-day predictions...")
-    records = compute_predictions(rf, scaler, mlp_model, days=180)
+    print("Computing predictions (today + 90 days)...")
+    records = compute_predictions(rf, scaler, mlp_model, days=91)
     print(f"  {len(records):,} slots computed")
 
     print("Upserting to Supabase predictions table...")
@@ -111,6 +111,14 @@ def main():
         batch = records[i:i + BATCH_SIZE]
         sb.table("predictions").upsert(batch, on_conflict="slot_ts").execute()
         print(f"  Upserted {min(i + BATCH_SIZE, len(records))}/{len(records)}")
+
+    # Purge stale far-future rows left over from when we generated 180 days, so the
+    # table stays bounded to the ~90-day horizon we now compute. The +93-day margin sits
+    # beyond the clients' +92-day fetch bound, so this can never delete a slot that's
+    # still viewable, even accounting for PT/UTC boundary fuzz.
+    purge_from = (now.date() + timedelta(days=93)).isoformat()
+    sb.table("predictions").delete().gte("slot_ts", purge_from).execute()
+    print(f"  Purged any predictions on/after {purge_from}")
 
     print(f"[{now.isoformat()}] predictions table updated: {len(records)} rows")
 

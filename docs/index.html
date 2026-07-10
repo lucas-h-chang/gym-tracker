@@ -1184,7 +1184,7 @@ function updatePredChart(data) {
 
   // Nav buttons
   const minDate = today;
-  const maxDate = shiftDate(today, 179);
+  const maxDate = shiftDate(today, 90);
   document.getElementById('pred-prev').disabled = predDate <= minDate;
   document.getElementById('pred-next').disabled = predDate >= maxDate;
   document.getElementById('pred-date-label').textContent = formatPredLabel(predDate);
@@ -1706,7 +1706,7 @@ async function init() {
   let predRows, weeklyRows, actualsRows, todaySummaryRows;
   try {
     [predRows, weeklyRows, actualsRows, todaySummaryRows] = await Promise.all([
-      sbFetch(`predictions?slot_ts=gte.${today}T00:00:00&order=slot_ts.asc&limit=10000`),
+      sbFetch(`predictions?slot_ts=gte.${today}T00:00:00&slot_ts=lte.${shiftDate(today, 92)}T23:59:59&order=slot_ts.asc&limit=10000`),
       sbFetch(`weekly_averages?select=*&limit=10000`),
       sbFetch(`capacity_log?timestamp=gte.${yesterday}T12:00:00Z&order=timestamp.asc&limit=2000`),
       sbFetch(`today_summary?date=eq.${today}&select=similarity_preds,blend_weight,computed_at`),
@@ -1772,7 +1772,7 @@ async function init() {
   const calPopup = document.getElementById('cal-popup');
   const calLabel = document.getElementById('pred-date-label');
   const minDate  = today;
-  const maxDate  = shiftDate(today, 179);
+  const maxDate  = shiftDate(today, 90);
   let calYear, calMonth;
 
   function renderCalendar() {
