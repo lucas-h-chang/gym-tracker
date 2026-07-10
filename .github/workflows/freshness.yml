@@ -1,0 +1,128 @@
+name: Data Freshness Monitor
+
+# Finding F: scrape.yml marks the scraper step continue-on-error, so a rotated
+# Density token or API change silently stops data collection with all-green runs.
+# This job independently checks that capacity_log is being written while the gym
+# is open, and opens a GitHub issue if the data goes stale.
+
+on:
+  schedule:
+    - cron: '20 * * * *'   # hourly, offset from the other jobs
+  workflow_dispatch:
+    inputs:
+      threshold_minutes:
+        description: 'Alert if the newest capacity_log row is older than this many minutes (while the gym is open)'
+        default: '45'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Check capacity_log freshness
+        id: check
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          THRESHOLD_MINUTES:    ${{ github.event.inputs.threshold_minutes || '45' }}
+        run: |
+          pip install requests --quiet
+          python - <<'PY'
+          import os, sys, requests
+          from datetime import date, datetime, timezone
+          from zoneinfo import ZoneInfo
+
+          PT        = ZoneInfo("America/Los_Angeles")
+          THRESHOLD = int(os.environ.get("THRESHOLD_MINUTES") or "45")
+
+          # --- Open-hours gate (kept in sync with scraper.py) ---------------------
+          SUMMER_RANGES = [
+              (date(2024, 5, 10), date(2024, 8, 24)),
+              (date(2025, 5, 16), date(2025, 8, 23)),
+              (date(2026, 5, 15), date(2026, 8, 22)),
+              (date(2027, 5, 14), date(2027, 8, 21)),
+          ]
+          def is_summer_day(d):
+              return any(s <= d <= e for s, e in SUMMER_RANGES)
+          def get_open_hours(day_name, d):
+              summer = is_summer_day(d)
+              if day_name == 'Saturday':
+                  return 8, 18
+              if day_name == 'Sunday':
+                  return 8, (20 if summer else 23)
+              return 7, (20 if summer else 23)
+
+          def emit(key, value):
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write(f"{key}={value}\n")
+
+          now = datetime.now(PT)
+          open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
+          now_hour = now.hour + now.minute / 60
+          if now_hour < open_h or now_hour >= close_h:
+              print(f"RSF closed (open {open_h}:00-{close_h}:00); skipping freshness check.")
+              emit("stale", "false")
+              sys.exit(0)
+
+          url = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/capacity_log"
+          key = os.environ["SUPABASE_SERVICE_KEY"]
+          resp = requests.get(
+              url,
+              headers={"apikey": key, "Authorization": f"Bearer {key}"},
+              params={"select": "timestamp", "order": "timestamp.desc", "limit": 1},
+              timeout=15,
+          )
+          resp.raise_for_status()
+          rows = resp.json()
+
+          if not rows:
+              print("capacity_log is EMPTY.")
+              emit("stale", "true")
+              emit("detail", "capacity_log has no rows at all")
+              sys.exit(0)
+
+          latest  = datetime.fromisoformat(rows[0]["timestamp"].replace("Z", "+00:00"))
+          age_min = (datetime.now(timezone.utc) - latest.astimezone(timezone.utc)).total_seconds() / 60
+          print(f"Latest row: {latest.astimezone(PT):%Y-%m-%d %H:%M %Z} "
+                f"({age_min:.0f} min ago); threshold {THRESHOLD} min; gym open.")
+
+          if age_min > THRESHOLD:
+              emit("stale", "true")
+              emit("detail", f"Newest capacity_log row is {age_min:.0f} min old "
+                             f"(threshold {THRESHOLD} min) while the RSF is open — scraper may be down.")
+          else:
+              emit("stale", "false")
+          PY
+
+      - name: Open issue if stale
+        if: steps.check.outputs.stale == 'true'
+        uses: actions/github-script@v7
+        env:
+          DETAIL: ${{ steps.check.outputs.detail }}
+        with:
+          script: |
+            // De-dupe: an hourly cron would otherwise file a new issue every hour
+            // for the duration of an outage. Only open one at a time.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'data-freshness',
+            });
+            if (existing.data.length > 0) {
+              console.log(`Freshness issue #${existing.data[0].number} already open; not duplicating.`);
+              return;
+            }
+            const detail = process.env.DETAIL || 'capacity_log is stale.';
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              labels: ['data-freshness'],
+              title: `Scraper stale — no fresh RSF data (${new Date().toISOString().slice(0,10)})`,
+              body: `${detail}\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
