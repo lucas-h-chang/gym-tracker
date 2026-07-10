@@ -1,11 +1,15 @@
 """
 today_builder.py — compute similarity-based predictions for today → Supabase today_summary.
 Runs every 15 min alongside scraper.py.
+
+Reads pre-aggregated candidate day profiles from the `day_profiles` table (built once/day by
+day_profiles_builder.py) instead of re-downloading the full capacity_log every run — ~0.3 MB/run vs
+~10 MB (Finding E). Only today's own rows are fetched live, for the fingerprint.
 """
 import os
 import numpy as np
 import pandas as pd
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
@@ -13,6 +17,10 @@ PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+# Fixed data boundary: keep 2022 onward, drop COVID-era 2020-2021.
+# Shared with day_profiles_builder.py (and, later, train.py via T20) — keep in sync.
+DATA_CUTOFF = date(2022, 1, 1)
 
 SPRING_BREAKS = [
     ('2021-03-20', '2021-03-28'),
@@ -57,15 +65,77 @@ def is_semester_day(d):
     return not (is_summer or is_winter or is_sb)
 
 
-def fetch_history():
-    """Fetch all capacity_log from Supabase (paginated). Full history improves similarity matching."""
-    BATCH  = 9000
-    offset = 0
-    rows   = []
+def _pt_iso(d, t):
+    """ISO8601 for a PT wall-clock (date, time)."""
+    return datetime.combine(d, t, tzinfo=PT).isoformat()
+
+
+def _hour_slot(ts):
+    """Quarter-hour bin for a PT timestamp series (identical formula to day_profiles_builder)."""
+    return ((ts.dt.hour + ts.dt.minute / 60) * 4).round() / 4
+
+
+# ---------------------------------------------------------------------------
+# Fetch: today's fingerprint + candidate day profiles
+# ---------------------------------------------------------------------------
+
+def fetch_today_rows():
+    """Today's capacity_log rows (a few dozen) for the live fingerprint."""
+    return (
+        sb.table("capacity_log")
+        .select("timestamp,percent_full")
+        .gte("timestamp", _pt_iso(now.date(), time.min))
+        .order("timestamp")
+        .limit(2000)
+        .execute()
+        .data
+    )
+
+
+def fetch_candidates():
+    """Pre-aggregated candidate profiles for today's weekday + semester phase.
+
+    Server-side filters: same weekday, same semester phase, dates in
+    [DATA_CUTOFF, today-8]. The `date <= today-8` bound folds in both `date != today`
+    and the EXCLUDE_WINDOW=7 rule. Paginated so it never trips the ~9998-row API cap
+    as history accumulates.
+    """
+    today        = now.date()
+    today_name   = pd.Timestamp(today).day_name()
+    today_is_sem = is_semester_day(today)
+    hi           = (today - timedelta(days=8)).isoformat()
+    lo           = DATA_CUTOFF.isoformat()
+
+    BATCH, offset, rows = 9000, 0, []
+    while True:
+        batch = (
+            sb.table("day_profiles")
+            .select("date,hour_slot,avg_pct")
+            .eq("day_name", today_name)
+            .eq("is_semester", today_is_sem)
+            .lte("date", hi)
+            .gte("date", lo)
+            .range(offset, offset + BATCH - 1)
+            .order("date")
+            .execute()
+            .data
+        )
+        rows.extend(batch)
+        if len(batch) < BATCH:
+            break
+        offset += BATCH
+    return rows
+
+
+def fetch_history_fallback():
+    """Full capacity_log from DATA_CUTOFF (paginated). Used only if day_profiles is
+    empty (e.g. before the first backfill), so a rollout gap can't blank the nowcast."""
+    BATCH, offset, rows = 9000, 0, []
     while True:
         batch = (
             sb.table("capacity_log")
             .select("timestamp,percent_full")
+            .gte("timestamp", _pt_iso(DATA_CUTOFF, time.min))
             .range(offset, offset + BATCH - 1)
             .order("timestamp")
             .execute()
@@ -78,61 +148,94 @@ def fetch_history():
     return rows
 
 
-def compute_similarity_predictions(df):
+# ---------------------------------------------------------------------------
+# Shape helpers: build the fingerprint + candidate profile dict
+# ---------------------------------------------------------------------------
+
+def build_today_finger(today_rows):
+    """Series indexed by hour_slot: today's mean % per quarter-hour, up to now."""
+    if not today_rows:
+        return pd.Series(dtype=float)
+    df = pd.DataFrame(today_rows)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
+    df['hour_slot'] = _hour_slot(df['timestamp'])
+    now_hour = now.hour + now.minute / 60
+    df = df[df['hour_slot'] <= now_hour]
+    return df.groupby('hour_slot')['percent_full'].mean()
+
+
+def candidates_from_profiles(rows):
+    """{date: Series(hour_slot -> avg_pct)} from day_profiles rows."""
+    by_date = {}
+    for r in rows:
+        by_date.setdefault(r['date'], {})[float(r['hour_slot'])] = float(r['avg_pct'])
+    return {d: pd.Series(slots) for d, slots in by_date.items()}
+
+
+def candidates_from_history(rows):
+    """Fallback: build the same {date: Series} from raw capacity_log rows, applying the
+    same filters fetch_candidates does server-side (weekday, phase, [DATA_CUTOFF, today-8])."""
+    if not rows:
+        return {}
+    df = pd.DataFrame(rows)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
+    df['date']      = df['timestamp'].dt.date
+    df['hour_slot'] = _hour_slot(df['timestamp'])
+    df['day_name']  = df['timestamp'].dt.day_name()
+    df['is_sem']    = df['date'].apply(is_semester_day)
+
+    today        = now.date()
+    today_name   = pd.Timestamp(today).day_name()
+    today_is_sem = is_semester_day(today)
+    mask = (
+        (df['date'] <= today - timedelta(days=8)) &
+        (df['date'] >= DATA_CUTOFF) &
+        (df['day_name'] == today_name) &
+        (df['is_sem'] == today_is_sem)
+    )
+    return {
+        d: g.groupby('hour_slot')['percent_full'].mean()
+        for d, g in df[mask].groupby('date')
+    }
+
+
+# ---------------------------------------------------------------------------
+# Similarity nowcast (algorithm unchanged; now consumes pre-aggregated inputs)
+# ---------------------------------------------------------------------------
+
+def compute_similarity_predictions(today_finger, candidates):
     K              = 5
     BLEND_CEIL     = 0.9
     OVERLAP_THRESH = 0.70
-    EXCLUDE_WINDOW = 7
     MIN_SLOTS      = 4
 
-    df['date']         = df['timestamp'].dt.date
-    df['hour_numeric'] = ((df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60) * 4).round() / 4
-    df['day_name']     = df['timestamp'].dt.day_name()
-    df['is_semester']  = df['date'].apply(is_semester_day)
-
-    today         = now.date()
-    today_name    = pd.Timestamp(today).day_name()
-    today_is_sem  = is_semester_day(today)
-    now_hour      = now.hour + now.minute / 60
+    today           = now.date()
+    today_name      = pd.Timestamp(today).day_name()
+    now_hour        = now.hour + now.minute / 60
     open_h, close_h = get_open_hours(today_name, today)
 
-    today_rows   = df[df['date'] == today]
-    today_finger = (
-        today_rows[today_rows['hour_numeric'] <= now_hour]
-        .groupby('hour_numeric')['percent_full'].mean()
-    )
     finger_slots = sorted(today_finger.index.tolist())
-
     if len(finger_slots) < MIN_SLOTS:
         return [], 0.0
 
-    target_ts     = pd.Timestamp(today)
-    candidates_df = df[
-        (df['date'] != today) &
-        (abs((pd.to_datetime(df['date']) - target_ts).dt.days) > EXCLUDE_WINDOW) &
-        (df['day_name'] == today_name) &
-        (df['is_semester'] == today_is_sem)
-    ]
-
-    candidates = []
-    for _, group in candidates_df.groupby('date'):
-        cf        = group.groupby('hour_numeric')['percent_full'].mean()
+    scored = []
+    for cf in candidates.values():
         available = [s for s in finger_slots if s in cf.index]
         if len(available) < len(finger_slots) * OVERLAP_THRESH:
             continue
-        hist_vec  = np.array([cf[s]          for s in available])
+        hist_vec  = np.array([cf[s]           for s in available])
         today_sub = np.array([today_finger[s] for s in available])
         dist      = float(np.sqrt(np.mean((hist_vec - today_sub) ** 2)))
-        candidates.append((dist, group))
+        scored.append((dist, cf))
 
-    if not candidates:
+    if not scored:
         return [], 0.0
 
-    candidates.sort(key=lambda x: x[0])
-    top_k = candidates[:K]
+    scored.sort(key=lambda x: x[0])
+    top_k = scored[:K]
 
-    dists   = np.array([c[0] for c in top_k])
-    weights = 1.0 / (dists + 1e-6)
+    dists    = np.array([c[0] for c in top_k])
+    weights  = 1.0 / (dists + 1e-6)
     weights /= weights.sum()
 
     future_slots = [
@@ -145,10 +248,9 @@ def compute_similarity_predictions(df):
     similarity_preds = []
     for slot in future_slots:
         vals, wts = [], []
-        for (_, grp), w in zip(top_k, weights):
-            gf = grp.groupby('hour_numeric')['percent_full'].mean()
-            if slot in gf.index:
-                vals.append(gf[slot])
+        for (_, cf), w in zip(top_k, weights):
+            if slot in cf.index:
+                vals.append(cf[slot])
                 wts.append(w)
         if vals:
             wa    = np.array(wts); wa /= wa.sum()
@@ -165,10 +267,9 @@ def compute_similarity_predictions(df):
     # Anchor correction: shift predictions to match today's last observed level.
     last_slot = max(finger_slots)
     vals, wts = [], []
-    for (_, grp), w in zip(top_k, weights):
-        gf = grp.groupby('hour_numeric')['percent_full'].mean()
-        if last_slot in gf.index:
-            vals.append(gf[last_slot])
+    for (_, cf), w in zip(top_k, weights):
+        if last_slot in cf.index:
+            vals.append(cf[last_slot])
             wts.append(w)
     if vals:
         wa             = np.array(wts); wa /= wa.sum()
@@ -187,15 +288,25 @@ def compute_similarity_predictions(df):
 
 
 def main():
-    print("Fetching history from Supabase...")
-    rows = fetch_history()
-    print(f"  {len(rows):,} rows loaded")
+    # Skip entirely when the RSF is closed — nothing to nowcast (Finding E).
+    open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
+    now_hour = now.hour + now.minute / 60
+    if now_hour < open_h or now_hour >= close_h:
+        print(f"[{now.isoformat()}] RSF closed (open {open_h}:00-{close_h}:00); skipping today_summary build.")
+        return
 
-    df = pd.DataFrame(rows)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
+    today_finger = build_today_finger(fetch_today_rows())
+
+    candidate_rows = fetch_candidates()
+    if candidate_rows:
+        candidates = candidates_from_profiles(candidate_rows)
+        print(f"Loaded {len(candidate_rows):,} profile rows across {len(candidates)} candidate days")
+    else:
+        print("day_profiles empty — falling back to full-history fetch")
+        candidates = candidates_from_history(fetch_history_fallback())
 
     print("Computing similarity predictions...")
-    preds, blend_weight = compute_similarity_predictions(df)
+    preds, blend_weight = compute_similarity_predictions(today_finger, candidates)
 
     today_str = now.strftime('%Y-%m-%d')
     sb.table("today_summary").upsert({

@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install supabase scikit-learn pandas numpy pytz
+          pip install -r requirements.txt
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Build 90-day predictions → Supabase
@@ -40,3 +40,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python weekly_builder.py
+
+      - name: Build day profiles → Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python day_profiles_builder.py

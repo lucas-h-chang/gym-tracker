@@ -6,11 +6,11 @@ ML web app predicting occupancy at UC Berkeley's RSF weight room. No Python at r
 | File | Purpose |
 |------|---------|
 | `scraper.py` | Fetches live occupancy from Density.io API → Supabase capacity_log (every 15 min) |
-| `today_builder.py` | Similarity predictions for today → Supabase today_summary (every 15 min) |
+| `today_builder.py` | Similarity predictions for today → Supabase today_summary (every 15 min). Reads pre-aggregated `day_profiles` (not full history); skips when the gym is closed |
 | `predictions_builder.py` | 90-day RF+MLP predictions → Supabase predictions (daily) |
 | `weekly_builder.py` | Weekly pattern averages → Supabase weekly_averages (daily) |
+| `day_profiles_builder.py` | Per-day hourly-average profiles (2022+) → Supabase day_profiles (daily, incremental). Feeds today_builder's similarity matcher so it doesn't re-download full history every 15 min |
 | `train.py` | Trains Random Forest + PyTorch MLP from Supabase data, commits models/ |
-| `predict.py` | One-off model inference + backtesting helper |
 | `docs/index.html` | Static frontend — queries Supabase REST API directly on page load |
 | `api/live-capacity.js` | Vercel serverless function — cached live-% proxy (checks `live_capacity` row, falls through to Density on stale cache) |
 
@@ -23,7 +23,7 @@ Two models, ~177k rows (Nov 2020–present), chronological 80/20 split:
 **PyTorch MLP** — Input(15)→Linear(64)→ReLU→Dropout(0.2)→Linear(32)→ReLU→Dropout(0.2)→Linear(1), MAE ±9.93%
 
 ## Feature engineering (15 features)
-Defined in `train.py::engineer_features()`, used by `predictions_builder.py` and `predict.py`:
+Defined in `train.py::engineer_features()`, used by `predictions_builder.py`:
 - `hour_numeric`, `week_of_year`, `is_weekend`, `day_Monday`…`day_Sunday` (one-hot)
 - Berkeley academic calendar flags (hardcoded through 2028): `is_finals`, `is_dead_week`, `is_first_week`, `is_break`, `is_holiday`
 
