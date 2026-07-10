@@ -12,7 +12,6 @@ ML web app predicting occupancy at UC Berkeley's RSF weight room. No Python at r
 | `train.py` | Trains Random Forest + PyTorch MLP from Supabase data, commits models/ |
 | `predict.py` | One-off model inference + backtesting helper |
 | `docs/index.html` | Static frontend — queries Supabase REST API directly on page load |
-| `api/subscribe.js` | Vercel serverless function for SMS subscription management |
 | `api/live-capacity.js` | Vercel serverless function — cached live-% proxy (checks `live_capacity` row, falls through to Density on stale cache) |
 
 ## ML models
