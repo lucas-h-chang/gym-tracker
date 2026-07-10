@@ -23,7 +23,7 @@ jobs:
 
       - name: Install ML tools
         run: |
-          pip install scikit-learn pandas numpy supabase
+          pip install -r requirements.txt
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Train models
@@ -33,9 +33,7 @@ jobs:
         run: python train.py
 
       - name: Sanity-check trained models
-        run: |
-          pip install pytest
-          python -m pytest test_model_sanity.py test_features.py -v
+        run: python -m pytest test_model_sanity.py test_features.py -v
 
       - name: Commit and push
         run: |

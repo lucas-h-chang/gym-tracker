@@ -1,7 +1,16 @@
-streamlit==1.54.0
+# Runtime + dev dependencies for the Bear Meter data pipeline.
+#
+# PyTorch is intentionally NOT listed here: on Linux CI the PyPI wheel pulls the
+# large CUDA build, so it is installed separately from the CPU index instead —
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# (torch is slated for removal in the XGBoost migration, T19; drop the extra
+# install line from daily.yml / train.yml once the MLP is gone.)
+supabase
 pandas
-altair
-pytz
 numpy
 scikit-learn
-torch
+requests
+pytz
+cryptography
+httpx[http2]
+pytest
