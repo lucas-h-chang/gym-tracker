@@ -1832,6 +1832,11 @@ async function init() {
   document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('semester-check').addEventListener('change', () => updateWeeklyChart(data));
 
+  // Default "Exclude breaks" to the current season: during the semester it shows the
+  // representative pattern, but during summer/winter/spring break the recent
+  // semester-only ranges are empty (all break days), so default to all days instead.
+  document.getElementById('semester-check').checked = isSemesterDay(new Date());
+
   updatePredChart(data);
   updateWeeklyChart(data);
   renderInsightCards(data);
