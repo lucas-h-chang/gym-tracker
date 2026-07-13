@@ -1299,7 +1299,14 @@ function updateWeeklyChart(data) {
   const semester = document.getElementById('semester-check').checked;
   const raw      = data.weekly[`${day}|${range}|${semester}`] || [];
   const hasData  = raw.some(p => p.y > 0);
-  const points   = hasData ? raw : [];
+
+  const DAY_NAME_TO_JS = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+  const jsDay = DAY_NAME_TO_JS[day] ?? 1;
+  const { open: xMin, close: xMax } = getOpenHours(jsDay, getPTNow());
+
+  // Strip data points outside today's operating hours so the bezier curve
+  // doesn't pull the line toward an out-of-bounds closing zero.
+  const points = hasData ? raw.filter(p => p.x >= xMin && p.x <= xMax) : [];
 
   document.getElementById('weekly-no-data').style.display = hasData ? 'none' : 'flex';
 
@@ -1308,6 +1315,8 @@ function updateWeeklyChart(data) {
 
   if (weeklyChart) {
     weeklyChart.data.datasets[0].data = points;
+    weeklyChart.options.scales.x.min = xMin;
+    weeklyChart.options.scales.x.max = xMax;
     weeklyChart.update();
     return;
   }
@@ -1354,7 +1363,7 @@ function updateWeeklyChart(data) {
       },
       scales: {
         x: {
-          type: 'linear', min: 7, max: 23,
+          type: 'linear', min: xMin, max: xMax,
           grid: { color: 'rgba(255,255,255,0.04)' },
           border: { display: false },
           ticks: {
