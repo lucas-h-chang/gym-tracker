@@ -156,9 +156,6 @@ def compute_weekly_averages(df):
             filtered = filtered.assign(_open_h=row_open, _close_h=row_close)
 
             for day in DAYS:
-                # Anchor synthetic close at the widest open period contributing to averages
-                # (academic close), so the chart's right edge stays put even when summer
-                # rows drop out earlier.
                 academic_close = 18 if day == 'Saturday' else 23
                 day_data = filtered[
                     (filtered['day_of_week'] == day) &
@@ -172,11 +169,16 @@ def compute_weekly_averages(df):
                     avg_pct=('percent_full', 'mean'),
                 ).reset_index()
 
+                # Use the actual max closing time from the data so summer-only
+                # ranges place the 0% at 20:00 (summer close) instead of 23:00
+                # (academic close), which caused a long diagonal tail on the chart.
+                chart_close = int(day_data['_close_h'].max()) if len(day_data) > 0 else academic_close
+
                 # Drop any bin that rounded up to the close hour (e.g. a 22:58
                 # reading binning to 23.0) so the synthetic close-zero we add
                 # below doesn't collide with it on the primary key.
-                avg = avg[avg['hour_slot'] < academic_close]
-                closing = pd.DataFrame([{'hour_slot': float(academic_close), 'avg_pct': 0.0}])
+                avg = avg[avg['hour_slot'] < chart_close]
+                closing = pd.DataFrame([{'hour_slot': float(chart_close), 'avg_pct': 0.0}])
                 avg     = pd.concat([avg, closing], ignore_index=True)
                 avg     = avg.sort_values('hour_slot')
 
