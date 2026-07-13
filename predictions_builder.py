@@ -4,14 +4,12 @@ Runs daily at midnight PT via daily.yml.
 """
 import os
 import pickle
-import numpy as np
 import pandas as pd
-import torch
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
-from train import GymMLP, engineer_features
+from train import engineer_features
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
@@ -43,21 +41,14 @@ def get_open_hours(day_name, d):
     return 7, (20 if summer else 23)
 
 
-def load_models():
+def load_model():
     with open('models/rf_model.pkl', 'rb') as f:
         rf = pickle.load(f)
-    with open('models/scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    with open('models/model_config.pkl', 'rb') as f:
-        config = pickle.load(f)
-    model = GymMLP(config['n_features'])
-    model.load_state_dict(torch.load('models/pytorch_model.pt', weights_only=True))
-    model.eval()
-    return rf, scaler, model
+    return rf
 
 
-def compute_predictions(rf, scaler, mlp_model, days=91):
-    """Build (slot_ts ISO string, rf_pct, mlp_pct) for every open 15-min slot over the next N days."""
+def compute_predictions(rf, days=91):
+    """Build (slot_ts ISO string, pct) for every open 15-min slot over the next N days."""
     timestamps = []
     slot_ts    = []
 
@@ -81,29 +72,24 @@ def compute_predictions(rf, scaler, mlp_model, days=91):
     print(f"  Engineering features for {len(df):,} slots...")
     X, _ = engineer_features(df)
 
-    rf_preds = rf.predict(X)
-    X_scaled = scaler.transform(X)
-    with torch.no_grad():
-        mlp_preds = mlp_model(
-            torch.tensor(X_scaled, dtype=torch.float32)
-        ).numpy().flatten()
+    preds = rf.predict(X)
 
+    # Single-model schema: one `pct` per slot (the Random Forest prediction, capped at 100).
     return [
         {
             "slot_ts": ts,
-            "rf_pct":  round(min(float(rf_p), 100.0), 1),
-            "mlp_pct": round(min(float(mlp_p), 100.0), 1),
+            "pct":     round(min(float(p), 100.0), 1),
         }
-        for ts, rf_p, mlp_p in zip(slot_ts, rf_preds, mlp_preds)
+        for ts, p in zip(slot_ts, preds)
     ]
 
 
 def main():
-    print("Loading models...")
-    rf, scaler, mlp_model = load_models()
+    print("Loading model...")
+    rf = load_model()
 
     print("Computing predictions (today + 90 days)...")
-    records = compute_predictions(rf, scaler, mlp_model, days=91)
+    records = compute_predictions(rf, days=91)
     print(f"  {len(records):,} slots computed")
 
     print("Upserting to Supabase predictions table...")

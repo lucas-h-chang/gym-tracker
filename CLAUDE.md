@@ -7,20 +7,28 @@ ML web app predicting occupancy at UC Berkeley's RSF weight room. No Python at r
 |------|---------|
 | `scraper.py` | Fetches live occupancy from Density.io API → Supabase capacity_log (every 15 min) |
 | `today_builder.py` | Similarity predictions for today → Supabase today_summary (every 15 min). Reads pre-aggregated `day_profiles` (not full history); skips when the gym is closed |
-| `predictions_builder.py` | 90-day RF+MLP predictions → Supabase predictions (daily) |
+| `predictions_builder.py` | 90-day Random Forest predictions → Supabase predictions (daily) |
 | `weekly_builder.py` | Weekly pattern averages → Supabase weekly_averages (daily) |
 | `day_profiles_builder.py` | Per-day hourly-average profiles (2022+) → Supabase day_profiles (daily, incremental). Feeds today_builder's similarity matcher so it doesn't re-download full history every 15 min |
-| `train.py` | Trains Random Forest + PyTorch MLP from Supabase data, commits models/ |
+| `train.py` | Trains a single Random Forest from Supabase data, commits models/ |
 | `docs/index.html` | Static frontend — queries Supabase REST API directly on page load |
 | `api/live-capacity.js` | Vercel serverless function — cached live-% proxy (checks `live_capacity` row, falls through to Density on stale cache) |
 
-## ML models
-Two models, ~177k rows (Nov 2020–present), chronological 80/20 split:
+## ML model
+One **Random Forest** (scikit-learn), ~146k rows (2021–present), chronological
+70/10/20 split — reported on the untouched 20% test set only:
 
-**Random Forest** — 20 trees, max_depth=15, MAE ±9.42%
-- Top features: `is_break` (50%), `hour_numeric` (25%), `week_of_year` (13%)
+- 20 trees, `max_depth=12`, test MAE **±9.20%** (RMSE ±13.3%), ~7 MB pickle
+- Top features: `is_break` (52%), `hour_numeric` (25%), `week_of_year` (11%)
+- Baseline (groupby mean per weekday/slot/is_break) test MAE ±10.83% — the RF must
+  beat this every retrain; both land in `models/metrics.json`.
 
-**PyTorch MLP** — Input(15)→Linear(64)→ReLU→Dropout(0.2)→Linear(32)→ReLU→Dropout(0.2)→Linear(1), MAE ±9.93%
+Why one RF (no MLP, no XGBoost): the old PyTorch MLP scored worse (±10.22% honest)
+and dragged the blend down while needing torch + a scaler; XGBoost lost to the RF on
+every hyperparameter config. This task is a calendar lookup table, which bagged deep
+trees fit better than boosting. The RF is near the calendar ceiling (an oracle
+per-cell lookup scores ±9.72% out-of-sample). Bigger accuracy gains need recent-
+occupancy signal, which lives in the `today_builder` nowcast, not this model.
 
 ## Feature engineering (15 features)
 Defined in `train.py::engineer_features()`, used by `predictions_builder.py`:

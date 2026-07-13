@@ -25,9 +25,7 @@ jobs:
           key: ${{ runner.os }}-pip-daily-${{ hashFiles('requirements.txt') }}
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+        run: pip install -r requirements.txt
 
       - name: Build 90-day predictions → Supabase
         env:

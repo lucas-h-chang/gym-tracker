@@ -55,7 +55,7 @@ offset = 0
 while True:
     batch = (
         sb.table("predictions")
-        .select("slot_ts,rf_pct,mlp_pct")
+        .select("slot_ts,pct")
         .gte("slot_ts", cutoff)
         .lte("slot_ts", now_pt.isoformat())
         .order("slot_ts")
@@ -70,7 +70,7 @@ while True:
 print(f"  {len(pred_rows)} prediction slots loaded")
 
 # ---------------------------------------------------------------------------
-# 3. Build prediction lookup: slot_ts_rounded → avg(rf, mlp)
+# 3. Build prediction lookup: slot_ts_rounded → pct
 # ---------------------------------------------------------------------------
 def round_ts_to_15(ts_str: str) -> str:
     """Snap a UTC ISO timestamp to the nearest 15-min slot, return PT date+hour+min key."""
@@ -83,7 +83,7 @@ def round_ts_to_15(ts_str: str) -> str:
 pred_map: dict[str, float] = {}
 for r in pred_rows:
     key = round_ts_to_15(r["slot_ts"])
-    pred_map[key] = (r["rf_pct"] + r["mlp_pct"]) / 2.0
+    pred_map[key] = r["pct"]
 
 # ---------------------------------------------------------------------------
 # 4. Match actual readings to predictions

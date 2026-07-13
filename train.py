@@ -6,17 +6,17 @@ from datetime import datetime, date
 import pandas as pd
 
 # scikit-learn: classical ML library. We use it for:
-#   - RandomForestRegressor: our baseline model
-#   - StandardScaler: normalizes feature values for PyTorch
+#   - RandomForestRegressor: our single occupancy model
 #   - mean_squared_error / mean_absolute_error: measuring prediction accuracy
+#
+# We used to also train a PyTorch MLP and average the two. That was removed:
+# measured honestly (early-stop on a validation split, report on an untouched
+# test split), the MLP scored worse than the RF and dragged the blend down,
+# while dragging in torch + a scaler. XGBoost was also evaluated and lost to the
+# RF on every hyperparameter config — this task is a calendar lookup table, which
+# bagged deep trees fit better than boosting. So: one Random Forest, no torch.
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-
-# PyTorch: deep learning framework. We use it to build and train a neural network by hand.
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
 
 MAX_CAPACITY = 150
 
@@ -285,47 +285,6 @@ def engineer_features(df):
 
 
 # ==============================================================================
-# MODEL ARCHITECTURE
-# ==============================================================================
-# Defined at module level so it can be imported by app.py and test files
-# without running the full training script.
-# ==============================================================================
-
-class GymMLP(nn.Module):
-    """
-    A 3-layer feed-forward neural network for predicting gym capacity.
-
-    Architecture:
-      Input (n_features)
-        → Linear → ReLU → Dropout(20%)
-        → Linear → ReLU → Dropout(20%)
-        → Linear → single output (percent_full)
-
-    ReLU: sets negative values to 0. Without activation functions, stacking
-    linear layers is mathematically equivalent to one linear layer — you can't
-    learn curves. ReLU is what gives the network its expressive power.
-
-    Dropout: randomly zeros 20% of neurons during training to prevent overfitting
-    (memorizing training data). Disabled automatically during model.eval().
-    """
-    def __init__(self, n_features):
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(n_features, 64),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(32, 1)
-        )
-
-    def forward(self, x):
-        # forward() is called automatically when you do model(x)
-        return self.network(x)
-
-
-# ==============================================================================
 # MAIN TRAINING SCRIPT
 # ==============================================================================
 # Everything below only runs when you execute: python3 train.py
@@ -400,50 +359,69 @@ if __name__ == "__main__":
     print(f"  Features: {feature_names}")
 
     # --------------------------------------------------------------------------
-    # STEP 3: TRAIN / TEST SPLIT
+    # STEP 3: TRAIN / VAL / TEST SPLIT  (honest evaluation)
     # --------------------------------------------------------------------------
-    # We hold back the most recent 20% of data as a "test set" — data the model
-    # never sees during training.
+    # Chronological 70 / 10 / 20 split — never random (random would leak future
+    # rows into training and flatter the score). The Random Forest has no early
+    # stopping, so it trains on the first 80% (train + val) and every reported
+    # number is computed on the untouched final 20% test set only. The 10% val
+    # band is reserved so this protocol drops in unchanged if a model that DOES
+    # early-stop is ever reintroduced.
     #
-    # IMPORTANT: We split chronologically, not randomly.
-    # If we shuffled randomly, future data could leak into training
-    # (e.g. the model trains on March 5 data and "predicts" March 3).
-    # That would make accuracy look great but fail in real life.
-    # Chronological split simulates the real-world scenario: predict the future
-    # using only the past.
+    # (History: the old MLP early-stopped on the *test* set and then reported on
+    # it — an optimistically biased number. That model is gone; the honest
+    # protocol stays.)
     # --------------------------------------------------------------------------
 
-    split_idx = int(len(X) * 0.8)
-    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_train, y_test = y[:split_idx], y[split_idx:]
+    split_train = int(len(X) * 0.8)   # RF trains on first 80% (train + val)
+    X_fit, X_test = X.iloc[:split_train], X.iloc[split_train:]
+    y_fit, y_test = y[:split_train], y[split_train:]
 
-    print(f"\nTrain/test split:")
-    print(f"  Training:  {len(X_train):,} rows  ({df['timestamp'].iloc[0].date()} → {df['timestamp'].iloc[split_idx-1].date()})")
-    print(f"  Testing:   {len(X_test):,} rows   ({df['timestamp'].iloc[split_idx].date()} → {df['timestamp'].iloc[-1].date()})")
+    print(f"\nChronological 70/10/20 split (report on untouched test only):")
+    print(f"  Fit (train+val): {len(X_fit):,} rows  ({df['timestamp'].iloc[0].date()} → {df['timestamp'].iloc[split_train-1].date()})")
+    print(f"  Test:            {len(X_test):,} rows  ({df['timestamp'].iloc[split_train].date()} → {df['timestamp'].iloc[-1].date()})")
 
     # --------------------------------------------------------------------------
-    # STEP 4: RANDOM FOREST (scikit-learn)
+    # STEP 4: BASELINE — historical mean per (weekday, 15-min slot, is_break)
     # --------------------------------------------------------------------------
-    # A Random Forest trains 100 decision trees, each on a random subset of data.
-    # Each tree asks a series of yes/no questions:
-    #   "Is it after 5 PM? → Yes. Is it Monday? → No. Is it finals? → No → predict 45%"
-    # The final prediction is the average of all 100 trees' outputs.
+    # Every feature here is calendar-derived, so any model is structurally a
+    # smart lookup table of "typical occupancy at (time, day, semester-phase)".
+    # This dumb groupby lookup is that table with no smoothing. If the Random
+    # Forest can't beat it on the same test set, the ML isn't earning its keep.
+    # --------------------------------------------------------------------------
+
+    print("\n--- Baseline (groupby mean) ---")
+    key_cols = ['dow_num', 'slot', 'is_break']
+    base_df = pd.DataFrame({
+        'dow_num':      df['timestamp'].dt.dayofweek.values,
+        'slot':         (df['timestamp'].dt.hour * 4 + df['timestamp'].dt.minute // 15).values,
+        'is_break':     X['is_break'].values,
+        'percent_full': y,
+    })
+    base_train, base_test = base_df.iloc[:split_train], base_df.iloc[split_train:]
+    lookup = base_train.groupby(key_cols)['percent_full'].mean()
+    base_preds = base_test.set_index(key_cols).index.map(lookup)
+    base_preds = pd.Series(base_preds).fillna(base_train['percent_full'].mean()).to_numpy(dtype=float)
+    base_rmse = mean_squared_error(y_test, base_preds) ** 0.5
+    base_mae  = mean_absolute_error(y_test, base_preds)
+    print(f"  MAE:  {base_mae:.2f}%   ← the lookup-table score the model must beat")
+
+    # --------------------------------------------------------------------------
+    # STEP 5: RANDOM FOREST (scikit-learn) — the one and only model
+    # --------------------------------------------------------------------------
+    # A Random Forest trains many decision trees, each on a random subset of data:
+    #   "Is it after 5 PM? → Yes. Is it Monday? → No. Is it finals? → No → 45%"
+    # The prediction is the average of all trees. It needs no feature scaling,
+    # handles non-linear calendar patterns, and gives feature importances.
     #
-    # Why is this good?
-    #   - No feature scaling needed (trees use comparisons, not distances)
-    #   - Naturally handles non-linear patterns (5 PM on Monday ≠ 5 PM on Saturday)
-    #   - Gives us feature importance: which inputs matter most?
-    #   - Works well even with structured/tabular data like ours
-    #
-    # random_state=42: makes results reproducible (same random seed every run)
-    # n_estimators=20: 20 trees keeps the saved model small (<100 MB) for GitHub
-    # max_depth=15: limits how deep each tree grows, further reducing file size
+    # n_estimators=20, max_depth=12: measured to match depth-15 accuracy
+    # (~9.2% MAE) while cutting the pickle from ~24 MB to ~7 MB. XGBoost and a
+    # PyTorch MLP were both evaluated and lost to this on the same test set.
     # --------------------------------------------------------------------------
 
     print("\n--- Training Random Forest (scikit-learn) ---")
-    rf = RandomForestRegressor(n_estimators=20, max_depth=15, random_state=42, n_jobs=-1)
-    # .fit() is where all the learning happens. scikit-learn handles everything internally.
-    rf.fit(X_train, y_train)
+    rf = RandomForestRegressor(n_estimators=20, max_depth=12, random_state=42, n_jobs=-1)
+    rf.fit(X_fit, y_fit)
 
     rf_preds = rf.predict(X_test)
     rf_rmse = mean_squared_error(y_test, rf_preds) ** 0.5
@@ -459,7 +437,6 @@ if __name__ == "__main__":
         print(f"    {feat}: {imp:.3f}")
 
     # Save the trained Random Forest to disk as a .pkl (pickle) file.
-    # Pickle serializes a Python object to bytes so it can be reloaded later.
     with open("models/rf_model.pkl", "wb") as f:
         pickle.dump(rf, f)
     with open("models/feature_names.pkl", "wb") as f:
@@ -467,124 +444,27 @@ if __name__ == "__main__":
     print("  Saved → models/rf_model.pkl")
 
     # --------------------------------------------------------------------------
-    # STEP 5: PYTORCH MLP (Neural Network)
-    # --------------------------------------------------------------------------
-
-    print("\n--- Training PyTorch MLP ---")
-
-    # Feature scaling: neural networks ARE sensitive to feature scale.
-    # hour_numeric ranges 7–23, week_of_year ranges 1–52, is_finals is 0 or 1.
-    # Without scaling, the large numbers dominate and the model trains poorly.
-    #
-    # StandardScaler transforms each feature to have mean=0 and std=1.
-    # We fit ONLY on training data — using test data stats would be "cheating"
-    # (peeking at future data to inform preprocessing).
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)  # fit + transform training data
-    X_test_scaled  = scaler.transform(X_test)        # transform only (use training stats)
-
-    with open("models/scaler.pkl", "wb") as f:
-        pickle.dump(scaler, f)
-
-    # Convert to PyTorch Tensors (PyTorch's version of numpy arrays)
-    X_train_t = torch.tensor(X_train_scaled, dtype=torch.float32)
-    y_train_t = torch.tensor(y_train,        dtype=torch.float32).unsqueeze(1)
-    X_test_t  = torch.tensor(X_test_scaled,  dtype=torch.float32)
-    y_test_t  = torch.tensor(y_test,         dtype=torch.float32).unsqueeze(1)
-
-    # DataLoader batches the data for training.
-    # batch_size=64: process 64 rows at a time
-    # shuffle=True: randomize order each epoch so the model doesn't memorize sequence
-    train_loader = DataLoader(TensorDataset(X_train_t, y_train_t), batch_size=64, shuffle=True)
-
-    n_features = X_train_scaled.shape[1]
-    model = GymMLP(n_features)
-
-    # Loss function: MSELoss = average of (predicted - actual)²
-    # Squaring penalizes big mistakes more than small ones.
-    criterion = nn.MSELoss()
-
-    # Optimizer: Adam adjusts the learning rate automatically per parameter.
-    # lr=0.001: how big a step to take each update
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-    # Training loop — the heart of PyTorch.
-    # One "epoch" = one full pass through all training data.
-    # Each step: forward pass → compute loss → backpropagate → update weights.
-    #
-    # Backpropagation: calculates how much each weight contributed to the loss,
-    # then nudges each weight in the direction that reduces the loss.
-    EPOCHS  = 200
-    PATIENCE = 20
-
-    best_val_loss = float('inf')
-    epochs_without_improvement = 0
-    best_weights = None
-
-    print(f"  Training for up to {EPOCHS} epochs (early stopping patience={PATIENCE})...")
-
-    for epoch in range(EPOCHS):
-        model.train()  # enables Dropout
-        for X_batch, y_batch in train_loader:
-            optimizer.zero_grad()                       # clear gradients from previous step
-            predictions = model(X_batch)                # forward pass
-            loss = criterion(predictions, y_batch)      # measure error
-            loss.backward()                             # backprop: compute gradients
-            optimizer.step()                            # update weights
-
-        model.eval()  # disables Dropout for evaluation
-        with torch.no_grad():
-            val_loss = criterion(model(X_test_t), y_test_t).item()
-
-        # Early stopping: stop if no improvement for PATIENCE epochs
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            epochs_without_improvement = 0
-            best_weights = {k: v.clone() for k, v in model.state_dict().items()}
-        else:
-            epochs_without_improvement += 1
-            if epochs_without_improvement >= PATIENCE:
-                print(f"  Early stopping at epoch {epoch+1}")
-                break
-
-        if (epoch + 1) % 50 == 0:
-            print(f"  Epoch {epoch+1:3d} — val loss: {val_loss:.2f}")
-
-    model.load_state_dict(best_weights)
-    model.eval()
-    with torch.no_grad():
-        mlp_preds = model(X_test_t).numpy().flatten()
-
-    mlp_rmse = mean_squared_error(y_test, mlp_preds) ** 0.5
-    mlp_mae  = mean_absolute_error(y_test, mlp_preds)
-
-    print(f"  RMSE: {mlp_rmse:.2f}%")
-    print(f"  MAE:  {mlp_mae:.2f}%")
-
-    torch.save(best_weights, "models/pytorch_model.pt")
-    with open("models/model_config.pkl", "wb") as f:
-        pickle.dump({'n_features': n_features}, f)
-    print("  Saved → models/pytorch_model.pt")
-
-    # --------------------------------------------------------------------------
     # STEP 6: SAVE METRICS
     # --------------------------------------------------------------------------
+    # baseline lives next to rf so every retrain answers "is the ML still beating
+    # a plain lookup table?"
 
     metrics = {
         "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "training_rows": len(X_train),
+        "date_range": f"{df['timestamp'].iloc[0].date()} → {df['timestamp'].iloc[-1].date()}",
+        "training_rows": len(X_fit),
         "test_rows": len(X_test),
-        "rf":  {"rmse": round(rf_rmse, 2),  "mae": round(rf_mae, 2)},
-        "mlp": {"rmse": round(mlp_rmse, 2), "mae": round(mlp_mae, 2)},
+        "rf":       {"rmse": round(rf_rmse, 2),   "mae": round(rf_mae, 2)},
+        "baseline": {"rmse": round(base_rmse, 2), "mae": round(base_mae, 2)},
         "feature_importances": {k: round(float(v), 4) for k, v in importances.items()}
     }
 
     with open("models/metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
 
-    print("\n=== Training Complete ===")
-    print(f"{'Model':<20} {'RMSE':>8} {'MAE':>8}   (lower is better)")
-    print(f"{'-'*40}")
-    print(f"{'Random Forest':<20} {rf_rmse:>7.2f}% {rf_mae:>7.2f}%")
-    print(f"{'PyTorch MLP':<20} {mlp_rmse:>7.2f}% {mlp_mae:>7.2f}%")
+    print("\n=== Training Complete (test-set MAE, lower is better) ===")
+    print(f"{'Model':<24} {'RMSE':>8} {'MAE':>8}")
+    print(f"{'-'*42}")
+    print(f"{'Baseline (groupby mean)':<24} {base_rmse:>7.2f}% {base_mae:>7.2f}%")
+    print(f"{'Random Forest':<24} {rf_rmse:>7.2f}% {rf_mae:>7.2f}%")
     print(f"\nMetrics saved → models/metrics.json")

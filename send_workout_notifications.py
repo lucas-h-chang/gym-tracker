@@ -158,7 +158,7 @@ def fetch_predictions_near(sb, target_times: list[datetime]) -> dict[datetime, i
 
     rows = (
         sb.table("predictions")
-        .select("slot_ts,rf_pct,mlp_pct")
+        .select("slot_ts,pct")
         .gte("slot_ts", earliest.astimezone(timezone.utc).isoformat())
         .lte("slot_ts", latest.astimezone(timezone.utc).isoformat())
         .execute()
@@ -177,7 +177,7 @@ def fetch_predictions_near(sb, target_times: list[datetime]) -> dict[datetime, i
                 best = row
 
         if best:
-            ml_pct = (best["rf_pct"] + best["mlp_pct"]) / 2
+            ml_pct = best["pct"]
             # Derive hour_numeric for this slot in PT
             slot_pt   = datetime.fromisoformat(best["slot_ts"].replace("Z", "+00:00")).astimezone(PT)
             hour_num  = slot_pt.hour + slot_pt.minute / 60.0
@@ -257,7 +257,7 @@ def send_workout_reminders(sb, rows, now, slot_h, slot_m, ios_weekday, sim_map, 
     latest   = t60 + timedelta(minutes=16)
     ml_rows  = (
         sb.table("predictions")
-        .select("slot_ts,rf_pct,mlp_pct")
+        .select("slot_ts,pct")
         .gte("slot_ts", earliest.isoformat())
         .lte("slot_ts", latest.isoformat())
         .execute()
@@ -273,7 +273,7 @@ def send_workout_reminders(sb, rows, now, slot_h, slot_m, ios_weekday, sim_map, 
                 best_diff, best = diff, r
         if not best:
             return None
-        ml  = (best["rf_pct"] + best["mlp_pct"]) / 2
+        ml  = best["pct"]
         spt = datetime.fromisoformat(best["slot_ts"].replace("Z", "+00:00")).astimezone(PT)
         return round(blend_ml(ml, spt.hour + spt.minute / 60.0, sim_map, blend_weight))
 
@@ -319,7 +319,7 @@ def send_daily_summaries(sb, rows, slot_h, slot_m, sim_map, blend_weight):
     today_end   = now.replace(hour=23, minute=59, second=0, microsecond=0).astimezone(timezone.utc)
     ml_rows = (
         sb.table("predictions")
-        .select("slot_ts,rf_pct,mlp_pct")
+        .select("slot_ts,pct")
         .gte("slot_ts", today_start.isoformat())
         .lte("slot_ts", today_end.isoformat())
         .execute()
@@ -328,7 +328,7 @@ def send_daily_summaries(sb, rows, slot_h, slot_m, sim_map, blend_weight):
 
     blended = []
     for r in ml_rows:
-        ml  = (r["rf_pct"] + r["mlp_pct"]) / 2
+        ml  = r["pct"]
         spt = datetime.fromisoformat(r["slot_ts"].replace("Z", "+00:00")).astimezone(PT)
         hn  = spt.hour + spt.minute / 60.0
         pct = blend_ml(ml, hn, sim_map, blend_weight)
