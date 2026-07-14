@@ -3,6 +3,7 @@ import json
 import pickle
 from datetime import datetime, date
 
+import numpy as np
 import pandas as pd
 
 # scikit-learn: classical ML library. We use it for:
@@ -444,6 +445,52 @@ if __name__ == "__main__":
     print("  Saved → models/rf_model.pkl")
 
     # --------------------------------------------------------------------------
+    # STEP 5b: SEGMENTED METRICS
+    # --------------------------------------------------------------------------
+    # Aggregate MAE hides the slots users actually care about.  These segments
+    # expose where the model is off and in which direction.
+    # bias = mean(pred − actual): negative → under-predicting (peak-shaving).
+    # --------------------------------------------------------------------------
+
+    test_hour    = X_test['hour_numeric'].values
+    test_weekend = X_test['is_weekend'].values
+    test_break   = X_test['is_break'].values
+
+    def seg_mae(mask):
+        if mask.sum() == 0:
+            return {"n": 0, "mae": None, "bias": None, "baseline_mae": None}
+        a, r, b = y_test[mask], rf_preds[mask], base_preds[mask]
+        return {
+            "n":            int(mask.sum()),
+            "mae":          round(float(mean_absolute_error(a, r)), 2),
+            "bias":         round(float((r - a).mean()), 2),
+            "baseline_mae": round(float(mean_absolute_error(a, b)), 2),
+        }
+
+    eve_peak = (test_hour >= 17) & (test_hour < 21) & (test_weekend == 0) & (test_break == 0)
+    off_peak = ~eve_peak & (test_weekend == 0) & (test_break == 0)
+    wknd     = test_weekend == 1
+    brk      = test_break == 1
+
+    segmented = {
+        "evening_peak_weekday": seg_mae(eve_peak),
+        "weekday_off_peak":     seg_mae(off_peak),
+        "weekend":              seg_mae(wknd),
+        "break_periods":        seg_mae(brk),
+    }
+
+    # % of test slots where the prediction is close enough to be actionable
+    within_10pp = round(float((np.abs(rf_preds - y_test) <= 10).mean() * 100), 1)
+
+    print("\n--- Segmented MAE (test set) ---")
+    print(f"  {'Segment':<28} {'N':>6}  {'MAE':>6}  {'Bias':>7}  {'Baseline':>8}")
+    print(f"  {'-'*62}")
+    for seg, m in segmented.items():
+        if m['n'] > 0:
+            print(f"  {seg:<28} {m['n']:>6,}  {m['mae']:>5.2f}%  {m['bias']:>+6.2f}%  {m['baseline_mae']:>7.2f}%")
+    print(f"\n  Within ±10pp (all test slots): {within_10pp:.1f}%")
+
+    # --------------------------------------------------------------------------
     # STEP 6: SAVE METRICS
     # --------------------------------------------------------------------------
     # baseline lives next to rf so every retrain answers "is the ML still beating
@@ -456,6 +503,8 @@ if __name__ == "__main__":
         "test_rows": len(X_test),
         "rf":       {"rmse": round(rf_rmse, 2),   "mae": round(rf_mae, 2)},
         "baseline": {"rmse": round(base_rmse, 2), "mae": round(base_mae, 2)},
+        "segmented":    segmented,
+        "within_10pp":  within_10pp,
         "feature_importances": {k: round(float(v), 4) for k, v in importances.items()}
     }
 
@@ -467,4 +516,9 @@ if __name__ == "__main__":
     print(f"{'-'*42}")
     print(f"{'Baseline (groupby mean)':<24} {base_rmse:>7.2f}% {base_mae:>7.2f}%")
     print(f"{'Random Forest':<24} {rf_rmse:>7.2f}% {rf_mae:>7.2f}%")
-    print(f"\nMetrics saved → models/metrics.json")
+    print(f"\n{'Segment':<28} {'MAE':>6}  {'Bias':>7}  {'Baseline':>8}")
+    print(f"{'-'*55}")
+    for seg, m in segmented.items():
+        if m['n'] > 0:
+            print(f"{seg:<28} {m['mae']:>5.2f}%  {m['bias']:>+6.2f}%  {m['baseline_mae']:>7.2f}%")
+    print(f"\nWithin ±10pp: {within_10pp:.1f}%  |  Metrics saved → models/metrics.json")

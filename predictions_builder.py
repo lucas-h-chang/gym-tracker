@@ -1,5 +1,5 @@
 """
-predictions_builder.py — compute 90-day RF+MLP predictions → Supabase predictions table.
+predictions_builder.py — compute 90-day RF predictions → Supabase predictions table.
 Runs daily at midnight PT via daily.yml.
 """
 import os
@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
-from train import engineer_features
+from train import engineer_features, parse_supabase_timestamps
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
@@ -41,13 +41,68 @@ def get_open_hours(day_name, d):
     return 7, (20 if summer else 23)
 
 
+CORRECTION_DAYS     = 28   # trailing window for residual computation
+CORRECTION_MIN_N    = 3    # min observations per (is_break, dow, hour) cell to apply correction
+CORRECTION_HOUR_MIN = 17   # only correct evening slots (5 PM onwards)
+
+
 def load_model():
     with open('models/rf_model.pkl', 'rb') as f:
         rf = pickle.load(f)
     return rf
 
 
-def compute_predictions(rf, days=91):
+def build_evening_correction(rf):
+    """
+    Fetch the last CORRECTION_DAYS days of actuals, re-predict with RF, and return a
+    dict keyed by (is_break, dow, hour) → mean residual (pp).  Only called once per run.
+    """
+    lo = (now - timedelta(days=CORRECTION_DAYS)).isoformat()
+    hi = now.isoformat()
+
+    rows, offset = [], 0
+    while True:
+        batch = (
+            sb.table("capacity_log")
+            .select("timestamp,percent_full")
+            .gte("timestamp", lo)
+            .lte("timestamp", hi)
+            .order("timestamp")
+            .range(offset, offset + 8999)
+            .execute()
+            .data
+        )
+        rows.extend(batch)
+        if len(batch) < 9000:
+            break
+        offset += 9000
+
+    if not rows:
+        return {}
+
+    df = pd.DataFrame(rows)
+    df['timestamp']    = parse_supabase_timestamps(df['timestamp'])
+    df['percent_full'] = df['percent_full'].astype(float)
+    df = df[df['percent_full'] > 0].dropna().reset_index(drop=True)
+
+    X, _ = engineer_features(df)
+    df['rf_pred']  = rf.predict(X)
+    df['residual'] = df['percent_full'] - df['rf_pred']
+    df['dow']      = df['timestamp'].dt.dayofweek
+    df['hour']     = df['timestamp'].dt.hour
+    df['is_break'] = X['is_break'].values.astype(int)
+
+    correction = {}
+    for (ib, dow, hr), g in df.groupby(['is_break', 'dow', 'hour']):
+        if len(g) >= CORRECTION_MIN_N:
+            correction[(int(ib), int(dow), int(hr))] = g['residual'].mean()
+
+    n_cells = len(correction)
+    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (is_break, dow, hour) cells")
+    return correction
+
+
+def compute_predictions(rf, correction, days=91):
     """Build (slot_ts ISO string, pct) for every open 15-min slot over the next N days."""
     timestamps = []
     slot_ts    = []
@@ -72,24 +127,31 @@ def compute_predictions(rf, days=91):
     print(f"  Engineering features for {len(df):,} slots...")
     X, _ = engineer_features(df)
 
-    preds = rf.predict(X)
+    preds    = rf.predict(X)
+    is_break = X['is_break'].values.astype(int)
+    dow      = df['timestamp'].dt.dayofweek.values
+    hour     = df['timestamp'].dt.hour.values
 
-    # Single-model schema: one `pct` per slot (the Random Forest prediction, capped at 100).
-    return [
-        {
+    records = []
+    for ts, p, ib, dw, hr in zip(slot_ts, preds, is_break, dow, hour):
+        if hr >= CORRECTION_HOUR_MIN:
+            p += correction.get((ib, dw, hr), 0.0)
+        records.append({
             "slot_ts": ts,
-            "pct":     round(min(float(p), 100.0), 1),
-        }
-        for ts, p in zip(slot_ts, preds)
-    ]
+            "pct":     round(min(max(float(p), 0.0), 100.0), 1),
+        })
+    return records
 
 
 def main():
     print("Loading model...")
     rf = load_model()
 
+    print("Building evening correction table...")
+    correction = build_evening_correction(rf)
+
     print("Computing predictions (today + 90 days)...")
-    records = compute_predictions(rf, days=91)
+    records = compute_predictions(rf, correction, days=91)
     print(f"  {len(records):,} slots computed")
 
     print("Upserting to Supabase predictions table...")
