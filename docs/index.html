@@ -1159,7 +1159,7 @@ function updatePredChart(data) {
   const pt       = getPTNow();
   const nowVal   = pt.getHours() + pt.getMinutes() / 60;
   const predDay  = new Date(predDate + 'T12:00:00');
-  const xMax     = getOpenHours(predDay.getDay(), predDay).close;
+  const xMax     = getOpenHours(predDay.getDay(), null).close;
 
   const allPredPoints = buildPredPoints(data, predDate);
   // On today: clip actual to <= now, clip predicted to >= now
