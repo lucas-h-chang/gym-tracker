@@ -55,7 +55,9 @@ def load_model():
 def build_evening_correction(rf):
     """
     Fetch the last CORRECTION_DAYS days of actuals, re-predict with RF, and return a
-    dict keyed by (is_break, dow, hour) → mean residual (pp).  Only called once per run.
+    dict keyed by (is_break, dow, hour, minute) → mean residual (pp).
+    minute is rounded to the nearest 15-min boundary (0/15/30/45) so scraped
+    timestamps (which land off-quarter) align with the prediction slots.
     """
     lo = (now - timedelta(days=CORRECTION_DAYS)).isoformat()
     hi = now.isoformat()
@@ -90,15 +92,16 @@ def build_evening_correction(rf):
     df['residual'] = df['percent_full'] - df['rf_pred']
     df['dow']      = df['timestamp'].dt.dayofweek
     df['hour']     = df['timestamp'].dt.hour
+    df['minute']   = (df['timestamp'].dt.minute // 15) * 15  # round to 0/15/30/45
     df['is_break'] = X['is_break'].values.astype(int)
 
     correction = {}
-    for (ib, dow, hr), g in df.groupby(['is_break', 'dow', 'hour']):
+    for (ib, dow, hr, mn), g in df.groupby(['is_break', 'dow', 'hour', 'minute']):
         if len(g) >= CORRECTION_MIN_N:
-            correction[(int(ib), int(dow), int(hr))] = g['residual'].mean()
+            correction[(int(ib), int(dow), int(hr), int(mn))] = g['residual'].mean()
 
     n_cells = len(correction)
-    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (is_break, dow, hour) cells")
+    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (is_break, dow, hour, minute) cells")
     return correction
 
 
@@ -131,11 +134,12 @@ def compute_predictions(rf, correction, days=91):
     is_break = X['is_break'].values.astype(int)
     dow      = df['timestamp'].dt.dayofweek.values
     hour     = df['timestamp'].dt.hour.values
+    minute   = df['timestamp'].dt.minute.values
 
     records = []
-    for ts, p, ib, dw, hr in zip(slot_ts, preds, is_break, dow, hour):
+    for ts, p, ib, dw, hr, mn in zip(slot_ts, preds, is_break, dow, hour, minute):
         if hr >= CORRECTION_HOUR_MIN:
-            p += correction.get((ib, dw, hr), 0.0)
+            p += correction.get((ib, dw, hr, mn), 0.0)
         records.append({
             "slot_ts": ts,
             "pct":     round(min(max(float(p), 0.0), 100.0), 1),
