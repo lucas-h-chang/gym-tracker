@@ -1159,7 +1159,7 @@ function updatePredChart(data) {
   const pt       = getPTNow();
   const nowVal   = pt.getHours() + pt.getMinutes() / 60;
   const predDay  = new Date(predDate + 'T12:00:00');
-  const xMax     = getOpenHours(predDay.getDay(), null).close;
+  const xMax     = 23;
 
   const allPredPoints = buildPredPoints(data, predDate);
   // On today: clip actual to <= now, clip predicted to >= now
@@ -1300,11 +1300,7 @@ function updateWeeklyChart(data) {
   const raw      = data.weekly[`${day}|${range}|${semester}`] || [];
   const hasData  = raw.some(p => p.y > 0);
 
-  const DAY_NAME_TO_JS = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
-  const jsDay = DAY_NAME_TO_JS[day] ?? 1;
-  // Use widest possible hours (academic year) so semester data past 8 PM is
-  // never clipped, regardless of which time range the user selects.
-  const { open: xMin, close: xMax } = getOpenHours(jsDay, null);
+  const xMin = 7, xMax = 23;
 
   const points = hasData ? raw.filter(p => p.x >= xMin && p.x <= xMax) : [];
 
@@ -1315,8 +1311,6 @@ function updateWeeklyChart(data) {
 
   if (weeklyChart) {
     weeklyChart.data.datasets[0].data = points;
-    weeklyChart.options.scales.x.min = xMin;
-    weeklyChart.options.scales.x.max = xMax;
     weeklyChart.update();
     return;
   }
