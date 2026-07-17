@@ -52,6 +52,7 @@
       justify-content: space-between;
       padding: 0 48px;
       height: 64px;
+      margin-top: 16px;
     }
     .logo {
       font-size: 28px;
@@ -800,24 +801,55 @@ const nowLinePlugin = {
       return;
     }
 
-    const { scales } = chart;
     const lastPt = actualData[actualData.length - 1];
     if (!lastPt) {
       if (pulseDot) pulseDot.style.display = 'none';
       return;
     }
 
-    const dotX = scales.x.getPixelForValue(lastPt.x);
-    const dotY = scales.y.getPixelForValue(lastPt.y);
-
-    if (pulseDot) {
-      pulseDot.style.display = 'block';
-      pulseDot.style.left = (dotX - 7) + 'px';
-      pulseDot.style.top  = (dotY - 7) + 'px';
-    }
+    positionPulseDot(chart, lastPt);
   }
 };
 Chart.register(nowLinePlugin);
+
+// Positions the live pulse dot at the real current time (not the last 15-min
+// actual bin) so it creeps steadily along the x-axis between data points —
+// e.g. at 4:52 it sits ~halfway between the 4:45 bin and the 5:00 slot.
+// Vertically, prefer the truly live capacity reading (Density, refreshed every
+// 30s) over the last 15-min actual average, since that average can lag by
+// up to 15 minutes behind what the dot's x-position claims to represent.
+function positionPulseDot(chart, lastPt) {
+  const pulseDot = document.getElementById('pulse-dot');
+  if (!pulseDot) return;
+
+  const opts = chart.options.plugins.nowLine;
+  const { scales } = chart;
+  const pt = getPTNow();
+  const nowVal = pt.getHours() + pt.getMinutes() / 60;
+  const clampedX = Math.min(Math.max(nowVal, scales.x.min), scales.x.max);
+
+  const yVal = liveCapacity ? liveCapacity.pct : lastPt.y;
+  const dotX = scales.x.getPixelForValue(clampedX);
+  const dotY = scales.y.getPixelForValue(yVal);
+
+  pulseDot.style.display = 'block';
+  pulseDot.style.left = (dotX - 7) + 'px';
+  pulseDot.style.top  = (dotY - 7) + 'px';
+}
+
+// The chart itself only redraws on interaction/data refresh, so without this
+// the dot would sit frozen at whatever time the page happened to load. Nudge
+// it forward every 15s using the same live-clock math, no full chart redraw needed.
+setInterval(() => {
+  if (!predChart) return;
+  const opts = predChart.options.plugins.nowLine;
+  if (!opts?.show) return;
+  const actualData = predChart.data.datasets[0]?.data || [];
+  const lastPt = actualData[actualData.length - 1];
+  if (!lastPt) return;
+  if (predChart.tooltip?.opacity > 0) return;
+  positionPulseDot(predChart, lastPt);
+}, 15000);
 
 // Scrub line on hover
 const scrubLinePlugin = {
@@ -1365,6 +1397,9 @@ function renderInsightCards(data) {
 // ── Boot ───────────────────────────────────────────────────────
 async function init() {
   updateStatusBar();
+  // Live capacity is server-cached for 30s (see api/live-capacity.js), so
+  // polling any faster than that just re-fetches the same cached value.
+  setInterval(updateStatusBar, 30000);
 
   const today     = todayPT();
   const yesterday = shiftDate(today, -1);
