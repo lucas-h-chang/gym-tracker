@@ -11,20 +11,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:         #09090f;
-      --panel:      #0d0e16;
-      --panel2:     #12131e;
-      --border:     rgba(160, 170, 220, 0.1);
-      --border2:    rgba(160, 170, 220, 0.16);
-      --accent:     #93a4f5;
-      --accent-bg:  rgba(147, 164, 245, 0.08);
-      --text:       #e2e3ee;
-      --sub:        #8f92aa;
-      --muted:      #454660;
-      --open-color: #6ee7b7;
-      --closed-color: #f87171;
-      --font:  'Inter', -apple-system, sans-serif;
-      --mono:  'JetBrains Mono', monospace;
+      --bg:         #0a0a0f;
+      --text:       #e8e6e3;
+      --sub:        #8a8480;
+      --muted:      #4a4540;
+      --border:     rgba(255,255,255,0.06);
+      --font:       'Inter', -apple-system, sans-serif;
+      --mono:       'JetBrains Mono', monospace;
+      --cap-green:     #6ee7b7;
+      --cap-yellow:    #fbbf24;
+      --cap-red:       #f87171;
+      --cap-dark-red:  #b91c1c;
     }
 
     body {
@@ -44,7 +41,7 @@
       letter-spacing: 0.05em;
       font-family: var(--mono);
       background: rgba(248, 113, 113, 0.07);
-      border-bottom: 1px solid rgba(248, 113, 113, 0.15);
+      border-bottom: 1px solid rgba(248, 113, 113, 0.12);
       color: #f87171;
     }
 
@@ -54,106 +51,171 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 48px;
-      height: 88px;
-      border-bottom: 1px solid var(--border);
+      height: 64px;
     }
-
     .logo {
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 700;
       letter-spacing: -0.02em;
       color: var(--text);
     }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    /* Status pill */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      height: 40px;
-      padding: 0 20px;
-      border-radius: 100px;
-      border: 1px solid var(--border);
-      background: transparent;
-      transition: border-color 0.4s, background 0.4s;
-    }
-    .status-badge.open {
-      border-color: rgba(110, 231, 183, 0.28);
-      background: rgba(110, 231, 183, 0.05);
-    }
-    .status-badge.closed {
-      border-color: rgba(248, 113, 113, 0.22);
-      background: rgba(248, 113, 113, 0.05);
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--muted);
-      flex-shrink: 0;
-      transition: background 0.3s;
-    }
-    .status-badge.open .status-dot {
-      background: var(--open-color);
-      animation: live-pulse 2.8s ease-in-out infinite;
-    }
-    .status-badge.closed .status-dot {
-      background: var(--closed-color);
-    }
-
-    @keyframes live-pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.35; }
-    }
-
-    .status-label {
+    .about-link {
       font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      transition: color 0.3s;
-      line-height: 40px;
-      display: block;
+      font-weight: 500;
+      color: var(--sub);
+      text-decoration: none;
+      transition: color 0.15s;
     }
-    .status-badge.open   .status-label { color: var(--open-color); }
-    .status-badge.closed .status-label { color: var(--closed-color); }
+    .about-link:hover { color: var(--text); }
 
-    /* ── Main ── */
-    main {
+    /* ── Insight Cards ── */
+    .insight-row {
+      display: flex;
+      gap: 48px;
+      padding: 32px 48px 36px;
+    }
+    .insight-row.hidden { display: none; }
+    .insight-card {
+      flex: 1;
       display: flex;
       flex-direction: column;
+      gap: 12px;
+      position: relative;
+      min-height: 120px;
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--sub);
+      text-transform: uppercase;
+      line-height: 1;
+    }
+    .card-value {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .card-sub {
+      font-size: 14px;
+      color: var(--sub);
+      line-height: 1.2;
+    }
+    .card-sub a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
 
-    .section-pred {
+    /* Capacity bar */
+    .cap-bar-wrap { width: 100%; }
+    .cap-bar-track {
+      height: 7px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .cap-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--cap-green);
+      transition: width 0.6s ease, background 0.4s;
+    }
+    .cap-bar-fill.mid      { background: var(--cap-yellow); }
+    .cap-bar-fill.high     { background: var(--cap-red); }
+    .cap-bar-fill.critical { background: var(--cap-dark-red); }
+
+    /* Comparison verdict colors */
+    .comp-verdict.much-busier  { color: #dc2626; }
+    .comp-verdict.busier       { color: #f87171; }
+    .comp-verdict.bit-busier   { color: #fca5a5; }
+    .comp-verdict.much-quieter { color: #059669; }
+    .comp-verdict.quieter      { color: #6ee7b7; }
+    .comp-verdict.bit-quieter  { color: #a7f3d0; }
+    .comp-verdict.average      { color: var(--text); }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 48px;
+    }
+
+    /* ── Chart Sections ── */
+    .chart-section {
       position: relative;
       padding: 32px 48px 0;
     }
-
-    .section-weekly {
-      padding: 50px 48px 60px;
+    .weekly-section {
+      padding-bottom: 60px;
+      margin-top: 48px;
     }
-    .section-weekly .section-title {
-      margin-bottom: 38px;
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .chart-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .chart-wrap {
+      position: relative;
+    }
+    .chart-wrap canvas {
+      display: block;
+      width: 100% !important;
     }
 
-    /* Calendar popup */
+    /* ── Day Pills ── */
+    .day-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .pill {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 7px 18px;
+      background: transparent;
+      color: var(--sub);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .pill:hover {
+      border-color: rgba(255,255,255,0.22);
+      color: var(--text);
+    }
+    .pill.active {
+      background: #ececec;
+      border-color: #ececec;
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+    .pill-cal {
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Calendar Popup ── */
     .cal-popup {
       position: absolute;
-      background: var(--panel);
-      border: 1px solid var(--border2);
-      border-radius: 10px;
+      background: #141310;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
       padding: 16px;
       z-index: 100;
       width: 260px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
     }
     .cal-header {
       display: flex;
@@ -200,208 +262,25 @@
       color: var(--sub);
       transition: background 0.12s, color 0.12s;
     }
-    .cal-day:hover:not(.cal-day-disabled):not(.cal-day-selected) { background: var(--border2); color: var(--text); }
+    .cal-day:hover:not(.cal-day-disabled):not(.cal-day-selected) {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
     .cal-day-disabled { opacity: 0.2; cursor: default; pointer-events: none; }
-    .cal-day-selected { background: var(--accent); color: #fff; font-weight: 700; }
-    .cal-day-today { color: var(--accent); font-weight: 700; }
-    .cal-day-selected.cal-day-today { color: #fff; }
+    .cal-day-selected { background: var(--cap-green); color: #000; font-weight: 700; }
+    .cal-day-today { color: var(--cap-green); font-weight: 700; }
+    .cal-day-selected.cal-day-today { color: #000; }
     .cal-day-empty { pointer-events: none; }
-    /* Prediction date nav */
-    .pred-header-row {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 32px;
-      margin-bottom: 20px;
-    }
-    .pred-nav {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      width: 280px;
-      background: var(--panel);
-      border: 1px solid var(--border2);
-      border-radius: 8px;
-      overflow: hidden;
-    }
 
-    .pred-nav-btn {
-      background: none;
-      border: none;
-      color: var(--text);
-      cursor: pointer;
-      width: 36px;
-      height: 30px;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s, color 0.15s;
-      line-height: 1;
-    }
-    .pred-nav-btn:hover:not(:disabled) { background: var(--border2); color: var(--accent); }
-    .pred-nav-btn:disabled { opacity: 0.25; cursor: default; }
-    .pred-date-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-      flex: 1;
-      text-align: center;
-      border-left: 1px solid var(--border2);
-      border-right: 1px solid var(--border2);
-      line-height: 30px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-
-    /* ── Eyebrow + title ── */
-    .eyebrow {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.18em;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-
-    .section-title {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      color: var(--text);
-      margin-bottom: 20px;
-    }
-    .pred-header-row .section-title { margin-bottom: 0; }
-
-    /* ── Info tooltip ── */
-    .info-tip {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-    }
-
-    .info-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 1.5px solid var(--muted);
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 600;
-      font-style: normal;
-      cursor: default;
-      line-height: 1;
-      flex-shrink: 0;
-      transition: border-color 0.15s, color 0.15s;
-      user-select: none;
-    }
-
-    .info-tip:hover .info-icon {
-      border-color: var(--sub);
-      color: var(--sub);
-    }
-
-    .info-popup {
-      display: none;
-      position: absolute;
-      top: calc(100% + 10px);
-      left: 0;
-      width: 300px;
-      background: var(--panel2);
-      border: 1px solid var(--border2);
-      border-radius: 10px;
-      padding: 14px 16px;
-      font-size: 13px;
-      line-height: 1.65;
-      color: var(--sub);
-      z-index: 100;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-
-    .info-tip:hover .info-popup { display: block; }
-
-    /* ── Chart card ── */
-    .chart-card {
-      position: relative;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 28px 24px 22px;
-      overflow: hidden;
-    }
-    .chart-card canvas { display: block; width: 100% !important; }
-
-    .no-data-overlay {
-      display: none;
-      position: absolute;
-      inset: 0;
-      align-items: center;
-      justify-content: center;
-      background: var(--panel);
-      color: var(--muted);
-      font-size: 12px;
-      font-family: var(--mono);
-      text-align: center;
-      padding: 24px;
-      pointer-events: none;
-      line-height: 1.7;
-    }
-
-    /* ── Controls ── */
-    .weekly-header-row {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      margin-bottom: 20px;
-    }
-    .weekly-controls-inline {
+    /* ── Weekly Controls ── */
+    .weekly-controls {
       display: flex;
       align-items: center;
       gap: 24px;
       flex-wrap: wrap;
     }
-    .weekly-header-row .section-title { margin-bottom: 0; }
-    .weekly-header-row .check-row { margin-top: 0; }
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 28px;
-      margin-top: 28px;
-      align-items: flex-end;
-    }
-
     .field {
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
       position: relative;
-    }
-
-    .field label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-    }
-
-    select {
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--border2);
-      color: var(--text);
-      padding: 6px 20px 6px 0;
-      font-size: 13px;
-      font-family: var(--font);
-      cursor: pointer;
-      outline: none;
-      -webkit-appearance: none;
-      appearance: none;
-      min-width: 120px;
-      transition: border-color 0.15s;
     }
     .field::after {
       content: '▾';
@@ -413,307 +292,150 @@
       pointer-events: none;
       line-height: 1;
     }
-    select:focus { border-bottom-color: var(--accent); }
-    select option { background: #1c1d2e; color: var(--text); }
-    input[type="hidden"] { display: none; }
-
-    .check-row {
+    select {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      color: var(--text);
+      padding: 6px 20px 6px 0;
+      font-size: 13px;
+      font-family: var(--font);
+      cursor: pointer;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 110px;
+      transition: border-color 0.15s;
+    }
+    select:focus { border-bottom-color: var(--text); }
+    select option { background: #1a1916; color: var(--text); }
+    .check-label {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-top: 0;
-    }
-    .check-row label {
       font-size: 12px;
       color: var(--sub);
       cursor: pointer;
     }
-    .check-row .hint {
-      font-size: 11px;
-      color: var(--muted);
-    }
     input[type="checkbox"] {
-      accent-color: var(--accent);
+      accent-color: var(--cap-green);
       width: 13px;
       height: 13px;
       cursor: pointer;
     }
 
-    .chart-caption {
-      margin-top: 14px;
+    /* ── No Data Overlay ── */
+    .no-data-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--mono);
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+      line-height: 1.7;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 16px 48px;
+      text-align: right;
+    }
+    footer span {
       font-family: var(--mono);
       font-size: 10px;
       color: var(--muted);
       letter-spacing: 0.03em;
     }
 
-
-
-    /* ── Footer ── */
-    footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 48px;
-      border-top: 1px solid var(--border);
+    /* ── Pulse Dot (live indicator) ── */
+    .pulse-dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+      z-index: 10;
     }
-
-    .footer-r {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-    }
-
-    /* ── Insight Cards ── */
-    .insight-row {
-      display: flex;
-      gap: 12px;
-      padding: 28px 48px 0;
-    }
-    .insight-card {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 29px 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      height: 158px;
-    }
-    #insight-status { flex: 1; justify-content: center; gap: 20px; padding: 28px 30px; }
-    .status-row { display: flex; align-items: center; gap: 12px; min-height: 34px; }
-    .live-dot {
-      position: relative;
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
-      margin-right: -6px;
-    }
-    .live-dot::before, .live-dot::after {
+    .pulse-dot::before {
       content: '';
       position: absolute;
+      inset: -4px;
       border-radius: 50%;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
+      background: rgba(110, 231, 183, 0.35);
+      animation: pulse-ring 2s ease-out infinite;
     }
-    .live-dot::before {
-      width: 11px; height: 11px;
-      background: currentColor;
-    }
-    .live-dot::after {
-      width: 20px; height: 20px;
-      background: currentColor;
-      opacity: 0.3;
-      animation: live-pulse 1.8s ease-out infinite;
-    }
-    @keyframes live-pulse {
-      0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.4; }
-      70%  { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
-      100% { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
-    }
-    .open-pill {
-      font-size: 34px;
-      font-weight: 700;
-      font-family: var(--font);
-      letter-spacing: 0.02em;
-      line-height: 1;
-    }
-    .open-pill.open   { color: #6ee7b7; }
-    .open-pill.closed { color: #f87171; }
-    .status-row { display: flex; align-items: center; gap: 16px; }
-    .status-sep { color: var(--muted); font-size: 24px; font-weight: 300; }
-    #insight-status-pct { font-size: 34px; font-weight: 700; font-family: var(--font); }
-    #insight-comparison { flex: 1; gap: 16px; justify-content: flex-start; padding: 35px 26px; }
-    #insight-trend      { flex: 1; gap: 16px; justify-content: flex-start; padding: 35px 30px; }
-    .insight-card-label {
-      font-size: 15px;
-      font-weight: 600;
-      line-height: 1;
-      letter-spacing: 0.06em;
-      color: var(--sub);
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    /* Card 2: comparison columns */
-    #insight-status-badge { width: fit-content; }
-    .comp-verdict {
-      font-size: 29px;
-      font-weight: 700;
-      font-family: var(--font);
-      line-height: 1;
-    }
-    .comp-verdict.much-busier  { color: #dc2626; }
-    .comp-verdict.busier       { color: #f87171; }
-    .comp-verdict.bit-busier   { color: #fca5a5; }
-    .comp-verdict.much-quieter { color: #059669; }
-    .comp-verdict.quieter      { color: #6ee7b7; }
-    .comp-verdict.bit-quieter  { color: #a7f3d0; }
-    .comp-verdict.average      { color: var(--text); }
-    .comp-deltas {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .comp-delta-item {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--sub);
-    }
-    .comp-delta-item span {
-      font-weight: 600;
-    }
-    .comp-delta-item span.much-busier  { color: #dc2626; }
-    .comp-delta-item span.busier       { color: #f87171; }
-    .comp-delta-item span.bit-busier   { color: #fca5a5; }
-    .comp-delta-item span.much-quieter { color: #059669; }
-    .comp-delta-item span.quieter      { color: #6ee7b7; }
-    .comp-delta-item span.bit-quieter  { color: #a7f3d0; }
-    .comp-delta-sep {
-      font-size: 11px;
-      color: var(--border);
-    }
-    .comp-header {
-      font-size: 15px;
-      font-weight: 600;
-      line-height: 1;
-      letter-spacing: 0.06em;
-      color: var(--sub);
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    /* Card 1: status */
-    .cap-bar-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
-    .cap-bar-track {
-      height: 5px;
-      background: rgba(255,255,255,0.07);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .cap-bar-fill {
-      height: 100%;
-      border-radius: 2px;
+    .pulse-dot::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
       background: #6ee7b7;
-      transition: width 0.6s ease, background 0.4s;
+      box-shadow: 0 0 8px rgba(110, 231, 183, 0.5);
     }
-    .cap-bar-fill.mid      { background: #fbbf24; }
-    .cap-bar-fill.high     { background: #f87171; }
-    .cap-bar-fill.critical { background: #b91c1c; }
-    .cap-bar-label {
-      font-size: 13px;
-      font-family: var(--font);
-      color: var(--sub);
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.8); opacity: 0.9; }
+      70%  { transform: scale(2.2); opacity: 0; }
+      100% { transform: scale(2.2); opacity: 0; }
     }
-    .cap-time {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    /* Card 2: trend */
-    .trend-main {
-      display: block;
-    }
-    .trend-line {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-    .trend-arrow {
-      font-size: 29px;
-      line-height: 1;
-    }
-    .trend-arrow.up   { color: #f87171; }
-    .trend-arrow.down { color: #6ee7b7; }
-    .trend-arrow.flat { color: var(--text); }
-    .trend-label {
-      font-size: 29px;
-      font-weight: 700;
-      font-family: var(--font);
-      line-height: 1;
-      color: var(--text);
-    }
-    .trend-label.up   { color: #f87171; }
-    .trend-label.down { color: #6ee7b7; }
-    .trend-delta {
-      font-size: 29px;
-      font-weight: 700;
-      font-family: var(--font);
-    }
-    .trend-delta.up   { color: #f87171; }
-    .trend-delta.down { color: #6ee7b7; }
-    .trend-delta.flat { color: var(--text); }
-    .trend-sub {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--sub);
-      min-height: 15px;
-    }
-    /* Card 3: quiet window */
-    .quiet-main {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .quiet-time {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--text);
-      font-family: var(--mono);
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-    .quiet-sub {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-    .quiet-avg {
-      font-size: 13px;
-      font-weight: 600;
-      font-family: var(--mono);
-      color: #6ee7b7;
-    }
-    .quiet-dur {
-      font-size: 12px;
-      color: var(--sub);
-    }
-    .quiet-dash {
-      font-size: 22px;
-      font-weight: 300;
-      color: var(--muted);
-      line-height: 1;
-    }
-    .insight-row.hidden { display: none; }
 
-    /* ── Skeleton loading ── */
+    /* ── Skeleton Loading ── */
     @keyframes skel-pulse {
       0%, 100% { opacity: 0.4; }
-      50%       { opacity: 0.85; }
+      50%       { opacity: 0.8; }
     }
     .skel {
-      background: var(--panel2);
-      border-radius: 5px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
       animation: skel-pulse 1.5s ease-in-out infinite;
     }
-    .insight-card { position: relative; }
     .skel-overlay {
       position: absolute;
       inset: 0;
-      background: var(--bg);
-      border-radius: inherit;
       display: none;
       flex-direction: column;
       justify-content: center;
       gap: 12px;
-      padding: 28px;
+      padding: 0;
       z-index: 2;
+      background: var(--bg);
     }
-    body.loading .skel-overlay      { display: flex; }
-    body.loading #insight-row       { display: flex !important; }
-    body.loading .chart-card canvas { visibility: hidden; }
-    body.loading #weekly-no-data    { display: none !important; }
+    body.loading .skel-overlay        { display: flex; }
+    body.loading #insight-row         { display: flex !important; }
+    body.loading .chart-wrap canvas   { visibility: hidden; }
+    body.loading .no-data-overlay     { display: none !important; }
 
+    /* ── Responsive ── */
     @media (max-width: 768px) {
-      .insight-row { flex-direction: column; padding: 20px 24px 0; }
+      .insight-row {
+        flex-direction: column;
+        padding: 20px 24px;
+        gap: 28px;
+      }
+      .chart-section { padding: 24px 20px 0; }
+      .weekly-section { padding-bottom: 40px; }
+      header { padding: 0 24px; }
+      .divider { margin: 0 24px; }
+      .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .day-pills {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+        width: 100%;
+      }
+      .weekly-controls {
+        gap: 16px;
+      }
+      footer { padding: 16px 24px; }
+      .card-value { font-size: 33px; }
     }
   </style>
 </head>
@@ -722,12 +444,8 @@
 <div id="data-warning"></div>
 
 <header>
-  <div style="display:flex; align-items:center;">
-    <div class="logo">Bear Meter</div>
-  </div>
-  <div class="header-right">
-    <a href="about.html" style="font-size:18px;font-weight:500;color:var(--sub);text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--sub)'">About</a>
-  </div>
+  <div class="logo">Bear Meter</div>
+  <a href="about.html" class="about-link">About</a>
 </header>
 
 <main>
@@ -736,87 +454,62 @@
   <div class="insight-row hidden" id="insight-row">
     <div class="insight-card" id="insight-status">
       <div class="skel-overlay">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="skel" style="width:11px;height:11px;border-radius:50%;flex-shrink:0"></div>
-          <div class="skel" style="width:62px;height:36px"></div>
-          <div class="skel" style="width:3px;height:28px;border-radius:2px;animation-delay:.1s"></div>
-          <div class="skel" style="width:62px;height:36px;animation-delay:.1s"></div>
-        </div>
-        <div class="skel" style="width:100%;height:5px;animation-delay:.15s"></div>
-        <div class="skel" style="width:50%;height:13px;animation-delay:.25s"></div>
+        <div class="skel" style="width:60%;height:12px"></div>
+        <div class="skel" style="width:50%;height:42px;animation-delay:.1s"></div>
+        <div class="skel" style="width:100%;height:7px;animation-delay:.15s"></div>
+        <div class="skel" style="width:40%;height:12px;animation-delay:.2s"></div>
       </div>
-      <div class="status-row">
-        <span class="live-dot" id="insight-live-dot" style="display:none"></span>
-        <span class="open-pill" id="insight-open-pill">—</span>
-        <span class="status-sep" id="insight-status-sep"></span>
-        <span id="insight-status-pct"></span>
-      </div>
-      <div class="cap-bar-wrap" id="insight-cap-wrap">
+      <span class="card-label" id="insight-status-label">LIVE CAPACITY</span>
+      <span class="card-value" id="insight-pct">&mdash;</span>
+      <div class="cap-bar-wrap">
         <div class="cap-bar-track"><div class="cap-bar-fill" id="insight-cap-fill" style="width:0%"></div></div>
-        <span class="cap-bar-label" id="insight-cap-label">—</span>
       </div>
+      <span class="card-sub" id="insight-cap-label">&mdash;</span>
     </div>
+
     <div class="insight-card" id="insight-trend">
       <div class="skel-overlay">
-        <div class="skel" style="width:62%;height:12px"></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="skel" style="width:26px;height:28px;border-radius:4px;animation-delay:.1s"></div>
-          <div class="skel" style="width:130px;height:28px;animation-delay:.1s"></div>
-          <div class="skel" style="width:46px;height:28px;animation-delay:.15s"></div>
-        </div>
-        <div class="skel" style="width:45%;height:12px;animation-delay:.2s"></div>
+        <div class="skel" style="width:70%;height:12px"></div>
+        <div class="skel" style="width:45%;height:42px;animation-delay:.1s"></div>
+        <div class="skel" style="width:35%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="insight-card-label">CROWD IN NEXT 30 MIN</span>
-      <div id="insight-trend-val" class="trend-main"></div>
-      <span id="insight-trend-sub" class="trend-sub"></span>
+      <span class="card-label">IN THE NEXT 30 MIN</span>
+      <span class="card-value" id="insight-trend-val">&mdash;</span>
+      <span class="card-sub" id="insight-trend-sub"></span>
     </div>
+
     <div class="insight-card" id="insight-comparison">
       <div class="skel-overlay">
-        <div class="skel" style="width:72%;height:12px"></div>
-        <div class="skel" style="width:48%;height:28px;animation-delay:.1s"></div>
-        <div style="display:flex;gap:8px">
-          <div class="skel" style="width:72px;height:12px;animation-delay:.2s"></div>
-          <div class="skel" style="width:60px;height:12px;animation-delay:.25s"></div>
-        </div>
+        <div class="skel" style="width:80%;height:12px"></div>
+        <div class="skel" style="width:55%;height:42px;animation-delay:.1s"></div>
+        <div class="skel" style="width:45%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="comp-header" id="insight-comp-header">COMPARED TO PREVIOUS —</span>
-      <div id="insight-comp-verdict" class="comp-verdict"><span class="quiet-dash">—</span></div>
-      <div id="insight-comp-deltas" class="comp-deltas"></div>
+      <span class="card-label" id="insight-comp-header">COMPARED TO USUAL &mdash;</span>
+      <span class="card-value" id="insight-comp-verdict">&mdash;</span>
+      <span class="card-sub" id="insight-comp-delta"></span>
     </div>
   </div>
 
-  <!-- PREDICTION CHART: full-width -->
-  <div class="section-pred" id="section-predict">
-    <div class="pred-header-row">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="section-title">Predicted Occupancy</div>
-        <div class="info-tip">
-          <span class="info-icon">i</span>
-          <div class="info-popup">Today's predictions blend two ML models (a Random Forest and a neural network) with a similarity signal. Using occupancy data already collected today, the app finds the most historically similar days and weights their curves against the model output.</div>
-        </div>
-      </div>
-      <div class="pred-nav">
-        <button class="pred-nav-btn" id="pred-prev">&#8592;</button>
-        <span class="pred-date-label" id="pred-date-label" style="cursor:pointer">—</span>
-        <button class="pred-nav-btn" id="pred-next">&#8594;</button>
-      </div>
+  <div class="divider"></div>
+
+  <!-- PREDICTION CHART -->
+  <div class="chart-section" id="section-predict">
+    <div class="chart-header">
+      <h2 class="chart-title" id="chart-title">Today's Crowd</h2>
+      <div class="day-pills" id="day-pills"></div>
     </div>
     <div id="cal-popup" class="cal-popup" style="display:none"></div>
-
-    <div class="chart-card">
-      <div class="skel-overlay" style="padding:20px">
-        <div class="skel" style="flex:1;width:100%;border-radius:6px"></div>
-      </div>
-      <canvas id="pred-chart" height="290"></canvas>
+    <div class="chart-wrap">
+      <canvas id="pred-chart" height="340"></canvas>
+      <div id="pulse-dot" class="pulse-dot" style="display:none"></div>
     </div>
-
   </div>
 
-  <!-- WEEKLY PATTERNS: full-width -->
-  <div class="section-weekly" id="section-weekly">
-    <div class="weekly-header-row">
-      <div class="section-title">Weekly Patterns</div>
-      <div class="weekly-controls-inline">
+  <!-- WEEKLY PATTERNS -->
+  <div class="chart-section weekly-section" id="section-weekly">
+    <div class="chart-header">
+      <h2 class="chart-title">Weekly Patterns</h2>
+      <div class="weekly-controls">
         <div class="field">
           <select id="day-select">
             <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
@@ -829,27 +522,22 @@
             <option>Last 6 months</option><option>Last year</option><option>All time</option>
           </select>
         </div>
-        <div class="check-row">
+        <label class="check-label">
           <input type="checkbox" id="semester-check" checked>
-          <label for="semester-check">Exclude breaks</label>
-        </div>
+          Exclude breaks
+        </label>
       </div>
     </div>
-
-    <div class="chart-card">
-      <div class="skel-overlay" style="padding:20px">
-        <div class="skel" style="flex:1;width:100%;border-radius:6px"></div>
-      </div>
+    <div class="chart-wrap">
       <canvas id="weekly-chart" height="290"></canvas>
       <div id="weekly-no-data" class="no-data-overlay"></div>
     </div>
-    <div class="chart-caption" id="weekly-meta"></div>
   </div>
 
 </main>
 
 <footer>
-  <div class="footer-r" id="footer-built"></div>
+  <span id="footer-built"></span>
 </footer>
 
 <script>
@@ -867,19 +555,17 @@ async function sbFetch(path) {
   return res.json();
 }
 
-// Supabase returns TIMESTAMPTZ as UTC (+00:00). Convert UTC → PT using manual
-// DST arithmetic instead of toLocaleString (~100µs/call × 7200 rows = 720ms).
 const _ptBounds = {};
 function _getPTBounds(year) {
   if (_ptBounds[year]) return _ptBounds[year];
   const mar1       = Date.UTC(year, 2, 1);
   const mar1dow    = new Date(mar1).getUTCDay();
   const firstSunMar = mar1 + (mar1dow === 0 ? 0 : (7 - mar1dow)) * 86400000;
-  const dstStart   = firstSunMar + 7 * 86400000 + 10 * 3600000; // 2nd Sun Mar 10:00 UTC
+  const dstStart   = firstSunMar + 7 * 86400000 + 10 * 3600000;
   const nov1       = Date.UTC(year, 10, 1);
   const nov1dow    = new Date(nov1).getUTCDay();
   const firstSunNov = nov1 + (nov1dow === 0 ? 0 : (7 - nov1dow)) * 86400000;
-  const dstEnd     = firstSunNov + 9 * 3600000;                  // 1st Sun Nov 09:00 UTC
+  const dstEnd     = firstSunNov + 9 * 3600000;
   return (_ptBounds[year] = { dstStart, dstEnd });
 }
 function slotTsToKey(slotTs) {
@@ -929,23 +615,21 @@ function buildTodayActuals(rows, today) {
     .sort((a, b) => (a.h + a.m/60) - (b.h + b.m/60))
     .map(b => ({ x: b.h + b.m/60, y: Math.round(b.sum/b.n*10)/10, label: formatTime(b.h, b.m) }));
 }
-// ──────────────────────────────────────────────────────────────
 
-let liveCapacity  = null; // { count, pct } — set when Density fetch succeeds
-let nowHoverState = { active: false, title: '', label: '' };
+let liveCapacity  = null;
 
 function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
 
 function isSemesterDay(date) {
-  const pt    = new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const pt    = new Date((date || new Date()).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   const month = pt.getMonth() + 1;
   const dom   = pt.getDate();
-  if (month >= 6 && month <= 8)          return false; // summer
-  if (month === 12 && dom >= 16)         return false; // winter break
-  if (month === 1  && dom <= 12)         return false; // winter break
-  const ds = pt.toLocaleDateString('en-CA'); // yyyy-MM-dd
+  if (month >= 6 && month <= 8)          return false;
+  if (month === 12 && dom >= 16)         return false;
+  if (month === 1  && dom <= 12)         return false;
+  const ds = pt.toLocaleDateString('en-CA');
   const breaks = [
     ['2021-03-20','2021-03-28'], ['2022-03-19','2022-03-27'],
     ['2023-03-25','2023-04-02'], ['2024-03-23','2024-03-31'],
@@ -955,7 +639,6 @@ function isSemesterDay(date) {
   return !breaks.some(([s, e]) => ds >= s && ds <= e);
 }
 
-// Summer-hours windows: derived from train.py summer-break ranges, end-shifted -3 days.
 const SUMMER_RANGES = [
   ['2024-05-10','2024-08-24'], ['2025-05-16','2025-08-23'],
   ['2026-05-15','2026-08-22'], ['2027-05-14','2027-08-21'],
@@ -990,14 +673,19 @@ function todayPT() {
   return `${pt.getFullYear()}-${String(pt.getMonth()+1).padStart(2,'0')}-${String(pt.getDate()).padStart(2,'0')}`;
 }
 
+function pctColor(p) {
+  if (p >= 90) return '#b91c1c';
+  if (p >= 80) return '#f87171';
+  if (p >= 60) return '#fbbf24';
+  return '#6ee7b7';
+}
+
 // ── Status ─────────────────────────────────────────────────────
 function updateStatusBar() {
   const pt = getPTNow();
   const { open, close } = getOpenHours(pt.getDay(), pt);
   const isOpen = pt.getHours() >= open && pt.getHours() < close;
   if (isOpen) {
-    // Goes through Vercel function which caches via Supabase live_capacity row.
-    // Density token now only lives on the server.
     fetch('/api/live-capacity')
       .then(r => r.json())
       .then(d => {
@@ -1020,16 +708,12 @@ function shiftDate(dateStr, delta) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function formatPredLabel(dateStr) {
+function chartTitle(dateStr) {
   const today = todayPT();
-  if (dateStr === today) {
-    const d = new Date(dateStr + 'T12:00:00');
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `Today, ${months[d.getMonth()]} ${d.getDate()}`;
-  }
+  if (dateStr === today) return "Today's Crowd";
+  if (dateStr === shiftDate(today, 1)) return "Tomorrow's Crowd";
   const d = new Date(dateStr + 'T12:00:00');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${DAYS[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+  return `${DAYS[d.getDay()]}'s Crowd`;
 }
 
 function buildPredPoints(data, dateStr) {
@@ -1044,95 +728,98 @@ function buildPredPoints(data, dateStr) {
       points.push({ x: h + m / 60, y: Math.round(pred * 10) / 10, label: formatTime(h, m) });
     }
   }
-  // closing zero
   points.push({ x: close, y: 0, label: formatTime(close, 0) });
   return points;
 }
 
-// Custom plugin: draws a vertical "Now" line
+// ── Chart.js Plugins ─────────────────────────────────────────
+
+// Gradient that maps chart color to capacity value (green → yellow → red)
+const capacityGradientPlugin = {
+  id: 'capacityGradient',
+  // Chart.js resolves each line's fill color from dataset.backgroundColor
+  // during the *update* phase (before Filler ever draws), not the draw
+  // phase — so this must run in beforeDatasetsUpdate, not beforeDatasetsDraw,
+  // or the gradient lags one full update cycle behind (invisible on first load).
+  beforeDatasetsUpdate(chart) {
+    if (!chart.options.plugins?.capacityGradient?.enabled) return;
+    const { ctx, scales } = chart;
+    if (!scales?.y) return;
+
+    const yBottom = scales.y.getPixelForValue(0);
+    const yTop    = scales.y.getPixelForValue(110);
+
+    chart.data.datasets.forEach((ds, i) => {
+      const lineOp = ds._predicted ? 0.55 : 1.0;
+      const fillOp = ds._predicted ? 0.15 : 0.35;
+
+      const lg = ctx.createLinearGradient(0, yBottom, 0, yTop);
+      lg.addColorStop(0,       `rgba(110,231,183,${lineOp})`);
+      lg.addColorStop(45/110,  `rgba(110,231,183,${lineOp})`);
+      lg.addColorStop(60/110,  `rgba(251,191,36,${lineOp})`);
+      lg.addColorStop(80/110,  `rgba(248,113,113,${lineOp})`);
+      lg.addColorStop(1,       `rgba(185,28,28,${lineOp})`);
+      ds.borderColor = lg;
+
+      const fg = ctx.createLinearGradient(0, yBottom, 0, yTop);
+      fg.addColorStop(0,       `rgba(110,231,183,${fillOp * 0.1})`);
+      fg.addColorStop(0.08,    `rgba(110,231,183,${fillOp * 0.45})`);
+      fg.addColorStop(45/110,  `rgba(110,231,183,${fillOp})`);
+      fg.addColorStop(60/110,  `rgba(251,191,36,${fillOp})`);
+      fg.addColorStop(80/110,  `rgba(248,113,113,${fillOp})`);
+      fg.addColorStop(1,       `rgba(185,28,28,${fillOp})`);
+      ds.backgroundColor = fg;
+    });
+  }
+};
+Chart.register(capacityGradientPlugin);
+
+// NOW indicator: pulsing dot at last actual data point (positioned via CSS element)
 const nowLinePlugin = {
   id: 'nowLine',
   afterDatasetsDraw(chart) {
     const opts = chart.options.plugins.nowLine;
-    if (!opts?.show || opts.value == null) return;
-    const { ctx, chartArea, scales } = chart;
-    const x = scales.x.getPixelForValue(opts.value);
-    if (x < chartArea.left || x > chartArea.right) return;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(147, 164, 245, 0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(x, chartArea.top);
-    ctx.lineTo(x, chartArea.bottom);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(147, 164, 245, 0.65)';
-    ctx.font = `500 10px 'Inter', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('Now', x, chartArea.top - 6);
-    ctx.restore();
+    const pulseDot = document.getElementById('pulse-dot');
+
+    if (!opts?.show) {
+      if (pulseDot) pulseDot.style.display = 'none';
+      return;
+    }
+
+    const actualData = chart.data.datasets[0]?.data || [];
+    if (!actualData.length) {
+      if (pulseDot) pulseDot.style.display = 'none';
+      return;
+    }
+
+    // The tooltip is drawn onto the canvas itself, but the pulse dot is a
+    // separate DOM overlay that always paints above it — hide the dot while
+    // a tooltip is showing so it doesn't cover the tooltip's corner.
+    if (chart.tooltip?.opacity > 0) {
+      if (pulseDot) pulseDot.style.display = 'none';
+      return;
+    }
+
+    const { scales } = chart;
+    const lastPt = actualData[actualData.length - 1];
+    if (!lastPt) {
+      if (pulseDot) pulseDot.style.display = 'none';
+      return;
+    }
+
+    const dotX = scales.x.getPixelForValue(lastPt.x);
+    const dotY = scales.y.getPixelForValue(lastPt.y);
+
+    if (pulseDot) {
+      pulseDot.style.display = 'block';
+      pulseDot.style.left = (dotX - 7) + 'px';
+      pulseDot.style.top  = (dotY - 7) + 'px';
+    }
   }
 };
 Chart.register(nowLinePlugin);
 
-// Inline plugin (pred chart only): intercepts Chart.js event pipeline to show
-// the native tooltip when hovering near the Now line.
-const nowHoverPlugin = {
-  id: 'nowHover',
-  afterEvent(chart, args) {
-    const { event } = args;
-    if (event.type !== 'mousemove' && event.type !== 'mouseout') return;
-    const opts = chart.options.plugins.nowLine;
-    if (!opts?.show || opts.value == null) { nowHoverState.active = false; return; }
-    const nowX = chart.scales.x.getPixelForValue(opts.value);
-
-    if (event.type === 'mousemove' && Math.abs(event.x - nowX) <= 10) {
-      // If a real data point is at least as close to the cursor as the Now line,
-      // let Chart.js show its normal tooltip instead.
-      const nearest = chart.getElementsAtEventForMode(
-        event.native, 'nearest', { intersect: false }, false
-      );
-      if (nearest.length > 0) {
-        const ptX = chart.getDatasetMeta(nearest[0].datasetIndex).data[nearest[0].index].x;
-        if (Math.abs(event.x - ptX) <= Math.abs(event.x - nowX)) {
-          nowHoverState.active = false;
-          return;
-        }
-      }
-
-      const actualData = chart.data.datasets[0].data;
-      if (!actualData.length) { nowHoverState.active = false; return; }
-
-      // Nearest actual point to "now" for tooltip anchoring
-      let closestIdx = 0, minDist = Infinity;
-      actualData.forEach((p, i) => {
-        const d = Math.abs(p.x - opts.value);
-        if (d < minDist) { minDist = d; closestIdx = i; }
-      });
-
-      const pt = getPTNow();
-      nowHoverState.active = true;
-      nowHoverState.title  = formatTime(pt.getHours(), pt.getMinutes());
-      nowHoverState.label  = liveCapacity
-        ? ` Actual: ${liveCapacity.pct.toFixed(1)}%`
-        : ' Live data unavailable';
-
-      chart.tooltip.setActiveElements(
-        [{ datasetIndex: 0, index: closestIdx }],
-        { x: event.x, y: event.y }
-      );
-      args.changed = true;
-    } else {
-      if (nowHoverState.active) {
-        nowHoverState.active = false;
-        args.changed = true;
-      }
-    }
-  }
-};
-
-// Scrubber: thin vertical line that tracks the active tooltip element on hover
+// Scrub line on hover
 const scrubLinePlugin = {
   id: 'scrubLine',
   afterDraw(chart) {
@@ -1145,7 +832,7 @@ const scrubLinePlugin = {
     ctx.beginPath();
     ctx.moveTo(x, a.top);
     ctx.lineTo(x, a.bottom);
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
@@ -1153,16 +840,72 @@ const scrubLinePlugin = {
 };
 Chart.register(scrubLinePlugin);
 
+// ── Day Pills ────────────────────────────────────────────────
+function buildPillDates() {
+  const today = todayPT();
+  const pills = [
+    { label: 'Today', date: today },
+    { label: 'Tomorrow', date: shiftDate(today, 1) },
+  ];
+  for (let i = 2; i <= 4; i++) {
+    const d = new Date(shiftDate(today, i) + 'T12:00:00');
+    pills.push({
+      label: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()],
+      date: shiftDate(today, i)
+    });
+  }
+  return pills;
+}
+
+function renderPills(data) {
+  const container = document.getElementById('day-pills');
+  const pills = buildPillDates();
+  container.innerHTML = '';
+
+  pills.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = `pill${p.date === predDate ? ' active' : ''}`;
+    btn.textContent = p.label;
+    btn.dataset.date = p.date;
+    btn.addEventListener('click', () => {
+      predDate = p.date;
+      updatePredChart(data);
+      renderInsightCards(data);
+      updatePillStates();
+    });
+    container.appendChild(btn);
+  });
+
+  const calBtn = document.createElement('button');
+  calBtn.className = 'pill pill-cal';
+  calBtn.textContent = 'More';
+  calBtn.id = 'cal-trigger';
+  if (!pills.some(p => p.date === predDate)) calBtn.classList.add('active');
+  container.appendChild(calBtn);
+}
+
+function updatePillStates() {
+  const pills = buildPillDates();
+  document.querySelectorAll('.pill').forEach(el => {
+    if (el.classList.contains('pill-cal')) {
+      el.classList.toggle('active', !pills.some(p => p.date === predDate));
+    } else {
+      el.classList.toggle('active', el.dataset.date === predDate);
+    }
+  });
+}
+
+// ── Prediction Chart ─────────────────────────────────────────
 function updatePredChart(data) {
   const today    = todayPT();
   const isToday  = predDate === today;
   const pt       = getPTNow();
   const nowVal   = pt.getHours() + pt.getMinutes() / 60;
   const predDay  = new Date(predDate + 'T12:00:00');
+  const xMin     = 7;
   const xMax     = 23;
 
   const allPredPoints = buildPredPoints(data, predDate);
-  // On today: clip actual to <= now, clip predicted to >= now
   const actualPoints = isToday
     ? (data.today_actuals || []).filter(p => p.x <= nowVal)
     : [];
@@ -1170,7 +913,6 @@ function updatePredChart(data) {
     ? allPredPoints.filter(p => p.x >= nowVal)
     : allPredPoints;
 
-  // Blend base ML with similarity signal for today's remaining predictions
   if (isToday && data.today_blend_weight > 0 && data.today_similarity_preds?.length) {
     const w      = data.today_blend_weight;
     const simMap = {};
@@ -1182,43 +924,46 @@ function updatePredChart(data) {
     });
   }
 
-  // Nav buttons
-  const minDate = today;
-  const maxDate = shiftDate(today, 90);
-  document.getElementById('pred-prev').disabled = predDate <= minDate;
-  document.getElementById('pred-next').disabled = predDate >= maxDate;
-  document.getElementById('pred-date-label').textContent = formatPredLabel(predDate);
+  // Bridge actual → predicted: predictions only land on quarter-hour slots,
+  // so "now" can sit up to ~15 min ahead of the last actual reading and
+  // before the next predicted one, leaving a dead gap with no line/fill.
+  // Prepend a connector point at the last actual value so both lines meet.
+  if (isToday && actualPoints.length) {
+    const lastActual = actualPoints[actualPoints.length - 1];
+    if (!predPoints.length || predPoints[0].x > lastActual.x) {
+      predPoints = [{ x: lastActual.x, y: lastActual.y, label: lastActual.label }, ...predPoints];
+    }
+  }
 
+  document.getElementById('chart-title').textContent = chartTitle(predDate);
+  updatePillStates();
 
   if (predChart) {
     predChart.data.datasets[0].data = actualPoints;
     predChart.data.datasets[1].data = predPoints;
     predChart.options.plugins.nowLine.show  = isToday;
     predChart.options.plugins.nowLine.value = nowVal;
+    predChart.options.scales.x.min          = xMin;
     predChart.options.scales.x.max          = xMax;
     predChart.update();
     return;
   }
 
   const ctx = document.getElementById('pred-chart').getContext('2d');
-  const gradient = ctx.createLinearGradient(0, 0, 0, 290);
-  gradient.addColorStop(0, 'rgba(147, 164, 245, 0.2)');
-  gradient.addColorStop(1, 'rgba(147, 164, 245, 0)');
 
   predChart = new Chart(ctx, {
     type: 'line',
-    plugins: [nowHoverPlugin],
     data: {
       datasets: [
         {
           label: 'Actual',
           data: actualPoints,
-          borderColor: '#93a4f5',
-          backgroundColor: gradient,
-          borderWidth: 1.5,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#93a4f5',
+          borderColor: '#6ee7b7',
+          backgroundColor: 'transparent',
+          borderWidth: 3.25,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#fff',
           pointBorderColor: 'transparent',
           tension: 0.35,
           fill: true,
@@ -1229,59 +974,76 @@ function updatePredChart(data) {
           data: predPoints,
           borderColor: '#9ca3af',
           backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [5, 4],
-          pointRadius: 3,
+          borderWidth: 2.6,
+          borderDash: [6, 5],
+          pointRadius: 0,
           pointHoverRadius: 5,
-          pointBackgroundColor: '#9ca3af',
+          pointBackgroundColor: '#fff',
           pointBorderColor: 'transparent',
           tension: 0.35,
-          fill: false,
+          fill: true,
           order: 2,
+          _predicted: true,
         }
       ]
     },
     options: {
       parsing: false,
       animation: { duration: 320 },
-      layout: { padding: { top: 20 } },
+      layout: { padding: { top: 36 } },
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
+        capacityGradient: { enabled: true },
         nowLine: { show: isToday, value: nowVal },
         legend:  { display: false },
         tooltip: {
-          backgroundColor: '#1a1b2e',
-          titleColor: '#8f92aa',
-          bodyColor: '#e2e3ee',
-          borderColor: 'rgba(147,164,245,0.18)',
+          backgroundColor: '#1e1c1a',
+          titleColor: '#8a8480',
+          bodyColor: '#e8e6e3',
+          borderColor: 'rgba(255,255,255,0.08)',
           borderWidth: 1,
           padding: 10,
+          cornerRadius: 8,
+          displayColors: false,
+          filter: (item) => {
+            // Drop the synthetic connector point that bridges the actual line
+            // into the predicted line (same x/y as the last actual reading) —
+            // without this, hovering right at the seam shows "Actual" and
+            // "Predicted" twice with an identical, confusing value.
+            if (item.datasetIndex !== 1) return true;
+            const actualData = item.chart.data.datasets[0].data;
+            const lastActual = actualData[actualData.length - 1];
+            return !(lastActual && item.raw.x === lastActual.x && item.raw.y === lastActual.y);
+          },
           callbacks: {
-            title: (items) => nowHoverState.active ? nowHoverState.title : (items[0].raw.label || ''),
-            label: (item)  => nowHoverState.active ? nowHoverState.label : ` ${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
+            title: (items) => items[0].raw.label || '',
+            label: (item) => `${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
           }
         }
       },
       scales: {
         x: {
-          type: 'linear', min: 7, max: xMax,
-          grid: { color: 'rgba(255,255,255,0.04)' },
+          type: 'linear', min: xMin, max: xMax,
+          grid: { display: false },
           border: { display: false },
           ticks: {
-            color: '#8f92aa',
-            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
-            stepSize: 1,
+            color: '#5a5550',
+            font: { size: 11, family: "'Inter', sans-serif", weight: '500' },
+            stepSize: 2,
+            padding: 8,
             callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
           }
         },
         y: {
           min: 0, max: 110,
-          grid: { color: 'rgba(255,255,255,0.04)' },
+          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
           border: { display: false },
           ticks: {
-            color: '#8f92aa',
-            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
-            callback: (v) => `${v}%`
+            color: '#5a5550',
+            font: { size: 10, family: "'Inter', sans-serif", weight: '500' },
+            stepSize: 25,
+            padding: 8,
+            callback: (v) => v > 0 ? `${v}%` : ''
           }
         }
       }
@@ -1292,7 +1054,6 @@ function updatePredChart(data) {
 // ── Weekly Chart ───────────────────────────────────────────────
 let weeklyChart = null;
 
-
 function updateWeeklyChart(data) {
   const day      = document.getElementById('day-select').value;
   const range    = document.getElementById('range-select').value;
@@ -1301,13 +1062,9 @@ function updateWeeklyChart(data) {
   const hasData  = raw.some(p => p.y > 0);
 
   const xMin = 7, xMax = 23;
-
   const points = hasData ? raw.filter(p => p.x >= xMin && p.x <= xMax) : [];
 
   document.getElementById('weekly-no-data').style.display = hasData ? 'none' : 'flex';
-
-  const semStr = semester ? ', semester weeks' : '';
-  // weekly-meta intentionally left blank
 
   if (weeklyChart) {
     weeklyChart.data.datasets[0].data = points;
@@ -1316,21 +1073,18 @@ function updateWeeklyChart(data) {
   }
 
   const ctx = document.getElementById('weekly-chart').getContext('2d');
-  const gradient = ctx.createLinearGradient(0, 0, 0, 290);
-  gradient.addColorStop(0, 'rgba(147, 164, 245, 0.2)');
-  gradient.addColorStop(1, 'rgba(147, 164, 245, 0)');
 
   weeklyChart = new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [{
         data: points,
-        borderColor: '#93a4f5',
-        backgroundColor: gradient,
-        borderWidth: 1.5,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        pointBackgroundColor: '#93a4f5',
+        borderColor: '#6ee7b7',
+        backgroundColor: 'transparent',
+        borderWidth: 3.25,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#fff',
         pointBorderColor: 'transparent',
         tension: 0.35,
         fill: true,
@@ -1341,40 +1095,47 @@ function updateWeeklyChart(data) {
       animation: { duration: 320 },
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
+        capacityGradient: { enabled: true },
+        nowLine: { show: false },
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1a1b2e',
-          titleColor: '#8f92aa',
-          bodyColor: '#e2e3ee',
-          borderColor: 'rgba(147,164,245,0.18)',
+          backgroundColor: '#1e1c1a',
+          titleColor: '#8a8480',
+          bodyColor: '#e8e6e3',
+          borderColor: 'rgba(255,255,255,0.08)',
           borderWidth: 1,
           padding: 10,
+          cornerRadius: 8,
+          displayColors: false,
           callbacks: {
             title: (items) => items[0].raw.label || '',
-            label: (item) => ` ${item.raw.y.toFixed(1)}% capacity`,
+            label: (item) => `${item.raw.y.toFixed(1)}% capacity`,
           }
         }
       },
       scales: {
         x: {
           type: 'linear', min: xMin, max: xMax,
-          grid: { color: 'rgba(255,255,255,0.04)' },
+          grid: { display: false },
           border: { display: false },
           ticks: {
-            color: '#8f92aa',
-            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
-            stepSize: 1,
+            color: '#5a5550',
+            font: { size: 11, family: "'Inter', sans-serif", weight: '500' },
+            stepSize: 2,
+            padding: 8,
             callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
           }
         },
         y: {
           min: 0, max: 110,
-          grid: { color: 'rgba(255,255,255,0.04)' },
+          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
           border: { display: false },
           ticks: {
-            color: '#8f92aa',
-            font: { size: 11, family: "'Inter', -apple-system, sans-serif", weight: '500' },
-            callback: (v) => `${v}%`
+            color: '#5a5550',
+            font: { size: 10, family: "'Inter', sans-serif", weight: '500' },
+            stepSize: 25,
+            padding: 8,
+            callback: (v) => v > 0 ? `${v}%` : ''
           }
         }
       }
@@ -1382,7 +1143,7 @@ function updateWeeklyChart(data) {
   });
 }
 
-// ── Data Warning ───────────────────────────────────────────────
+// ── Data Warning ──────────────────────────────────────────────
 function showDataWarning(msg) {
   const el = document.getElementById('data-warning');
   el.textContent = msg;
@@ -1390,7 +1151,6 @@ function showDataWarning(msg) {
 }
 
 // ── Insight Cards ─────────────────────────────────────────────
-
 function getBlendedSlots(data, fromH, toH, date) {
   const dateStr = date || todayPT();
   const isToday = dateStr === todayPT();
@@ -1407,9 +1167,8 @@ function getBlendedSlots(data, fromH, toH, date) {
       const key  = `${dateStr}_${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
       const pred = data.predictions[key];
       if (pred == null) continue;
-      const mlAvg   = pred;
       const simY    = simMap[slotH];
-      const blended = simY != null ? (1 - w) * mlAvg + w * simY : mlAvg;
+      const blended = simY != null ? (1 - w) * pred + w * simY : pred;
       slots.push({ h, m, slotH, y: blended });
     }
   }
@@ -1447,56 +1206,6 @@ function computeTrend(data, livePct) {
   return { dir, delta: Math.round(delta), startY: Math.round(startY), endY: Math.round(endY), toH: lastSlot.h, toMin: lastSlot.m, sub };
 }
 
-function computeQuietWindow(data) {
-  if (predDate !== todayPT()) return null;
-  const pt  = getPTNow();
-  const nowH = pt.getHours() + pt.getMinutes() / 60;
-  const { open, close } = getOpenHours(pt.getDay(), pt);
-  const THRESHOLD = 50;
-
-  const slots = getBlendedSlots(data, nowH, close);
-  if (!slots.length) return null;
-
-  let bestWindow = null, bestLen = 0, bestAvg = Infinity;
-  let runStart = null, runSlots = [];
-
-  function evalRun() {
-    if (!runSlots.length) return;
-    const avg = runSlots.reduce((s, r) => s + r.y, 0) / runSlots.length;
-    if (runSlots.length > bestLen || (runSlots.length === bestLen && avg < bestAvg)) {
-      bestLen = runSlots.length;
-      bestAvg = avg;
-      bestWindow = { startH: runSlots[0].h, startM: runSlots[0].m,
-                     endSlotH: runSlots[runSlots.length - 1].slotH + 0.25, avg };
-    }
-  }
-
-  for (const s of slots) {
-    if (s.y <= THRESHOLD) {
-      runSlots.push(s);
-    } else {
-      evalRun();
-      runSlots = [];
-    }
-  }
-  evalRun();
-
-  if (!bestWindow) {
-    // No sub-threshold window — find quietest single hour instead
-    let minAvg = Infinity, minStart = null;
-    for (let i = 0; i <= slots.length - 4; i++) {
-      const block = slots.slice(i, i + 4);
-      const avg = block.reduce((s, r) => s + r.y, 0) / block.length;
-      if (avg < minAvg) { minAvg = avg; minStart = block[0]; }
-    }
-    if (!minStart) return null;
-    const endH = minStart.slotH + 1;
-    return { startH: minStart.h, startM: minStart.m, endSlotH: endH, avg: Math.round(minAvg), fallback: true };
-  }
-
-  return { ...bestWindow, avg: Math.round(bestWindow.avg), fallback: false };
-}
-
 function computeDayComparisonAt(dayName, qH, data, forDate) {
   function getWeeklyAt(key, h) {
     const arr = data.weekly[key];
@@ -1504,12 +1213,8 @@ function computeDayComparisonAt(dayName, qH, data, forDate) {
     const pt = arr.find(p => p.x === h);
     return pt ? pt.y : null;
   }
-
-  const semOnly = isSemesterDay(forDate || new Date()) ? 'true' : 'false';
   return {
-    lastWeek:     getWeeklyAt(`${dayName}|Last 7 days|false`, qH),
     thisSemester: getWeeklyAt(`${dayName}|This semester|true`, qH),
-    allTime:      getWeeklyAt(`${dayName}|All time|${semOnly}`, qH),
   };
 }
 
@@ -1526,177 +1231,135 @@ function renderInsightCards(data) {
 
   const { open: openH, close: closeH } = getOpenHours(predDay.getDay(), predDay);
 
-  // Card 1: Status
-  const liveDot   = document.getElementById('insight-live-dot');
-  const openPill  = document.getElementById('insight-open-pill');
-  const statusSep = document.getElementById('insight-status-sep');
-  const insightPct = document.getElementById('insight-status-pct');
-  const capFill   = document.getElementById('insight-cap-fill');
-  const capLabel  = document.getElementById('insight-cap-label');
-
-  function pctColor(p) {
-    return p >= 90 ? '#b91c1c' : p >= 80 ? '#f87171' : p >= 60 ? '#fbbf24' : '#6ee7b7';
-  }
+  // ── Card 1: Status / Capacity ──
+  const statusLabel = document.getElementById('insight-status-label');
+  const pctEl       = document.getElementById('insight-pct');
+  const capFill     = document.getElementById('insight-cap-fill');
+  const capLabel    = document.getElementById('insight-cap-label');
 
   if (isToday) {
     const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
-    openPill.className = `open-pill ${gymIsOpen ? 'open' : 'closed'}`;
-    openPill.style.fontSize    = '';
-    openPill.style.background  = '';
-    openPill.style.borderColor = '';
-    if (gymIsOpen) {
-      if (livePct != null) {
-        const col = pctColor(livePct);
-        liveDot.style.display  = 'inline-block';
-        liveDot.style.color    = col;
-        openPill.textContent   = `${livePct.toFixed(0)}% Full`;
-        openPill.style.color   = col;
-        statusSep.textContent  = '';
-        insightPct.textContent = '';
+    statusLabel.textContent = 'LIVE CAPACITY';
+
+    if (gymIsOpen && livePct != null) {
+      pctEl.textContent = `${livePct.toFixed(0)}%`;
+      pctEl.style.color = pctColor(livePct);
+
+      const fillCls = livePct >= 90 ? 'critical' : livePct >= 80 ? 'high' : livePct >= 60 ? 'mid' : '';
+      capFill.style.width = `${Math.min(livePct, 100)}%`;
+      capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
+
+      if (livePct >= 95) {
+        capLabel.innerHTML = `${liveCount} / 150 people · <a href="https://417804.waitwell.us/join/48" target="_blank" rel="noopener">Join virtual queue</a>`;
       } else {
-        liveDot.style.display  = 'none';
-        openPill.textContent   = '—';
-        openPill.style.color   = 'var(--sub)';
-        statusSep.textContent  = '';
-        insightPct.textContent = '';
+        capLabel.textContent = `${liveCount} / 150 people`;
       }
-      if (livePct != null) {
-        const fillCls = livePct >= 90 ? 'critical' : livePct >= 80 ? 'high' : livePct >= 60 ? 'mid' : '';
-        capFill.style.width = `${Math.min(livePct, 100)}%`;
-        capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
-        if (livePct >= 95) {
-          capLabel.innerHTML = `${liveCount} / 150 people · <a href="https://417804.waitwell.us/join/48" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px">Join virtual queue</a>`;
-        } else {
-          capLabel.textContent = `${liveCount} / 150 people`;
-        }
-      } else {
-        capFill.style.width = '0%';
-        capLabel.textContent = 'Live count unavailable';
-      }
+    } else if (gymIsOpen) {
+      pctEl.textContent = '—';
+      pctEl.style.color = 'var(--sub)';
+      capFill.style.width = '0%';
+      capLabel.textContent = 'Live count unavailable';
     } else {
       const nowH = pt.getHours() + pt.getMinutes() / 60;
       const isBeforeOpen = nowH < openH;
       const tomorrow = new Date(pt.getTime() + 24 * 60 * 60 * 1000);
       const nextOpen = isBeforeOpen ? openH : getOpenHours(tomorrow.getDay(), tomorrow).open;
       const prefix   = isBeforeOpen ? 'Opens at' : 'Opens tomorrow at';
-      openPill.textContent   = 'CLOSED';
-      statusSep.textContent  = '';
-      insightPct.textContent  = '';
-      insightPct.style.color  = '';
-      insightPct.style.fontSize = '';
-      capFill.style.width    = '0%';
-      capLabel.textContent   = `${prefix} ${formatTime(nextOpen, 0)}`;
+
+      pctEl.textContent = 'CLOSED';
+      pctEl.style.color = '#f87171';
+      pctEl.style.fontSize = '';
+      capFill.style.width = '0%';
+      capLabel.textContent = `${prefix} ${formatTime(nextOpen, 0)}`;
     }
   } else {
-    liveDot.style.display  = 'none';
-    openPill.className     = 'open-pill open';
-    openPill.textContent   = `${formatTime(openH, 0)} – ${formatTime(closeH, 0)}`;
-    openPill.style.color   = 'var(--text)';
-    openPill.style.fontSize = '28px';
-    openPill.style.borderColor = '';
-    openPill.style.background  = '';
-    statusSep.textContent  = '';
-    insightPct.textContent = '';
-
+    statusLabel.textContent = 'DAILY FORECAST';
     const allSlots = getBlendedSlots(data, openH, closeH, predDate);
     if (allSlots.length) {
       const avg  = allSlots.reduce((s, p) => s + p.y, 0) / allSlots.length;
       const peak = allSlots.reduce((a, b) => b.y > a.y ? b : a);
+      pctEl.textContent = `${Math.round(avg)}%`;
+      pctEl.style.color = pctColor(avg);
       const fillCls = avg >= 90 ? 'critical' : avg >= 80 ? 'high' : avg >= 60 ? 'mid' : '';
       capFill.style.width = `${Math.min(avg, 100)}%`;
       capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
-      capLabel.textContent = `avg ${Math.round(avg)}% · peak ${Math.round(peak.y)}%`;
+      capLabel.textContent = `peak ${Math.round(peak.y)}% · ${formatTime(openH, 0)} – ${formatTime(closeH, 0)}`;
     } else {
-      capFill.style.width  = '0%';
+      pctEl.textContent = '—';
+      pctEl.style.color = 'var(--sub)';
+      capFill.style.width = '0%';
       capLabel.textContent = '—';
     }
   }
 
-  // Card 2: Comparison — use viewed day, noon as representative hour for non-today
-  const cmpH  = isToday
+  // ── Card 2: Trend (Next 30 min) ──
+  const trendValEl = document.getElementById('insight-trend-val');
+  const trendSubEl = document.getElementById('insight-trend-sub');
+  const trend = computeTrend(data, livePct);
+
+  if (trend && isToday) {
+    const labels  = { up: 'Getting busier', down: 'Getting quieter', flat: 'Holding steady' };
+    const dirColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--text)';
+    trendValEl.textContent = labels[trend.dir];
+    trendValEl.style.color = dirColor;
+
+    const arrows = { up: '↑', down: '↓', flat: '→' };
+    const subColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--sub)';
+    const sign = trend.delta >= 0 ? '+' : '';
+    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${sign}${trend.delta}%</span>`;
+  } else if (trend) {
+    trendValEl.textContent = `${trend.endY}%`;
+    trendValEl.style.color = pctColor(trend.endY);
+    trendSubEl.textContent = trend.sub || '';
+  } else {
+    trendValEl.textContent = '—';
+    trendValEl.style.color = 'var(--sub)';
+    trendSubEl.textContent = '';
+  }
+
+  // ── Card 3: Comparison (this semester only) ──
+  const compHeaderEl  = document.getElementById('insight-comp-header');
+  const compVerdictEl = document.getElementById('insight-comp-verdict');
+  const compDeltaEl   = document.getElementById('insight-comp-delta');
+
+  compHeaderEl.textContent = `COMPARED TO USUAL ${dayName.toUpperCase()}S`;
+
+  const cmpH = isToday
     ? Math.round((pt.getHours() + pt.getMinutes() / 60) * 4) / 4
     : 12;
   const cmp = computeDayComparisonAt(dayName, cmpH, data, new Date(predDate + 'T12:00:00'));
-  const verdictEl = document.getElementById('insight-comp-verdict');
-  const deltasEl  = document.getElementById('insight-comp-deltas');
-  const compHeaderEl = document.getElementById('insight-comp-header');
-  if (compHeaderEl) compHeaderEl.textContent = `NOW VS PREVIOUS ${dayName.toUpperCase()}S`;
   const refPct = isToday ? livePct : null;
+  const baseline = cmp.thisSemester;
+  const avgDelta = (baseline != null && refPct != null) ? Math.round(refPct - baseline) : null;
 
-  const pairs = [
-    { label: 'last week',    val: cmp.lastWeek },
-    { label: 'this sem',     val: cmp.thisSemester },
-    { label: 'all time',     val: cmp.allTime },
-  ];
+  if (avgDelta != null) {
+    const absDelta = Math.abs(avgDelta);
+    const higher = avgDelta > 0;
 
-  // Use this semester as baseline, fall back to all time
-  const baseline = cmp.thisSemester ?? cmp.allTime ?? null;
-  const avgDelta = (baseline != null && refPct != null) ? refPct - baseline : null;
-
-  if (verdictEl) {
-    if (avgDelta == null) {
-      verdictEl.innerHTML = '<span class="quiet-dash">—</span>';
-      verdictEl.className = 'comp-verdict average';
-    } else if (avgDelta > 15) {
-      verdictEl.textContent = 'Much busier than usual';
-      verdictEl.className = 'comp-verdict much-busier';
-    } else if (avgDelta > 6) {
-      verdictEl.textContent = 'Busier than usual';
-      verdictEl.className = 'comp-verdict busier';
-    } else if (avgDelta > 3) {
-      verdictEl.textContent = 'A bit busier than usual';
-      verdictEl.className = 'comp-verdict bit-busier';
-    } else if (avgDelta < -15) {
-      verdictEl.textContent = 'Much quieter than usual';
-      verdictEl.className = 'comp-verdict much-quieter';
-    } else if (avgDelta < -6) {
-      verdictEl.textContent = 'Quieter than usual';
-      verdictEl.className = 'comp-verdict quieter';
-    } else if (avgDelta < -3) {
-      verdictEl.textContent = 'A bit quieter than usual';
-      verdictEl.className = 'comp-verdict bit-quieter';
+    let verdict, verdictClass;
+    if (absDelta > 15) {
+      verdict = higher ? 'Much Busier' : 'Much Quieter';
+      verdictClass = higher ? 'much-busier' : 'much-quieter';
+    } else if (absDelta > 6) {
+      verdict = higher ? 'Busier' : 'Quieter';
+      verdictClass = higher ? 'busier' : 'quieter';
+    } else if (absDelta > 3) {
+      verdict = higher ? 'A Bit Busier' : 'A Bit Quieter';
+      verdictClass = higher ? 'bit-busier' : 'bit-quieter';
     } else {
-      verdictEl.textContent = 'About average';
-      verdictEl.className = 'comp-verdict average';
+      verdict = 'Average';
+      verdictClass = 'average';
     }
-  }
 
-  if (deltasEl) {
-    deltasEl.innerHTML = pairs.map((p, i) => {
-      const diff = (p.val != null && refPct != null) ? Math.round(refPct - p.val) : null;
-      const cls  = diff == null ? '' : diff > 15 ? 'much-busier' : diff > 6 ? 'busier' : diff > 3 ? 'bit-busier' : diff < -15 ? 'much-quieter' : diff < -6 ? 'quieter' : diff < -3 ? 'bit-quieter' : '';
-      const sign = diff > 0 ? '+' : '';
-      const valStr = diff != null ? `${sign}${diff}%` : '—';
-      const sep = i < pairs.length - 1 ? `<span class="comp-delta-sep">·</span>` : '';
-      return `<span class="comp-delta-item"><span class="${cls}">${valStr}</span> vs ${p.label}</span>${sep}`;
-    }).join('');
-  }
-
-  // Card 3: Trend
-  const trendEl  = document.getElementById('insight-trend-val');
-  const trendSub = document.getElementById('insight-trend-sub');
-  const trend = computeTrend(data, livePct);
-  if (!trend || !isToday) {
-    trendEl.innerHTML  = `<span class="quiet-dash">—</span>`;
-    trendSub.textContent = '';
+    compVerdictEl.textContent = verdict;
+    compVerdictEl.className = `card-value comp-verdict ${verdictClass}`;
+    compDeltaEl.innerHTML = `<span class="comp-verdict ${verdictClass}">${absDelta}% ${higher ? 'higher' : 'lower'}</span>`;
   } else {
-    const arrows = { up: '↑', down: '↓', flat: '→' };
-    const labels = { up: 'Getting busier', down: 'Getting quieter', flat: 'Holding steady' };
-    const sign = trend.delta >= 0 ? '+' : '';
-    const deltaStr = `${sign}${trend.delta}%`;
-    trendEl.innerHTML =
-      `<div class="trend-line">` +
-        `<span class="trend-arrow ${trend.dir}">${arrows[trend.dir]}</span>` +
-        `<span class="trend-label ${trend.dir}">${labels[trend.dir]}</span>` +
-        (deltaStr ? `<span class="trend-delta ${trend.dir}">${deltaStr}</span>` : '') +
-      `</div>`;
-    if (trend.sub) {
-      trendSub.textContent = trend.sub;
-    } else {
-      trendSub.textContent = `${trend.endY}% at ${formatTime(trend.toH, trend.toMin)}`;
-    }
+    compVerdictEl.textContent = '—';
+    compVerdictEl.className = 'card-value comp-verdict';
+    compVerdictEl.style.color = 'var(--sub)';
+    compDeltaEl.textContent = '';
   }
-
 }
 
 // ── Boot ───────────────────────────────────────────────────────
@@ -1717,15 +1380,13 @@ async function init() {
   } catch (e) {
     console.error('Supabase load failed:', e);
     document.body.classList.remove('loading');
-    showDataWarning(`⚠  Could not load gym data: ${e.message}`);
+    showDataWarning(`Could not load gym data: ${e.message}`);
     return;
   }
 
-  // predictions dict: "2026-04-21_07:00" → pct (single Random Forest prediction)
   const predictions = {};
   predRows.forEach(r => { predictions[slotTsToKey(r.slot_ts)] = r.pct; });
 
-  // weekly dict: "Monday|Last 7 days|false" → [{x, y, label}]
   const weekly = {};
   weeklyRows.forEach(r => {
     const disp = RANGE_DB_TO_DISPLAY[r.range_type] || r.range_type;
@@ -1751,7 +1412,7 @@ async function init() {
   };
 
   if (Object.keys(predictions).length === 0) {
-    showDataWarning('⚠  Prediction data is unavailable — the daily build may not have run yet.');
+    showDataWarning('Prediction data is unavailable — the daily build may not have run yet.');
   }
 
   const pt = getPTNow();
@@ -1760,20 +1421,11 @@ async function init() {
 
   window._insightData = data;
 
-  document.getElementById('pred-prev').addEventListener('click', () => {
-    predDate = shiftDate(predDate, -1);
-    updatePredChart(data);
-    renderInsightCards(data);
-  });
-  document.getElementById('pred-next').addEventListener('click', () => {
-    predDate = shiftDate(predDate, 1);
-    updatePredChart(data);
-    renderInsightCards(data);
-  });
+  // Render day pills
+  renderPills(data);
 
   // Calendar popup
   const calPopup = document.getElementById('cal-popup');
-  const calLabel = document.getElementById('pred-date-label');
   const minDate  = today;
   const maxDate  = shiftDate(today, 90);
   let calYear, calMonth;
@@ -1786,9 +1438,9 @@ async function init() {
     const nextMonthHasDays = new Date(calYear, calMonth + 1, 1) <= new Date(maxDate + 'T00:00:00');
 
     let html = `<div class="cal-header">
-      <button class="cal-nav-btn" id="cal-prev-month" ${!prevMonthHasDays ? 'disabled' : ''}>&#8592;</button>
+      <button class="cal-nav-btn" id="cal-prev-month" ${!prevMonthHasDays ? 'disabled' : ''}>←</button>
       <span class="cal-month-label">${months[calMonth]} ${calYear}</span>
-      <button class="cal-nav-btn" id="cal-next-month" ${!nextMonthHasDays ? 'disabled' : ''}>&#8594;</button>
+      <button class="cal-nav-btn" id="cal-next-month" ${!nextMonthHasDays ? 'disabled' : ''}>→</button>
     </div>
     <div class="cal-grid">`;
     ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => html += `<div class="cal-dow">${d}</div>`);
@@ -1812,19 +1464,25 @@ async function init() {
         calPopup.style.display = 'none';
         updatePredChart(data);
         renderInsightCards(data);
+        updatePillStates();
       });
     });
   }
 
-  calLabel.addEventListener('click', (e) => {
+  document.getElementById('day-pills').addEventListener('click', (e) => {
+    const calTrigger = e.target.closest('#cal-trigger');
+    if (!calTrigger) return;
     e.stopPropagation();
     if (calPopup.style.display !== 'none') { calPopup.style.display = 'none'; return; }
     const d = new Date(predDate + 'T12:00:00');
     calYear = d.getFullYear(); calMonth = d.getMonth();
     renderCalendar();
-    const navEl = document.querySelector('.pred-nav');
-    calPopup.style.top  = (navEl.offsetTop + navEl.offsetHeight + 8) + 'px';
-    calPopup.style.left = navEl.offsetLeft + 'px';
+    const pillsEl = document.getElementById('day-pills');
+    const rect = pillsEl.getBoundingClientRect();
+    const sectionRect = document.getElementById('section-predict').getBoundingClientRect();
+    calPopup.style.top  = (rect.bottom - sectionRect.top + 8) + 'px';
+    calPopup.style.right = '0';
+    calPopup.style.left = 'auto';
     calPopup.style.display = 'block';
   });
 
@@ -1835,9 +1493,6 @@ async function init() {
   document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('semester-check').addEventListener('change', () => updateWeeklyChart(data));
 
-  // Default "Exclude breaks" to the current season: during the semester it shows the
-  // representative pattern, but during summer/winter/spring break the recent
-  // semester-only ranges are empty (all break days), so default to all days instead.
   document.getElementById('semester-check').checked = isSemesterDay(new Date());
 
   updatePredChart(data);
@@ -1849,7 +1504,6 @@ async function init() {
 }
 
 init();
-
 </script>
 </body>
 </html>
