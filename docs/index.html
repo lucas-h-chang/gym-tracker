@@ -99,6 +99,11 @@
       letter-spacing: -0.02em;
       color: var(--text);
     }
+    .val-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
     .card-sub {
       font-size: 14px;
       color: var(--sub);
@@ -361,13 +366,14 @@
       height: 14px;
       pointer-events: none;
       z-index: 10;
+      --dot-rgb: 110, 231, 183;
     }
     .pulse-dot::before {
       content: '';
       position: absolute;
       inset: -4px;
       border-radius: 50%;
-      background: rgba(110, 231, 183, 0.35);
+      background: rgba(var(--dot-rgb), 0.35);
       animation: pulse-ring 2s ease-out infinite;
     }
     .pulse-dot::after {
@@ -375,14 +381,40 @@
       position: absolute;
       inset: 3px;
       border-radius: 50%;
-      background: #6ee7b7;
-      box-shadow: 0 0 8px rgba(110, 231, 183, 0.5);
+      background: rgb(var(--dot-rgb));
+      box-shadow: 0 0 8px rgba(var(--dot-rgb), 0.5);
     }
     @keyframes pulse-ring {
       0%   { transform: scale(0.8); opacity: 0.9; }
       70%  { transform: scale(2.2); opacity: 0; }
       100% { transform: scale(2.2); opacity: 0; }
     }
+
+    /* ── Chart Tooltip (custom HTML — sits above the pulse dot, unlike
+       Chart.js's canvas-drawn tooltip which the dot always painted over) ── */
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      z-index: 20;
+      background: #1e1c1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .chart-tooltip .tt-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sub);
+      margin-bottom: 6px;
+    }
+    .chart-tooltip .tt-row {
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .chart-tooltip .tt-row b { font-weight: 700; }
 
     /* ── Skeleton Loading ── */
     @keyframes skel-pulse {
@@ -461,7 +493,10 @@
         <div class="skel" style="width:40%;height:12px;animation-delay:.2s"></div>
       </div>
       <span class="card-label" id="insight-status-label">LIVE CAPACITY</span>
-      <span class="card-value" id="insight-pct">&mdash;</span>
+      <div class="val-row">
+        <span class="card-value" id="insight-pct">&mdash;</span>
+        <span class="card-label" id="insight-pct-tag"></span>
+      </div>
       <div class="cap-bar-wrap">
         <div class="cap-bar-track"><div class="cap-bar-fill" id="insight-cap-fill" style="width:0%"></div></div>
       </div>
@@ -503,6 +538,7 @@
     <div class="chart-wrap">
       <canvas id="pred-chart" height="340"></canvas>
       <div id="pulse-dot" class="pulse-dot" style="display:none"></div>
+      <div id="pred-tooltip" class="chart-tooltip"></div>
     </div>
   </div>
 
@@ -532,6 +568,7 @@
     <div class="chart-wrap">
       <canvas id="weekly-chart" height="290"></canvas>
       <div id="weekly-no-data" class="no-data-overlay"></div>
+      <div id="weekly-tooltip" class="chart-tooltip"></div>
     </div>
   </div>
 
@@ -681,6 +718,58 @@ function pctColor(p) {
   return '#6ee7b7';
 }
 
+function pctColorRGB(p) {
+  if (p >= 90) return '185, 28, 28';
+  if (p >= 80) return '248, 113, 113';
+  if (p >= 60) return '251, 191, 36';
+  return '110, 231, 183';
+}
+
+// Custom HTML tooltip renderer, replacing Chart.js's canvas-drawn tooltip.
+// Needed so (a) it can sit above the pulse dot via z-index instead of the
+// dot always painting over it, and (b) the numeric value can be bolded —
+// canvas tooltips render each line in one uniform font, no per-word styling.
+function makeExternalTooltip(tooltipId) {
+  return (context) => {
+    const el = document.getElementById(tooltipId);
+    if (!el) return;
+    const tt = context.tooltip;
+
+    if (tt.opacity === 0) {
+      el.style.opacity = 0;
+      return;
+    }
+
+    let html = '';
+    if (tt.title?.length) {
+      html += `<div class="tt-title">${tt.title[0]}</div>`;
+    }
+    (tt.body || []).forEach(b => {
+      b.lines.forEach(line => {
+        const bolded = line.replace(/\d+/, (m) => `<b>${m}</b>`);
+        html += `<div class="tt-row">${bolded}</div>`;
+      });
+    });
+    el.innerHTML = html;
+
+    // Measure off-screen first so we know which side to place the box on.
+    el.style.left = '0px';
+    el.style.top  = '0px';
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+
+    const gap = 14;
+    const chartArea = context.chart.chartArea;
+    const preferLeft = tt.caretX - w - gap >= chartArea.left;
+    const left = preferLeft ? (tt.caretX - w - gap) : (tt.caretX + gap);
+    const top  = tt.caretY - h / 2;
+
+    el.style.left = left + 'px';
+    el.style.top  = top + 'px';
+    el.style.opacity = 1;
+  };
+}
+
 // ── Status ─────────────────────────────────────────────────────
 function updateStatusBar() {
   const pt = getPTNow();
@@ -775,7 +864,10 @@ const capacityGradientPlugin = {
 };
 Chart.register(capacityGradientPlugin);
 
-// NOW indicator: pulsing dot at last actual data point (positioned via CSS element)
+// NOW indicator: pulsing dot at the live point (positioned via CSS element).
+// The live point itself — same x/y the actual line is extended to and the
+// predicted line bridges from in updatePredChart() — is what's rendered
+// here, so the dot always sits exactly where the two lines meet.
 const nowLinePlugin = {
   id: 'nowLine',
   afterDatasetsDraw(chart) {
@@ -788,19 +880,6 @@ const nowLinePlugin = {
     }
 
     const actualData = chart.data.datasets[0]?.data || [];
-    if (!actualData.length) {
-      if (pulseDot) pulseDot.style.display = 'none';
-      return;
-    }
-
-    // The tooltip is drawn onto the canvas itself, but the pulse dot is a
-    // separate DOM overlay that always paints above it — hide the dot while
-    // a tooltip is showing so it doesn't cover the tooltip's corner.
-    if (chart.tooltip?.opacity > 0) {
-      if (pulseDot) pulseDot.style.display = 'none';
-      return;
-    }
-
     const lastPt = actualData[actualData.length - 1];
     if (!lastPt) {
       if (pulseDot) pulseDot.style.display = 'none';
@@ -812,43 +891,28 @@ const nowLinePlugin = {
 };
 Chart.register(nowLinePlugin);
 
-// Positions the live pulse dot at the real current time (not the last 15-min
-// actual bin) so it creeps steadily along the x-axis between data points —
-// e.g. at 4:52 it sits ~halfway between the 4:45 bin and the 5:00 slot.
-// Vertically, prefer the truly live capacity reading (Density, refreshed every
-// 30s) over the last 15-min actual average, since that average can lag by
-// up to 15 minutes behind what the dot's x-position claims to represent.
 function positionPulseDot(chart, lastPt) {
   const pulseDot = document.getElementById('pulse-dot');
   if (!pulseDot) return;
 
-  const opts = chart.options.plugins.nowLine;
   const { scales } = chart;
-  const pt = getPTNow();
-  const nowVal = pt.getHours() + pt.getMinutes() / 60;
-  const clampedX = Math.min(Math.max(nowVal, scales.x.min), scales.x.max);
-
-  const yVal = liveCapacity ? liveCapacity.pct : lastPt.y;
-  const dotX = scales.x.getPixelForValue(clampedX);
-  const dotY = scales.y.getPixelForValue(yVal);
+  const dotX = scales.x.getPixelForValue(lastPt.x);
+  const dotY = scales.y.getPixelForValue(lastPt.y);
 
   pulseDot.style.display = 'block';
   pulseDot.style.left = (dotX - 7) + 'px';
   pulseDot.style.top  = (dotY - 7) + 'px';
+  pulseDot.style.setProperty('--dot-rgb', pctColorRGB(lastPt.y));
 }
 
-// The chart itself only redraws on interaction/data refresh, so without this
-// the dot would sit frozen at whatever time the page happened to load. Nudge
-// it forward every 15s using the same live-clock math, no full chart redraw needed.
+// The chart's data only advances when updatePredChart() re-runs (page load,
+// day switch), so without this the live point — and the dot sitting on it —
+// would freeze at whatever time the page happened to load. Recompute it
+// every 15s so the line, its fill, and the dot all keep creeping forward
+// together and never drift apart.
 setInterval(() => {
-  if (!predChart) return;
-  const opts = predChart.options.plugins.nowLine;
-  if (!opts?.show) return;
-  const actualData = predChart.data.datasets[0]?.data || [];
-  const lastPt = actualData[actualData.length - 1];
-  if (!lastPt) return;
-  if (predChart.tooltip?.opacity > 0) return;
-  positionPulseDot(predChart, lastPt);
+  if (!predChart || predDate !== todayPT()) return;
+  if (window._insightData) updatePredChart(window._insightData);
 }, 15000);
 
 // Scrub line on hover
@@ -937,6 +1001,13 @@ function updatePredChart(data) {
   const xMin     = 7;
   const xMax     = 23;
 
+  // The pulse dot sits on the live point at "now". Past closing (or before
+  // open) there's no actual line for it to cap, so it would float alone in
+  // empty space — only show it while the gym is actually open.
+  const { open: openH, close: closeH } = getOpenHours(predDay.getDay(), predDay);
+  const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
+  const showNow   = isToday && gymIsOpen;
+
   const allPredPoints = buildPredPoints(data, predDate);
   const actualPoints = isToday
     ? (data.today_actuals || []).filter(p => p.x <= nowVal)
@@ -956,14 +1027,37 @@ function updatePredChart(data) {
     });
   }
 
-  // Bridge actual → predicted: predictions only land on quarter-hour slots,
-  // so "now" can sit up to ~15 min ahead of the last actual reading and
-  // before the next predicted one, leaving a dead gap with no line/fill.
-  // Prepend a connector point at the last actual value so both lines meet.
-  if (isToday && actualPoints.length) {
+  // Extend the actual line all the way to "right now" (not just the last
+  // completed 15-min bin) using the live capacity reading, then bridge the
+  // predicted line from that exact same point. This is also what the pulse
+  // dot renders on top of, so the line, its fill, and the dot all meet at
+  // one spot instead of the dot floating off the end of the line — and the
+  // sliver of time between the last bin and now gets shaded as "actual"
+  // since it's already passed, instead of being left blank.
+  if (isToday && actualPoints.length && gymIsOpen) {
     const lastActual = actualPoints[actualPoints.length - 1];
-    if (!predPoints.length || predPoints[0].x > lastActual.x) {
-      predPoints = [{ x: lastActual.x, y: lastActual.y, label: lastActual.label }, ...predPoints];
+    const liveX = Math.min(Math.max(nowVal, lastActual.x), xMax);
+    const liveY = liveCapacity ? liveCapacity.pct : lastActual.y;
+    const livePoint = { x: liveX, y: liveY, label: formatTime(pt.getHours(), pt.getMinutes()) };
+
+    if (liveX > lastActual.x) {
+      actualPoints.push(livePoint);
+    } else {
+      actualPoints[actualPoints.length - 1] = livePoint;
+    }
+    if (!predPoints.length || predPoints[0].x > liveX) {
+      predPoints = [livePoint, ...predPoints];
+    }
+  } else if (isToday && actualPoints.length && nowVal >= closeH) {
+    // Day is over. There's no live point to extend to, and the predicted
+    // (close, 0) point was filtered out by p.x >= nowVal, so the actual line
+    // would otherwise end flat at its last non-zero reading. Drop it to 0 at
+    // close so today looks like every other finished day.
+    const lastActual = actualPoints[actualPoints.length - 1];
+    if (lastActual.x < closeH) {
+      actualPoints.push({ x: closeH, y: 0, label: formatTime(closeH, 0) });
+    } else {
+      actualPoints[actualPoints.length - 1] = { x: closeH, y: 0, label: formatTime(closeH, 0) };
     }
   }
 
@@ -973,7 +1067,7 @@ function updatePredChart(data) {
   if (predChart) {
     predChart.data.datasets[0].data = actualPoints;
     predChart.data.datasets[1].data = predPoints;
-    predChart.options.plugins.nowLine.show  = isToday;
+    predChart.options.plugins.nowLine.show  = showNow;
     predChart.options.plugins.nowLine.value = nowVal;
     predChart.options.scales.x.min          = xMin;
     predChart.options.scales.x.max          = xMax;
@@ -1026,16 +1120,11 @@ function updatePredChart(data) {
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         capacityGradient: { enabled: true },
-        nowLine: { show: isToday, value: nowVal },
+        nowLine: { show: showNow, value: nowVal },
         legend:  { display: false },
         tooltip: {
-          backgroundColor: '#1e1c1a',
-          titleColor: '#8a8480',
-          bodyColor: '#e8e6e3',
-          borderColor: 'rgba(255,255,255,0.08)',
-          borderWidth: 1,
-          padding: 10,
-          cornerRadius: 8,
+          enabled: false,
+          external: makeExternalTooltip('pred-tooltip'),
           displayColors: false,
           filter: (item) => {
             // Drop the synthetic connector point that bridges the actual line
@@ -1049,7 +1138,7 @@ function updatePredChart(data) {
           },
           callbacks: {
             title: (items) => items[0].raw.label || '',
-            label: (item) => `${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
+            label: (item) => `${item.dataset.label}: ${Math.round(item.raw.y)}%`,
           }
         }
       },
@@ -1131,17 +1220,12 @@ function updateWeeklyChart(data) {
         nowLine: { show: false },
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1e1c1a',
-          titleColor: '#8a8480',
-          bodyColor: '#e8e6e3',
-          borderColor: 'rgba(255,255,255,0.08)',
-          borderWidth: 1,
-          padding: 10,
-          cornerRadius: 8,
+          enabled: false,
+          external: makeExternalTooltip('weekly-tooltip'),
           displayColors: false,
           callbacks: {
             title: (items) => items[0].raw.label || '',
-            label: (item) => `${item.raw.y.toFixed(1)}% capacity`,
+            label: (item) => `${Math.round(item.raw.y)}% capacity`,
           }
         }
       },
@@ -1266,8 +1350,10 @@ function renderInsightCards(data) {
   // ── Card 1: Status / Capacity ──
   const statusLabel = document.getElementById('insight-status-label');
   const pctEl       = document.getElementById('insight-pct');
+  const pctTagEl    = document.getElementById('insight-pct-tag');
   const capFill     = document.getElementById('insight-cap-fill');
   const capLabel    = document.getElementById('insight-cap-label');
+  pctTagEl.textContent = '';
 
   if (isToday) {
     const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
@@ -1308,14 +1394,14 @@ function renderInsightCards(data) {
     statusLabel.textContent = 'DAILY FORECAST';
     const allSlots = getBlendedSlots(data, openH, closeH, predDate);
     if (allSlots.length) {
-      const avg  = allSlots.reduce((s, p) => s + p.y, 0) / allSlots.length;
       const peak = allSlots.reduce((a, b) => b.y > a.y ? b : a);
-      pctEl.textContent = `${Math.round(avg)}%`;
-      pctEl.style.color = pctColor(avg);
-      const fillCls = avg >= 90 ? 'critical' : avg >= 80 ? 'high' : avg >= 60 ? 'mid' : '';
-      capFill.style.width = `${Math.min(avg, 100)}%`;
+      pctEl.textContent = `${Math.round(peak.y)}%`;
+      pctEl.style.color = pctColor(peak.y);
+      pctTagEl.textContent = 'PEAK';
+      const fillCls = peak.y >= 90 ? 'critical' : peak.y >= 80 ? 'high' : peak.y >= 60 ? 'mid' : '';
+      capFill.style.width = `${Math.min(peak.y, 100)}%`;
       capFill.className = `cap-bar-fill${fillCls ? ' ' + fillCls : ''}`;
-      capLabel.textContent = `peak ${Math.round(peak.y)}% · ${formatTime(openH, 0)} – ${formatTime(closeH, 0)}`;
+      capLabel.textContent = `${formatTime(openH, 0)} – ${formatTime(closeH, 0)}`;
     } else {
       pctEl.textContent = '—';
       pctEl.style.color = 'var(--sub)';
@@ -1339,10 +1425,6 @@ function renderInsightCards(data) {
     const subColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--sub)';
     const sign = trend.delta >= 0 ? '+' : '';
     trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${sign}${trend.delta}%</span>`;
-  } else if (trend) {
-    trendValEl.textContent = `${trend.endY}%`;
-    trendValEl.style.color = pctColor(trend.endY);
-    trendSubEl.textContent = trend.sub || '';
   } else {
     trendValEl.textContent = '—';
     trendValEl.style.color = 'var(--sub)';
