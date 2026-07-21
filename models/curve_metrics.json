@@ -1,29 +1,29 @@
 {
-  "built_at": "2026-07-21T03:52:24.620691",
+  "built_at": "2026-07-21T21:56:23.590841",
   "params": {
     "halflife_days": 365,
     "shrink_k": 3,
     "smooth_window": 3,
     "blend_window_days": 5
   },
-  "distinct_days": 1899,
-  "date_range": "2021-01-05 -> 2026-07-20",
+  "distinct_days": 1900,
+  "date_range": "2021-01-05 -> 2026-07-21",
   "n_curves": 71,
   "coverage_by_phase": {
     "dead_week": {
       "cells": 320,
-      "min_n_eff": 2.07,
-      "median_n_eff": 2.95
+      "min_n_eff": 2.06,
+      "median_n_eff": 2.94
     },
     "finals": {
       "cells": 320,
       "min_n_eff": 1.76,
-      "median_n_eff": 2.98
+      "median_n_eff": 2.97
     },
     "first_week": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 2.39
+      "median_n_eff": 2.38
     },
     "holiday": {
       "cells": 320,
@@ -33,7 +33,7 @@
     "regular": {
       "cells": 447,
       "min_n_eff": 0.0,
-      "median_n_eff": 34.2
+      "median_n_eff": 34.14
     },
     "spring_break": {
       "cells": 440,
@@ -43,17 +43,17 @@
     "summer_break_5": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 3.8
+      "median_n_eff": 3.79
     },
     "summer_break_6": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 7.48
+      "median_n_eff": 7.47
     },
     "summer_break_7": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 6.85
+      "median_n_eff": 6.87
     },
     "summer_break_8": {
       "cells": 440,
