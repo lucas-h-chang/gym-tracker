@@ -200,27 +200,38 @@ def build_table(df, params=None, build_date=None, built_at=None):
     }
 
 
+def _is_break_phase(phase):
+    return phase in ("winter_break", "spring_break") or phase.startswith("summer_break_")
+
+
 def phase_weights(d, blend_window_days=None):
     """
     Soft phase assignment for a prediction date, per SPEC_CURVE_MODEL.md §4.
     Default: hard classify_date. Within blend_window_days of a semester
-    boundary while classified 'break', linearly blend toward the adjacent
-    phase (first_week on the way in, finals on the way out).
+    boundary while classified as (any) break, linearly blend toward the
+    adjacent phase (first_week on the way in, finals on the way out).
+
+    "break" is season-specific (winter_break/spring_break/summer_break_<M> —
+    see academic_calendar.classify_date), not one pooled phase, so this
+    blends using whichever break variant classify_date actually returned for
+    `d` rather than a hardcoded "break" string. spring_break is never near a
+    semester boundary (SEM_STARTS/SEM_ENDS only cover Aug/Jan starts and
+    May/Dec ends) so it always falls through to the flat case below.
     """
     W = blend_window_days if blend_window_days is not None else DEFAULT_PARAMS['blend_window_days']
     d = _as_date(d)
     phase = classify_date(d)
 
-    if phase == "break":
+    if _is_break_phase(phase):
         dts = days_to_sem_start(d)
         if 1 <= dts <= W:
             alpha = (W + 1 - dts) / (W + 1)
-            return [("break", 1 - alpha), ("first_week", alpha)]
+            return [(phase, 1 - alpha), ("first_week", alpha)]
 
         k = -days_to_sem_end(d)
         if 1 <= k <= W:
             alpha = (W + 1 - k) / (W + 1)  # weight on "finals" (boundary-adjacent regime)
-            return [("finals", alpha), ("break", 1 - alpha)]
+            return [("finals", alpha), (phase, 1 - alpha)]
 
     return [(phase, 1.0)]
 

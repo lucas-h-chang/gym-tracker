@@ -113,9 +113,14 @@ def hour_bucket(slot):
 
 
 def segment_for_date(d, ramp_days=10):
-    """regular / first_week / ramp (break within ramp_days of a boundary) / finals_dead / break_deep / holiday."""
+    """regular / first_week / ramp (break within ramp_days of a boundary) / finals_dead / break_deep / holiday.
+
+    "break" is season-specific in the model (winter_break/spring_break/
+    summer_break_<month> — see academic_calendar.classify_date) but pooled
+    back into one "break_deep"/"ramp" bucket here purely for report readability.
+    """
     phase = classify_date(d)
-    if phase == "break":
+    if phase in ("winter_break", "spring_break") or phase.startswith("summer_break_"):
         dts = days_to_sem_start(d)
         dte = days_to_sem_end(d)
         if (1 <= dts <= ramp_days) or (1 <= -dte <= ramp_days):

@@ -147,8 +147,7 @@ FIRST_WEEK_RANGES = [
     (date(2028, 1, 18), date(2028, 1, 24)),  # Spring 2028
 ]
 
-BREAK_RANGES = [
-    # ── Winter breaks ──
+WINTER_BREAK_RANGES = [
     (date(2020, 12, 18), date(2021, 1, 18)),
     (date(2021, 12, 17), date(2022, 1, 17)),
     (date(2022, 12, 16), date(2023, 1, 16)),
@@ -157,7 +156,9 @@ BREAK_RANGES = [
     (date(2025, 12, 19), date(2026, 1, 19)),
     (date(2026, 12, 18), date(2027, 1, 18)),
     (date(2027, 12, 17), date(2028, 1, 17)),
-    # ── Spring Recesses ──
+]
+
+SPRING_BREAK_RANGES = [
     (date(2021, 3, 20), date(2021, 3, 28)),
     (date(2022, 3, 19), date(2022, 3, 27)),
     (date(2023, 3, 25), date(2023, 4,  2)),
@@ -166,7 +167,9 @@ BREAK_RANGES = [
     (date(2026, 3, 21), date(2026, 3, 29)),
     (date(2027, 3, 20), date(2027, 3, 28)),
     (date(2028, 3, 25), date(2028, 4,  2)),
-    # ── Summer breaks ──
+]
+
+SUMMER_BREAK_RANGES = [
     (date(2021, 5, 14), date(2021, 8, 24)),
     (date(2022, 5, 13), date(2022, 8, 23)),
     (date(2023, 5, 12), date(2023, 8, 22)),
@@ -175,6 +178,14 @@ BREAK_RANGES = [
     (date(2026, 5, 15), date(2026, 8, 25)),
     (date(2027, 5, 14), date(2027, 8, 24)),
 ]
+
+# Kept for callers that only need "is this any kind of break" (e.g. is_holiday
+# suppression below). classify_date() below returns the season-specific label,
+# not this generic one — pooling all three into one phase was the original
+# design (per SPEC_CURVE_MODEL.md) and it's a real bug: winter break Tuesday
+# 7pm runs ~6% occupancy, summer break Tuesday 7pm runs ~78% — averaging them
+# into one curve produces a prediction that matches neither.
+BREAK_RANGES = WINTER_BREAK_RANGES + SPRING_BREAK_RANGES + SUMMER_BREAK_RANGES
 
 
 def _in_any(d, ranges):
@@ -188,10 +199,17 @@ def _as_date(d):
 
 def classify_date(d):
     """
-    Priority order: finals > dead_week > first_week > holiday > break > regular.
+    Priority order: finals > dead_week > first_week > holiday > break > regular,
+    where "break" is season-specific (winter_break / spring_break / summer_break)
+    rather than one pooled phase — winter break Tuesday 7pm runs ~6% occupancy,
+    summer break Tuesday 7pm runs ~78%; a single "break" curve averaged the two
+    and predicted neither correctly (see project memory / SPEC_CURVE_MODEL.md
+    follow-up notes for the incident this fixed, 2026-07-20).
+
     Mirrors train.py::engineer_features()'s is_finals/is_dead_week/is_first_week/
-    is_break/is_holiday flags collapsed into one label — see test_curve_sanity.py's
-    cross-check against those flags on all historical dates.
+    is_break/is_holiday flags collapsed into one label (with is_break further
+    split by season here) — see test_curve_sanity.py's cross-check against
+    those flags on all historical dates.
     """
     d = _as_date(d)
     if _in_any(d, FINALS_RANGES):
@@ -203,8 +221,18 @@ def classify_date(d):
     is_break = _in_any(d, BREAK_RANGES)
     if d in HOLIDAYS and not is_break:
         return "holiday"
-    if is_break:
-        return "break"
+    if _in_any(d, WINTER_BREAK_RANGES):
+        return "winter_break"
+    if _in_any(d, SPRING_BREAK_RANGES):
+        return "spring_break"
+    if _in_any(d, SUMMER_BREAK_RANGES):
+        # Summer break itself has a large intra-phase swing that a single
+        # pooled curve washes out: raw Tuesday-7pm means by month run
+        # May ~55%, June ~77%, July ~78%, August ~65% (shoulder months are
+        # genuinely quieter than peak summer, not just noise) — split by
+        # month so "which part of summer" isn't lost the way "which season"
+        # was before the winter/spring/summer split above.
+        return f"summer_break_{d.month}"
     return "regular"
 
 
