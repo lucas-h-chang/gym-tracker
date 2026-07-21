@@ -1,0 +1,86 @@
+{
+  "params": {
+    "halflife_days": 365,
+    "shrink_k": 3,
+    "smooth_window": 3,
+    "blend_window_days": 5
+  },
+  "origins": "holdout",
+  "report": {
+    "curve": {
+      "overall_mae": 9.218,
+      "mae_by_hour_bucket": {
+        "12-5pm": 8.663,
+        "5-9pm": 11.067,
+        "9-12": 7.906,
+        "9pm-close": 11.536,
+        "open-9am": 8.119
+      },
+      "mae_by_segment": {
+        "break_deep": 7.366,
+        "finals_dead": 7.863,
+        "first_week": 11.456,
+        "holiday": 16.297,
+        "ramp": 13.057,
+        "regular": 9.311
+      },
+      "good_day_rate_pct": 8.7,
+      "good_day_rate_p90_pct": 22.4,
+      "p90_hourly_error_7_9am": 16.485,
+      "p90_hourly_error_5_10pm": 23.127,
+      "shape_correlation_median": 0.85,
+      "max_slot_jump_pp": 27.44,
+      "n": 54314
+    },
+    "equal": {
+      "overall_mae": 9.642,
+      "mae_by_hour_bucket": {
+        "12-5pm": 8.954,
+        "5-9pm": 11.685,
+        "9-12": 8.302,
+        "9pm-close": 12.332,
+        "open-9am": 8.365
+      },
+      "mae_by_segment": {
+        "break_deep": 7.354,
+        "finals_dead": 9.173,
+        "first_week": 11.856,
+        "holiday": 13.888,
+        "ramp": 12.961,
+        "regular": 9.911
+      },
+      "good_day_rate_pct": 9.2,
+      "good_day_rate_p90_pct": 19.1,
+      "p90_hourly_error_7_9am": 16.832,
+      "p90_hourly_error_5_10pm": 24.477,
+      "shape_correlation_median": 0.845,
+      "max_slot_jump_pp": 25.81,
+      "n": 54314
+    },
+    "rf": {
+      "overall_mae": 9.33,
+      "mae_by_hour_bucket": {
+        "12-5pm": 8.498,
+        "5-9pm": 11.517,
+        "9-12": 7.502,
+        "9pm-close": 14.284,
+        "open-9am": 7.537
+      },
+      "mae_by_segment": {
+        "break_deep": 6.726,
+        "finals_dead": 7.749,
+        "first_week": 12.446,
+        "holiday": 12.03,
+        "ramp": 11.758,
+        "regular": 9.926
+      },
+      "good_day_rate_pct": 9.3,
+      "good_day_rate_p90_pct": 20.0,
+      "p90_hourly_error_7_9am": 16.281,
+      "p90_hourly_error_5_10pm": 25.07,
+      "shape_correlation_median": 0.786,
+      "max_slot_jump_pp": 38.12,
+      "n": 54314
+    }
+  }
+}

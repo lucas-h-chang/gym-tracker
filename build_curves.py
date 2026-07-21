@@ -1,0 +1,102 @@
+"""
+build_curves.py — weekly job: pull capacity_log -> curve_model.build_table ->
+models/curves.json + models/curve_metrics.json.
+
+Replaces train.py's monthly RF retrain per SPEC_CURVE_MODEL.md. Runs via
+.github/workflows/build_curves.yml (Sun 03:00 PT).
+"""
+import os
+import json
+from datetime import datetime
+
+import pandas as pd
+
+import curve_model as cm
+from train import parse_supabase_timestamps
+
+MIN_DISTINCT_DAYS = 1500  # mirrors train.py's row guard
+
+
+def fetch_capacity_log():
+    from supabase import create_client
+    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+    print("Loading data from Supabase capacity_log...")
+    BATCH, offset, rows = 9000, 0, []
+    while True:
+        batch = (
+            sb.table("capacity_log")
+            .select("timestamp,people_count")
+            .range(offset, offset + BATCH - 1)
+            .order("timestamp")
+            .execute()
+            .data
+        )
+        rows.extend(batch)
+        if len(batch) < BATCH:
+            break
+        offset += BATCH
+        print(f"  Fetched {len(rows):,} rows...")
+
+    df = pd.DataFrame(rows)
+    df['timestamp'] = parse_supabase_timestamps(df['timestamp'])
+    df['people_count'] = df['people_count'].astype(float)
+    return df
+
+
+def main():
+    os.makedirs("models", exist_ok=True)
+
+    raw = fetch_capacity_log()
+    slots = cm.prepare_slots(raw)
+
+    distinct_days = slots['date'].nunique()
+    print(f"  {distinct_days:,} distinct days, {len(slots):,} (date, slot) rows after cleaning")
+    if distinct_days < MIN_DISTINCT_DAYS:
+        raise RuntimeError(
+            f"Only {distinct_days:,} distinct days (< {MIN_DISTINCT_DAYS:,}) — "
+            "aborting to protect the existing curves.json"
+        )
+
+    print("Building curve table...")
+    table = cm.build_table(slots, cm.DEFAULT_PARAMS)
+    n_curves = len(table['curves'])
+    print(f"  Built {n_curves} (phase, dow) curves")
+
+    with open("models/curves.json", "w") as f:
+        json.dump(table, f)
+    size_kb = os.path.getsize("models/curves.json") / 1024
+    print(f"  Saved -> models/curves.json ({size_kb:.1f} KB)")
+
+    # Lightweight companion metrics: cell coverage / thinness per phase, so a
+    # retrain that suddenly loses a phase or goes very thin is visible in the
+    # commit diff without re-running the full backtest.
+    coverage = {}
+    for key, curve in table['curves'].items():
+        phase, dow = key.split('|')
+        coverage.setdefault(phase, []).extend(curve['n_eff'])
+    curve_metrics = {
+        "built_at": table['built_at'],
+        "params": table['params'],
+        "distinct_days": int(distinct_days),
+        "date_range": f"{slots['date'].min().date()} -> {slots['date'].max().date()}",
+        "n_curves": n_curves,
+        "coverage_by_phase": {
+            phase: {
+                "cells": len(n_effs),
+                "min_n_eff": round(min(n_effs), 2),
+                "median_n_eff": round(sorted(n_effs)[len(n_effs) // 2], 2),
+            }
+            for phase, n_effs in coverage.items()
+        },
+    }
+    with open("models/curve_metrics.json", "w") as f:
+        json.dump(curve_metrics, f, indent=2)
+    print("  Saved -> models/curve_metrics.json")
+
+    print(f"\n[{datetime.now().isoformat()}] curves.json rebuilt: {n_curves} curves, "
+          f"{distinct_days:,} distinct days")
+
+
+if __name__ == "__main__":
+    main()
