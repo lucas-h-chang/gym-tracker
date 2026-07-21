@@ -555,7 +555,7 @@
         </div>
         <div class="field">
           <select id="range-select">
-            <option>Last 7 days</option><option>Last month</option>
+            <option id="range-last-day-opt" value="Last 7 days">Last 7 days</option><option>Last month</option>
             <option>Last 6 months</option><option>Last year</option><option>All time</option>
           </select>
         </div>
@@ -1016,14 +1016,17 @@ function updatePredChart(data) {
     ? allPredPoints.filter(p => p.x >= nowVal)
     : allPredPoints;
 
-  if (isToday && data.today_blend_weight > 0 && data.today_similarity_preds?.length) {
-    const w      = data.today_blend_weight;
+  if (isToday && data.today_similarity_preds?.length) {
+    // Blend weight is per-slot ('w'): full trust near the last observation,
+    // decaying to the base curve within ~2h (see today_builder.py). Fall back
+    // to the scalar blend_weight for older cached rows that lack per-point w.
     const simMap = {};
-    data.today_similarity_preds.forEach(p => { simMap[p.x] = p.y; });
+    data.today_similarity_preds.forEach(p => { simMap[p.x] = p; });
     predPoints = predPoints.map(p => {
-      const simY = simMap[p.x];
-      if (simY == null) return p;
-      return { ...p, y: Math.round(((1 - w) * p.y + w * simY) * 10) / 10 };
+      const sim = simMap[p.x];
+      if (sim == null) return p;
+      const w = sim.w != null ? sim.w : (data.today_blend_weight || 0);
+      return { ...p, y: Math.round(((1 - w) * p.y + w * sim.y) * 10) / 10 };
     });
   }
 
@@ -1175,6 +1178,11 @@ function updatePredChart(data) {
 // ── Weekly Chart ───────────────────────────────────────────────
 let weeklyChart = null;
 
+function updateRangeDayLabel() {
+  const day = document.getElementById('day-select').value;
+  document.getElementById('range-last-day-opt').textContent = `Last ${day}`;
+}
+
 function updateWeeklyChart(data) {
   const day      = document.getElementById('day-select').value;
   const range    = document.getElementById('range-select').value;
@@ -1272,9 +1280,8 @@ function getBlendedSlots(data, fromH, toH, date) {
   const isToday = dateStr === todayPT();
   const simMap = {};
   if (isToday && data.today_similarity_preds) {
-    data.today_similarity_preds.forEach(p => { simMap[p.x] = p.y; });
+    data.today_similarity_preds.forEach(p => { simMap[p.x] = p; });
   }
-  const w = isToday ? (data.today_blend_weight || 0) : 0;
   const slots = [];
   for (let h = Math.floor(fromH); h <= Math.floor(toH); h++) {
     for (const m of [0, 15, 30, 45]) {
@@ -1283,8 +1290,9 @@ function getBlendedSlots(data, fromH, toH, date) {
       const key  = `${dateStr}_${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
       const pred = data.predictions[key];
       if (pred == null) continue;
-      const simY    = simMap[slotH];
-      const blended = simY != null ? (1 - w) * pred + w * simY : pred;
+      const sim     = simMap[slotH];
+      const w       = sim ? (sim.w != null ? sim.w : (data.today_blend_weight || 0)) : 0;
+      const blended = sim ? (1 - w) * pred + w * sim.y : pred;
       slots.push({ h, m, slotH, y: blended });
     }
   }
@@ -1535,6 +1543,7 @@ async function init() {
   const pt = getPTNow();
   predDate = today;
   document.getElementById('day-select').value = DAYS[pt.getDay()];
+  updateRangeDayLabel();
 
   window._insightData = data;
 
@@ -1606,7 +1615,7 @@ async function init() {
   document.addEventListener('click', () => { calPopup.style.display = 'none'; });
   calPopup.addEventListener('click', e => e.stopPropagation());
 
-  document.getElementById('day-select').addEventListener('change', () => updateWeeklyChart(data));
+  document.getElementById('day-select').addEventListener('change', () => { updateRangeDayLabel(); updateWeeklyChart(data); });
   document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
   document.getElementById('semester-check').addEventListener('change', () => updateWeeklyChart(data));
 

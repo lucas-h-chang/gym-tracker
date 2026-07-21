@@ -206,6 +206,7 @@ def candidates_from_history(rows):
 def compute_similarity_predictions(today_finger, candidates):
     K              = 5
     BLEND_CEIL     = 0.9
+    BLEND_HORIZON  = 2.0   # hours the nowcast bridges before handing back to the base curve
     OVERLAP_THRESH = 0.70
     MIN_SLOTS      = 4
 
@@ -283,6 +284,20 @@ def compute_similarity_predictions(today_finger, candidates):
     ch_label = f"{close_h % 12 or 12}:00 {'AM' if close_h < 12 else 'PM'}"
     similarity_preds.append({'x': float(close_h), 'y': 0.0, 'label': ch_label})
 
+    # Per-slot blend weight. The nowcast's job is to smoothly bridge today's
+    # live level onto the base curve — not to forecast hours out — so each
+    # slot's trust in the nowcast starts at BLEND_CEIL right at the last
+    # observed slot and decays linearly to 0 over BLEND_HORIZON hours, handing
+    # far slots (e.g. tonight's peak, seen only through morning-shape
+    # neighbors) fully back to the recency-aware base curve. Replaces the old
+    # time-of-day ramp, which under-weighted the bridge in the morning and
+    # over-rode the evening peak by pinning w≈0.9 across every future slot.
+    for p in similarity_preds:
+        decay  = max(0.0, 1.0 - (p['x'] - last_slot) / BLEND_HORIZON)
+        p['w'] = round(BLEND_CEIL * decay, 3)
+
+    # Retained as a scalar fallback for any cached today_summary row still read
+    # by an older frontend build; live blending now uses each point's own 'w'.
     blend_weight = round(min((now_hour - open_h) / 6.0, BLEND_CEIL), 3)
     return similarity_preds, blend_weight
 
