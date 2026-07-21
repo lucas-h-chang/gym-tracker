@@ -1,15 +1,17 @@
 """
-predictions_builder.py — compute 90-day RF predictions → Supabase predictions table.
+predictions_builder.py — compute 90-day curve-model predictions → Supabase predictions table.
 Runs daily at midnight PT via daily.yml.
 """
 import os
-import pickle
+import json
 import pandas as pd
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
-from train import engineer_features, parse_supabase_timestamps
+import curve_model as cm
+from academic_calendar import classify_date
+from train import parse_supabase_timestamps
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
@@ -42,22 +44,50 @@ def get_open_hours(day_name, d):
 
 
 CORRECTION_DAYS     = 28   # trailing window for residual computation
-CORRECTION_MIN_N    = 3    # min observations per (is_break, dow, hour) cell to apply correction
+CORRECTION_MIN_N    = 3    # min observations per (segment, dow, hour, minute) cell to apply correction
 CORRECTION_HOUR_MIN = 17   # only correct evening slots (5 PM onwards)
 
 
-def load_model():
-    with open('models/rf_model.pkl', 'rb') as f:
-        rf = pickle.load(f)
-    return rf
+def load_curves():
+    with open('models/curves.json') as f:
+        return json.load(f)
 
 
-def build_evening_correction(rf):
+def _correction_segment(phase):
     """
-    Fetch the last CORRECTION_DAYS days of actuals, re-predict with RF, and return a
-    dict keyed by (is_break, dow, hour, minute) → mean residual (pp).
-    minute is rounded to the nearest 15-min boundary (0/15/30/45) so scraped
-    timestamps (which land off-quarter) align with the prediction slots.
+    Coarser-than-baseline segment key for the evening correction only.
+
+    The baseline curve is keyed on the fine-grained phase (e.g.
+    summer_break_7) so June and July get their own distinct shapes. But a
+    CORRECTION_DAYS=28 trailing window only contains ~2 same-weekday days in
+    any single calendar month -- well under CORRECTION_MIN_N, so keying the
+    correction on the same fine phase leaves almost every cell empty right
+    when a month boundary makes the nowcast matter most (checked directly:
+    July 2026 had exactly 2 Tuesdays in the trailing window). Pooling all
+    break sub-phases back into one "break" bucket here gives ~4 same-weekday
+    samples instead, without touching the baseline curve's own granularity.
+    """
+    if phase in ("winter_break", "spring_break") or phase.startswith("summer_break_"):
+        return "break"
+    return phase
+
+
+def build_evening_correction(table):
+    """
+    Fetch the last CORRECTION_DAYS days of actuals, re-predict with the curve
+    table, and return a dict keyed by (segment, dow, hour, minute) → mean
+    residual (pp), where segment = _correction_segment(phase). This is the
+    curve model's own trailing-residual nowcast -- same mechanism the RF
+    pipeline used (see git history), ported to correct
+    the curve model's baseline instead so we get both the curve model's
+    structurally-correct shape (no closed-hours extrapolation, no pooled-break
+    averaging -- see academic_calendar.classify_date) and RF's ability to
+    track "this stretch is running hotter/cooler than the multi-year average"
+    (halflife_days=365 makes the raw curve far too slow to pick that up on
+    its own). See _correction_segment() for why the correction uses a
+    coarser segment than the baseline curve's own phase. minute is rounded
+    to the nearest 15-min boundary (0/15/30/45) so scraped timestamps (which
+    land off-quarter) align with the prediction slots.
     """
     lo = (now - timedelta(days=CORRECTION_DAYS)).isoformat()
     hi = now.isoformat()
@@ -87,59 +117,57 @@ def build_evening_correction(rf):
     df['percent_full'] = df['percent_full'].astype(float)
     df = df[df['percent_full'] > 0].dropna().reset_index(drop=True)
 
-    X, _ = engineer_features(df)
-    df['rf_pred']  = rf.predict(X)
-    df['residual'] = df['percent_full'] - df['rf_pred']
-    df['dow']      = df['timestamp'].dt.dayofweek
-    df['hour']     = df['timestamp'].dt.hour
-    df['minute']   = (df['timestamp'].dt.minute // 15) * 15  # round to 0/15/30/45
-    df['is_break'] = X['is_break'].values.astype(int)
+    df['date']   = df['timestamp'].dt.date
+    df['dow']    = df['timestamp'].dt.dayofweek
+    df['hour']   = df['timestamp'].dt.hour
+    df['minute'] = (df['timestamp'].dt.minute // 15) * 15  # round to 0/15/30/45
+    df['slot']   = df['hour'] * 4 + df['minute'] // 15
+    df['segment'] = df['date'].map(classify_date).map(_correction_segment)
+
+    df['curve_pred'] = cm.predict(table, list(zip(df['date'], df['slot'])))
+    df = df.dropna(subset=['curve_pred']).reset_index(drop=True)
+    df['residual'] = df['percent_full'] - df['curve_pred']
 
     correction = {}
-    for (ib, dow, hr, mn), g in df.groupby(['is_break', 'dow', 'hour', 'minute']):
+    for (seg, dow, hr, mn), g in df.groupby(['segment', 'dow', 'hour', 'minute']):
         if len(g) >= CORRECTION_MIN_N:
-            correction[(int(ib), int(dow), int(hr), int(mn))] = g['residual'].mean()
+            correction[(seg, int(dow), int(hr), int(mn))] = g['residual'].mean()
 
     n_cells = len(correction)
-    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (is_break, dow, hour, minute) cells")
+    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (segment, dow, hour, minute) cells")
     return correction
 
 
-def compute_predictions(rf, correction, days=91):
+def compute_predictions(table, correction, days=91):
     """Build (slot_ts ISO string, pct) for every open 15-min slot over the next N days."""
-    timestamps = []
-    slot_ts    = []
+    slot_ts, dates_slots, segments, dows, hours, minutes = [], [], [], [], [], []
 
     for offset in range(days):
         d        = now.date() + timedelta(days=offset)
         day_name = pd.Timestamp(d).day_name()
         open_h, close_h = get_open_hours(day_name, d)
+        dow     = d.weekday()
+        segment = _correction_segment(classify_date(d))
         for h in range(open_h, close_h):
             for m in (0, 15, 30, 45):
                 # Store as PT-aware ISO timestamp for Supabase TIMESTAMPTZ
                 dt = datetime(d.year, d.month, d.day, h, m, tzinfo=PT)
                 slot_ts.append(dt.isoformat())
-                timestamps.append(pd.Timestamp(f'{d} {h:02d}:{m:02d}'))
+                dates_slots.append((d, h * 4 + m // 15))
+                segments.append(segment)
+                dows.append(dow)
+                hours.append(h)
+                minutes.append(m)
 
-    df = pd.DataFrame({
-        'timestamp':    timestamps,
-        'people_count': [100] * len(timestamps),
-        'percent_full': [66.7] * len(timestamps),
-    })
-
-    print(f"  Engineering features for {len(df):,} slots...")
-    X, _ = engineer_features(df)
-
-    preds    = rf.predict(X)
-    is_break = X['is_break'].values.astype(int)
-    dow      = df['timestamp'].dt.dayofweek.values
-    hour     = df['timestamp'].dt.hour.values
-    minute   = df['timestamp'].dt.minute.values
+    print(f"  Predicting {len(dates_slots):,} slots from curve table...")
+    preds = cm.predict(table, dates_slots)
 
     records = []
-    for ts, p, ib, dw, hr, mn in zip(slot_ts, preds, is_break, dow, hour, minute):
+    for ts, p, seg, dw, hr, mn in zip(slot_ts, preds, segments, dows, hours, minutes):
+        if p != p:  # NaN -> no curve matched this (phase, dow, slot)
+            continue
         if hr >= CORRECTION_HOUR_MIN:
-            p += correction.get((ib, dw, hr, mn), 0.0)
+            p += correction.get((seg, dw, hr, mn), 0.0)
         records.append({
             "slot_ts": ts,
             "pct":     round(min(max(float(p), 0.0), 100.0), 1),
@@ -148,14 +176,14 @@ def compute_predictions(rf, correction, days=91):
 
 
 def main():
-    print("Loading model...")
-    rf = load_model()
+    print("Loading curve table...")
+    table = load_curves()
 
     print("Building evening correction table...")
-    correction = build_evening_correction(rf)
+    correction = build_evening_correction(table)
 
     print("Computing predictions (today + 90 days)...")
-    records = compute_predictions(rf, correction, days=91)
+    records = compute_predictions(table, correction, days=91)
     print(f"  {len(records):,} slots computed")
 
     print("Upserting to Supabase predictions table...")
