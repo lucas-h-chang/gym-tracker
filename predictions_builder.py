@@ -164,6 +164,40 @@ def main():
         sb.table("predictions").upsert(batch, on_conflict="slot_ts").execute()
         print(f"  Upserted {min(i + BATCH_SIZE, len(records))}/{len(records)}")
 
+    # Purge stale in-horizon rows: upsert only ever adds/overwrites slots we generate
+    # today, it never removes ones from an earlier run whose open/close hours no
+    # longer match (e.g. a date that used to be generated with academic-year hours
+    # and is now correctly summer-hours-only keeps its old post-close rows forever
+    # otherwise). Diff today's generated slot set against what's actually in the
+    # table over the same horizon and delete anything left over.
+    horizon_start = datetime(now.year, now.month, now.day, 0, 0, tzinfo=PT)
+    horizon_end   = horizon_start + timedelta(days=91)
+    generated_instants = {datetime.fromisoformat(r["slot_ts"]) for r in records}
+
+    existing, offset = [], 0
+    while True:
+        batch = (
+            sb.table("predictions")
+            .select("slot_ts")
+            .gte("slot_ts", horizon_start.isoformat())
+            .lt("slot_ts", horizon_end.isoformat())
+            .range(offset, offset + 8999)
+            .execute()
+            .data
+        )
+        existing.extend(batch)
+        if len(batch) < 9000:
+            break
+        offset += 9000
+
+    stale = [
+        r["slot_ts"] for r in existing
+        if datetime.fromisoformat(r["slot_ts"]) not in generated_instants
+    ]
+    for i in range(0, len(stale), BATCH_SIZE):
+        sb.table("predictions").delete().in_("slot_ts", stale[i:i + BATCH_SIZE]).execute()
+    print(f"  Purged {len(stale)} stale in-horizon rows")
+
     # Purge stale far-future rows left over from when we generated 180 days, so the
     # table stays bounded to the ~90-day horizon we now compute. The +93-day margin sits
     # beyond the clients' +92-day fetch bound, so this can never delete a slot that's
