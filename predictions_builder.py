@@ -43,9 +43,12 @@ def get_open_hours(day_name, d):
     return 7, (20 if summer else 23)
 
 
-CORRECTION_DAYS     = 28   # trailing window for residual computation
-CORRECTION_MIN_N    = 3    # min observations per (segment, dow, hour, minute) cell to apply correction
-CORRECTION_HOUR_MIN = 17   # only correct evening slots (5 PM onwards)
+CORRECTION_DAYS       = 28   # trailing window for residual computation
+CORRECTION_MIN_N      = 3    # min observations per (segment, regime, dow, hour, minute) cell to apply correction
+CORRECTION_HOUR_MIN   = 17   # only correct evening slots (5 PM onwards)
+CORRECTION_DECAY_HALFLIFE = 7  # days; residual weight = 0.5^(horizon/halflife), so the
+                               # 28-day-trailing nowcast only moves the near-term days it
+                               # can actually track and fades to the base curve far out.
 
 
 def load_curves():
@@ -75,19 +78,48 @@ def _correction_segment(phase):
 def build_evening_correction(table):
     """
     Fetch the last CORRECTION_DAYS days of actuals, re-predict with the curve
-    table, and return a dict keyed by (segment, dow, hour, minute) → mean
-    residual (pp), where segment = _correction_segment(phase). This is the
-    curve model's own trailing-residual nowcast -- same mechanism the RF
-    pipeline used (see git history), ported to correct
-    the curve model's baseline instead so we get both the curve model's
-    structurally-correct shape (no closed-hours extrapolation, no pooled-break
-    averaging -- see academic_calendar.classify_date) and RF's ability to
-    track "this stretch is running hotter/cooler than the multi-year average"
-    (halflife_days=365 makes the raw curve far too slow to pick that up on
-    its own). See _correction_segment() for why the correction uses a
-    coarser segment than the baseline curve's own phase. minute is rounded
-    to the nearest 15-min boundary (0/15/30/45) so scraped timestamps (which
-    land off-quarter) align with the prediction slots.
+    table, and return a dict keyed by (segment, regime, dow, hour, minute) →
+    mean residual (pp), where segment = _correction_segment(phase) and
+    regime = is_summer_day(date) (summer closes at 8pm, academic-year closes
+    at 11pm on weekdays/Sunday). This is the curve model's own
+    trailing-residual nowcast -- same mechanism the RF pipeline used (see git
+    history), ported to correct the curve model's baseline instead so we get
+    both the curve model's structurally-correct shape (no closed-hours
+    extrapolation, no pooled-break averaging -- see
+    academic_calendar.classify_date) and RF's ability to track "this stretch
+    is running hotter/cooler than the multi-year average" (halflife_days=365
+    makes the raw curve far too slow to pick that up on its own). See
+    _correction_segment() for why the correction uses a coarser segment than
+    the baseline curve's own phase.
+
+    regime is in the key on both sides (built here off each source row's own
+    date, applied in compute_predictions off each target slot's date) so a
+    summer-hours residual can never correct an academic-hours target or vice
+    versa -- without this, a trailing window that's entirely summer (e.g.
+    the whole of July) stamps summer's ~8pm closing-crash residual onto an
+    academic-hours target day that's still open until 11pm, producing a
+    sharp unnatural dip at 7:45pm followed by a jump back to baseline at 8pm
+    where no summer correction data exists. When a target's regime has no
+    matching trailing-window data at all (e.g. an academic-hours target
+    whose entire trailing window is summer), the correction dict simply has
+    no cells for that regime and compute_predictions falls back cleanly to
+    the base curve for those slots.
+
+    No closing-slot trimming: the pre-close emptying-out (e.g. summer's ~40%
+    at 7:45pm before the 8pm close) is real, regime-specific signal the
+    halflife-365 base curve misses (it averages in busy academic-year
+    evenings), and the regime key already keeps it from reaching an
+    academic-hours target -- so it is kept, not discarded.
+
+    The magnitude fade with forecast horizon is applied at prediction time
+    (see compute_predictions / CORRECTION_DECAY_HALFLIFE), not here: a
+    trailing-28-day residual tracks "this stretch is running hot/cool" only
+    for the next ~week (verified by backtest: the flat correction improved
+    day 1-7 evenings but added noise from day ~15 out, dragging the 90-day
+    average below the raw base curve).
+
+    minute is rounded to the nearest 15-min boundary (0/15/30/45) so scraped
+    timestamps (which land off-quarter) align with the prediction slots.
     """
     lo = (now - timedelta(days=CORRECTION_DAYS)).isoformat()
     hi = now.isoformat()
@@ -123,24 +155,25 @@ def build_evening_correction(table):
     df['minute'] = (df['timestamp'].dt.minute // 15) * 15  # round to 0/15/30/45
     df['slot']   = df['hour'] * 4 + df['minute'] // 15
     df['segment'] = df['date'].map(classify_date).map(_correction_segment)
+    df['regime'] = df['date'].map(is_summer_day)
 
     df['curve_pred'] = cm.predict(table, list(zip(df['date'], df['slot'])))
     df = df.dropna(subset=['curve_pred']).reset_index(drop=True)
     df['residual'] = df['percent_full'] - df['curve_pred']
 
     correction = {}
-    for (seg, dow, hr, mn), g in df.groupby(['segment', 'dow', 'hour', 'minute']):
+    for (seg, rg, dow, hr, mn), g in df.groupby(['segment', 'regime', 'dow', 'hour', 'minute']):
         if len(g) >= CORRECTION_MIN_N:
-            correction[(seg, int(dow), int(hr), int(mn))] = g['residual'].mean()
+            correction[(seg, rg, int(dow), int(hr), int(mn))] = g['residual'].mean()
 
     n_cells = len(correction)
-    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (segment, dow, hour, minute) cells")
+    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (segment, regime, dow, hour, minute) cells")
     return correction
 
 
 def compute_predictions(table, correction, days=91):
     """Build (slot_ts ISO string, pct) for every open 15-min slot over the next N days."""
-    slot_ts, dates_slots, segments, dows, hours, minutes = [], [], [], [], [], []
+    slot_ts, dates_slots, segments, regimes, dows, hours, minutes, horizons = [], [], [], [], [], [], [], []
 
     for offset in range(days):
         d        = now.date() + timedelta(days=offset)
@@ -148,6 +181,7 @@ def compute_predictions(table, correction, days=91):
         open_h, close_h = get_open_hours(day_name, d)
         dow     = d.weekday()
         segment = _correction_segment(classify_date(d))
+        regime  = is_summer_day(d)
         for h in range(open_h, close_h):
             for m in (0, 15, 30, 45):
                 # Store as PT-aware ISO timestamp for Supabase TIMESTAMPTZ
@@ -155,19 +189,24 @@ def compute_predictions(table, correction, days=91):
                 slot_ts.append(dt.isoformat())
                 dates_slots.append((d, h * 4 + m // 15))
                 segments.append(segment)
+                regimes.append(regime)
                 dows.append(dow)
                 hours.append(h)
                 minutes.append(m)
+                horizons.append(offset)  # days from today, for correction decay
 
     print(f"  Predicting {len(dates_slots):,} slots from curve table...")
     preds = cm.predict(table, dates_slots)
 
     records = []
-    for ts, p, seg, dw, hr, mn in zip(slot_ts, preds, segments, dows, hours, minutes):
+    for ts, p, seg, rg, dw, hr, mn, hz in zip(slot_ts, preds, segments, regimes, dows, hours, minutes, horizons):
         if p != p:  # NaN -> no curve matched this (phase, dow, slot)
             continue
         if hr >= CORRECTION_HOUR_MIN:
-            p += correction.get((seg, dw, hr, mn), 0.0)
+            # Decay the nowcast residual toward 0 as the forecast horizon grows:
+            # it tracks the current hot/cool stretch for ~a week, not 3 months out.
+            decay = 0.5 ** (hz / CORRECTION_DECAY_HALFLIFE)
+            p += decay * correction.get((seg, rg, dw, hr, mn), 0.0)
         records.append({
             "slot_ts": ts,
             "pct":     round(min(max(float(p), 0.0), 100.0), 1),
