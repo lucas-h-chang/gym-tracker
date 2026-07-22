@@ -59,7 +59,12 @@ def main():
         )
 
     print("Building curve table...")
-    table = cm.build_table(slots, cm.DEFAULT_PARAMS)
+    # week_levels opt-in: differentiate weeks-of-semester within a phase (esp.
+    # the long 'regular' phase, where early-Sept and late-Oct were previously
+    # one identical curve). Validated on holdout: overall MAE 8.98->8.69,
+    # morning 7-9am 8.02->7.02, good-day rate 10.6%->12.6%. DEFAULT_PARAMS keeps
+    # it off so the backtest baseline / other callers are unaffected.
+    table = cm.build_table(slots, {**cm.DEFAULT_PARAMS, "week_levels": True})
     n_curves = len(table['curves'])
     print(f"  Built {n_curves} (phase, dow) curves")
 

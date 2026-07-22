@@ -1,10 +1,13 @@
 {
-  "built_at": "2026-07-21T21:56:23.590841",
+  "built_at": "2026-07-21T19:19:40.896139",
   "params": {
     "halflife_days": 365,
     "shrink_k": 3,
     "smooth_window": 3,
-    "blend_window_days": 5
+    "blend_window_days": 5,
+    "week_levels": true,
+    "week_cap": 9,
+    "week_smooth_window": 3
   },
   "distinct_days": 1900,
   "date_range": "2021-01-05 -> 2026-07-21",

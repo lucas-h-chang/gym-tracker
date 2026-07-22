@@ -13,15 +13,26 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end
+from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, SEM_STARTS
 
 MAX_CAPACITY = 150
+
+# Weeks-since-semester-start axis (experimental, see week-of-semester
+# backtest in the scratchpad dir). Capped at WEEK_CAP because regular-phase
+# occupancy decay plateaus around week 9 — weeks 9+ pool into one bucket
+# rather than each getting their own (increasingly thin) cell.
+WEEK_CAP = 9
+WEEK_SENTINEL = -1
 
 DEFAULT_PARAMS = {
     "halflife_days": 365,
     "shrink_k": 3,
     "smooth_window": 3,
     "blend_window_days": 5,
+    # Week-of-semester backoff level (OFF by default — see build_table).
+    "week_levels": False,
+    "week_cap": WEEK_CAP,
+    "week_smooth_window": 3,
 }
 # Tuned via backtest.py grid search over halflife_days [120,180,365] x
 # shrink_k [3,7,15] x smooth_window [1,3,5] x blend_window_days [5,7,10] on
@@ -50,7 +61,37 @@ def _as_date(d):
     return d.date() if hasattr(d, "date") else d
 
 
-def prepare_slots(df):
+def week_of_sem(d, phase, cap=WEEK_CAP):
+    """
+    Weeks since the most recently started semester (academic_calendar.SEM_STARTS),
+    capped at `cap` so week `cap`+ pools into one plateau bucket (the observed
+    regular-phase decay is smooth/monotonic from week 1 to ~week 9, then flat).
+
+    Returns WEEK_SENTINEL when "week of semester" isn't a meaningful axis for
+    this row: break phases (winter_break/spring_break/summer_break_<M>, where
+    the gym is off the academic calendar entirely) or dates with no preceding
+    recorded semester start. Every row in a sentinel-eligible phase gets the
+    same bucket, so the (phase, dow, week_bucket, slot) backoff level in
+    build_table collapses to one group there — identical to the
+    (phase, dow, slot) parent, i.e. no spurious splitting.
+
+    Fall and spring are intentionally pooled (not kept separate): both show
+    the same decay shape, so pooling gives each week bucket more data.
+    """
+    d = _as_date(d)
+    if phase in ("winter_break", "spring_break") or phase.startswith("summer_break_"):
+        return WEEK_SENTINEL
+    past_starts = [s for s in SEM_STARTS if s <= d]
+    if not past_starts:
+        return WEEK_SENTINEL
+    start = max(past_starts)
+    weeks = (d - start).days // 7
+    if weeks < 0:
+        return WEEK_SENTINEL
+    return min(weeks, cap)
+
+
+def prepare_slots(df, week_cap=WEEK_CAP):
     """
     df: raw capacity_log rows with 'timestamp' (naive PT, tz already stripped —
     see train.py::parse_supabase_timestamps) and 'people_count'.
@@ -69,6 +110,9 @@ def prepare_slots(df):
     collapsed['dow'] = collapsed['date'].dt.dayofweek
     collapsed['is_weekend'] = (collapsed['dow'] >= 5).astype(int)
     collapsed['phase'] = collapsed['date'].apply(lambda d: classify_date(d.date()))
+    collapsed['week_of_sem'] = [
+        week_of_sem(d, p, week_cap) for d, p in zip(collapsed['date'], collapsed['phase'])
+    ]
     return collapsed
 
 
@@ -192,6 +236,93 @@ def build_table(df, params=None, build_date=None, built_at=None):
             "n_eff":      grp['n_eff'].round(2).tolist(),
         }
 
+    # ── Optional week-of-semester backoff level: (phase, dow, week_bucket,
+    #    slot), shrunk toward the (phase, dow, slot) level (l3_full's m_hat/
+    #    s_hat, pre-slot-smoothing — same convention as L1→L0→L2→L3, which
+    #    all shrink toward their parent's *unsmoothed* shrunk value and only
+    #    smooth once, at the end, for the level actually being published).
+    #    OFF by default, so a table built with week_levels=False is byte-for-
+    #    byte identical to the pre-week-levels table (nothing above this
+    #    block changes, and `curves` is only ever added to, never mutated).
+    if p['week_levels']:
+        week_col = 'week_of_sem'
+        if week_col not in df.columns:
+            raise ValueError(
+                "week_levels=True requires df to include a 'week_of_sem' "
+                "column — pass week_cap to prepare_slots() to get one."
+            )
+
+        l4 = _weighted_agg(df, ['phase', 'dow', week_col, 'slot'])
+        l3_parent = l3_full[['phase', 'dow', 'slot', 'm_hat', 's_hat']].rename(
+            columns={'m_hat': 'p_mean', 's_hat': 'p_std'})
+        l4 = l4.merge(l3_parent, on=['phase', 'dow', 'slot'], how='left')
+        l4['m_hat'], l4['s_hat'] = _shrink(
+            l4['n_eff'], l4['mean'], l4['std'], l4['p_mean'], l4['p_std'], k)
+
+        # Smooth across adjacent WEEK buckets (fixed phase/dow/slot) — adjacent
+        # weeks share a smooth decay, so borrowing strength from neighbors
+        # reduces per-week-bucket noise without erasing the trend. Mirrors the
+        # across-slot smoothing above: applied to m_hat only, after shrinkage.
+        wwindow = p['week_smooth_window']
+        smoothed_parts = []
+        for _, grp in l4.groupby(['phase', 'dow', 'slot']):
+            grp = grp.sort_values(week_col)
+            sm = (grp['m_hat'].rolling(window=wwindow, center=True, min_periods=1).mean()
+                  if wwindow > 1 else grp['m_hat'])
+            smoothed_parts.append(grp.assign(m_smoothed=sm))
+        l4 = pd.concat(smoothed_parts, ignore_index=True) if smoothed_parts else l4.assign(m_smoothed=l4['m_hat'])
+
+        # ALSO smooth across SLOT within each (phase, dow, week_bucket), using
+        # the *same* smooth_window/formula as the published (phase, dow) curve
+        # above. This isn't optional: without it, any week bucket — including
+        # a phase's single sentinel/trivial bucket (break phases, first_week,
+        # etc., which are supposed to just reproduce their parent curve
+        # unsplit) — would surface RAW (unsmoothed) per-slot estimates instead
+        # of the smoothed ones, silently changing predictions for phases that
+        # were never meant to differ. Applying the identical slot-smoothing
+        # here means a trivial (single-bucket) week curve is byte-identical to
+        # its parent curve, and only genuinely multi-bucket phases (regular)
+        # end up differing.
+        slot_smoothed_parts = []
+        for _, grp in l4.groupby(['phase', 'dow', week_col]):
+            grp = grp.sort_values('slot')
+            sm = (grp['m_smoothed'].rolling(window=window, center=True, min_periods=1).mean()
+                  if window > 1 else grp['m_smoothed'])
+            slot_smoothed_parts.append(grp.assign(m_smoothed=sm))
+        l4 = pd.concat(slot_smoothed_parts, ignore_index=True) if slot_smoothed_parts else l4
+
+        for (phase, dow), grp in l4.groupby(['phase', 'dow']):
+            key = f"{phase}|{dow}"
+            if key not in curves:
+                continue  # defensive: L4's (phase,dow) universe is always <= L3's
+
+            # A curve with only one distinct week bucket across ALL its slots
+            # (every break phase, by construction of week_of_sem's sentinel;
+            # typically first_week too, since it's always exactly week 0) has
+            # nothing to split on. Skip building a "weeks" sub-table for it
+            # entirely rather than computing one via the shrink pipeline: L4's
+            # raw support would exactly equal L3's raw support for that cell,
+            # and shrinking that same raw signal a second time toward the
+            # already-shrunk L3 value does NOT mathematically reproduce L3
+            # (it double-applies the pull toward L2). Omitting "weeks" here
+            # instead means predict_one's existing fallback kicks in, which
+            # *is* guaranteed byte-identical to the parent curve — satisfying
+            # "sentinel-bucket rows just reproduce their parent curve" exactly
+            # rather than approximately.
+            if grp[week_col].nunique() <= 1:
+                continue
+
+            weeks = {}
+            for wb, g in grp.groupby(week_col):
+                g = g.sort_values('slot')
+                weeks[str(int(wb))] = {
+                    "slot_index": g['slot'].astype(int).tolist(),
+                    "mean":       g['m_smoothed'].round(3).tolist(),
+                    "std":        g['s_hat'].round(3).tolist(),
+                    "n_eff":      g['n_eff'].round(2).tolist(),
+                }
+            curves[key]["weeks"] = weeks
+
     return {
         "version": 1,
         "built_at": built_at or datetime.now().isoformat(),
@@ -249,11 +380,22 @@ def _lookup_slot(curve, slot):
 
 
 def predict_one(table, d, slot, blend_window_days=None):
-    """Returns (mean, std) blended across soft phase weights, or (None, None) if no curve matches."""
+    """Returns (mean, std) blended across soft phase weights, or (None, None) if no curve matches.
+
+    When the table was built with week_levels=True, each phase term first
+    tries the finer (phase, dow, week_bucket) curve for d's week-of-semester
+    bucket, falling back to the week-agnostic (phase, dow) curve when that
+    bucket is missing or has no data for this slot. Tables built with
+    week_levels=False (the default) carry no "weeks" sub-table at all, so
+    this is a no-op and behavior is identical to before week levels existed.
+    """
     d = _as_date(d)
     dow = d.weekday()
+    params = table.get("params", {})
     if blend_window_days is None:
-        blend_window_days = table.get("params", {}).get("blend_window_days")
+        blend_window_days = params.get("blend_window_days")
+    week_levels_on = params.get("week_levels", False)
+    week_cap = params.get("week_cap", WEEK_CAP)
     weights = phase_weights(d, blend_window_days)
     curves = table["curves"]
 
@@ -262,9 +404,18 @@ def predict_one(table, d, slot, blend_window_days=None):
         curve = curves.get(f"{phase}|{dow}")
         if curve is None:
             continue
-        m, s = _lookup_slot(curve, slot)
+
+        m, s = None, None
+        if week_levels_on and curve.get("weeks"):
+            wb = week_of_sem(d, phase, week_cap)
+            wk_curve = curve["weeks"].get(str(wb))
+            if wk_curve is not None:
+                m, s = _lookup_slot(wk_curve, slot)
+        if m is None:
+            m, s = _lookup_slot(curve, slot)
         if m is None:
             continue
+
         mean_acc += w * m
         std_acc += w * s
         total_w += w
