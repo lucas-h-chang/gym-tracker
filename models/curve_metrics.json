@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-07-21T19:19:40.896139",
+  "built_at": "2026-07-22T02:58:37.748726",
   "params": {
     "halflife_days": 365,
     "shrink_k": 3,
@@ -56,7 +56,7 @@
     "summer_break_7": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 6.87
+      "median_n_eff": 6.95
     },
     "summer_break_8": {
       "cells": 440,
