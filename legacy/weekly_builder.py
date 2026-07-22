@@ -5,32 +5,28 @@ Runs daily at midnight PT via daily.yml.
 import os
 import numpy as np
 import pandas as pd
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
+
+from academic_calendar import (
+    is_summer_day,
+    get_open_hours,
+    is_semester_day,
+)
+from supabase_io import paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
-SPRING_BREAKS = [
-    ('2021-03-20', '2021-03-28'),
-    ('2022-03-19', '2022-03-27'),
-    ('2023-03-25', '2023-04-02'),
-    ('2024-03-23', '2024-03-31'),
-    ('2025-03-22', '2025-03-30'),
-    ('2026-03-21', '2026-03-29'),
-    ('2027-03-20', '2027-03-28'),
-    ('2028-03-25', '2028-04-02'),
-]
-
-SUMMER_RANGES = [
-    (date(2024, 5, 10), date(2024, 8, 24)),
-    (date(2025, 5, 16), date(2025, 8, 23)),
-    (date(2026, 5, 15), date(2026, 8, 22)),
-    (date(2027, 5, 14), date(2027, 8, 21)),
-]
+# SPRING_BREAKS/SUMMER_RANGES/is_summer_day/get_open_hours/is_semester_day live
+# in academic_calendar.py (consolidated 2026-07-21 — see CLAUDE.md). SPRING_BREAKS
+# is now the same SPRING_BREAK_RANGES date-tuple list used elsewhere in the
+# codebase (aliased so the rest of this file's `pd.Timestamp(start)` calls below
+# are unchanged — pd.Timestamp accepts a date object exactly as it accepted the
+# original ISO strings).
 
 RANGE_TYPE_MAP = {
     'last_week':       timedelta(days=7),
@@ -44,30 +40,6 @@ RANGE_TYPE_MAP = {
 BATCH_SIZE = 500
 
 
-def is_summer_day(d):
-    return any(s <= d <= e for s, e in SUMMER_RANGES)
-
-
-def get_open_hours(day_name, d):
-    summer = is_summer_day(d)
-    if day_name == 'Saturday':
-        return 8, 18
-    if day_name == 'Sunday':
-        return 8, (20 if summer else 23)
-    return 7, (20 if summer else 23)
-
-
-def is_semester_day(d):
-    month, dom = d.month, d.day
-    is_summer = month in [6, 7, 8]
-    is_winter = (month == 12 and dom >= 16) or (month == 1 and dom <= 12)
-    is_sb = any(
-        pd.Timestamp(s).date() <= d <= pd.Timestamp(e).date()
-        for s, e in SPRING_BREAKS
-    )
-    return not (is_summer or is_winter or is_sb)
-
-
 def get_semester_start(today):
     d = today
     while is_semester_day(d):
@@ -77,24 +49,7 @@ def get_semester_start(today):
 
 def fetch_all_history():
     """Fetch all capacity_log from Supabase (paginated)."""
-    BATCH  = 9000
-    offset = 0
-    rows   = []
-    while True:
-        batch = (
-            sb.table("capacity_log")
-            .select("timestamp,percent_full")
-            .range(offset, offset + BATCH - 1)
-            .order("timestamp")
-            .execute()
-            .data
-        )
-        rows.extend(batch)
-        if len(batch) < BATCH:
-            break
-        offset += BATCH
-        print(f"  Fetched {len(rows):,} rows...")
-    return rows
+    return paginated_fetch(sb, "capacity_log", "timestamp,percent_full", order="timestamp")
 
 
 def compute_weekly_averages(df):
@@ -127,19 +82,14 @@ def compute_weekly_averages(df):
 
         for semester_only in [True, False]:
             if semester_only:
-                month     = range_df['timestamp'].dt.month
-                dom       = range_df['timestamp'].dt.day
-                date_only = range_df['timestamp'].dt.date
-
-                is_summer = month.isin([6, 7, 8])
-                is_winter = ((month == 12) & (dom >= 16)) | ((month == 1) & (dom <= 12))
-                is_sb     = np.zeros(len(range_df), dtype=bool)
-                for start, end in SPRING_BREAKS:
-                    is_sb |= (
-                        (date_only >= pd.Timestamp(start).date()) &
-                        (date_only <= pd.Timestamp(end).date())
-                    )
-                filtered = range_df[~(is_summer | is_winter | is_sb)]
+                # Precise in-session gate: is_semester_day uses the exact
+                # academic-calendar break ranges, not month cutoffs, so
+                # first-week-of-fall and the semester-boundary days are kept
+                # instead of being dropped as "summer/winter". Classify each
+                # distinct date once, then map back onto the rows.
+                date_only   = range_df['timestamp'].dt.date
+                sem_by_date = {dd: is_semester_day(dd) for dd in date_only.unique()}
+                filtered    = range_df[date_only.map(sem_by_date)]
             else:
                 filtered = range_df
 
@@ -208,6 +158,14 @@ def main():
     records = compute_weekly_averages(df)
     print(f"  {len(records):,} records computed")
 
+    # Truncate-then-insert. This intentionally does NOT use upsert(on_conflict=...):
+    # that would require (day_of_week, hour_slot, range_type, semester_only) to be a
+    # declared unique constraint in Postgres, which is not defined anywhere in this
+    # repo and could not be verified against the live DB. If that constraint is
+    # missing, an upsert errors at runtime and this daily job silently stops updating
+    # (weekly_averages is not covered by freshness.yml). The brief empty-table window
+    # at midnight is the accepted cost of not depending on an unverified constraint.
+    # To switch to upsert-then-purge, first confirm/add that unique constraint.
     print("Truncating weekly_averages table...")
     sb.table("weekly_averages").delete().neq("day_of_week", "").execute()
 

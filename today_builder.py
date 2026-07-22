@@ -2,9 +2,14 @@
 today_builder.py — compute similarity-based predictions for today → Supabase today_summary.
 Runs every 15 min alongside scraper.py.
 
-Reads pre-aggregated candidate day profiles from the `day_profiles` table (built once/day by
-day_profiles_builder.py) instead of re-downloading the full capacity_log every run — ~0.3 MB/run vs
-~10 MB (Finding E). Only today's own rows are fetched live, for the fingerprint.
+Reads pre-aggregated candidate day profiles from `day_profiles` instead of re-downloading the
+full capacity_log every run — ~0.3 MB/run vs ~10 MB (Finding E). Only today's own rows are
+fetched live, for the fingerprint.
+
+`day_profiles` is now a live Postgres VIEW over capacity_log (see migrations/002_day_profiles_view.sql),
+not a table built once/day by day_profiles_builder.py (moved to legacy/ — kept only as the
+reference the view SQL was translated from). fetch_candidates()'s server-side filters are
+unchanged since the view exposes identical columns.
 """
 import os
 import numpy as np
@@ -12,6 +17,9 @@ import pandas as pd
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
+
+from academic_calendar import is_summer_day, get_open_hours, is_semester_day
+from supabase_io import paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
@@ -22,47 +30,8 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"
 # Shared with day_profiles_builder.py (and, later, train.py via T20) — keep in sync.
 DATA_CUTOFF = date(2022, 1, 1)
 
-SPRING_BREAKS = [
-    ('2021-03-20', '2021-03-28'),
-    ('2022-03-19', '2022-03-27'),
-    ('2023-03-25', '2023-04-02'),
-    ('2024-03-23', '2024-03-31'),
-    ('2025-03-22', '2025-03-30'),
-    ('2026-03-21', '2026-03-29'),
-    ('2027-03-20', '2027-03-28'),
-    ('2028-03-25', '2028-04-02'),
-]
-
-SUMMER_RANGES = [
-    (date(2024, 5, 10), date(2024, 8, 24)),
-    (date(2025, 5, 16), date(2025, 8, 23)),
-    (date(2026, 5, 15), date(2026, 8, 22)),
-    (date(2027, 5, 14), date(2027, 8, 21)),
-]
-
-
-def is_summer_day(d):
-    return any(s <= d <= e for s, e in SUMMER_RANGES)
-
-
-def get_open_hours(day_name, d):
-    summer = is_summer_day(d)
-    if day_name == 'Saturday':
-        return 8, 18
-    if day_name == 'Sunday':
-        return 8, (20 if summer else 23)
-    return 7, (20 if summer else 23)
-
-
-def is_semester_day(d):
-    month, dom = d.month, d.day
-    is_summer = month in [6, 7, 8]
-    is_winter = (month == 12 and dom >= 16) or (month == 1 and dom <= 12)
-    is_sb = any(
-        pd.Timestamp(s).date() <= d <= pd.Timestamp(e).date()
-        for s, e in SPRING_BREAKS
-    )
-    return not (is_summer or is_winter or is_sb)
+# SPRING_BREAKS/SUMMER_RANGES/is_summer_day/get_open_hours/is_semester_day live
+# in academic_calendar.py (consolidated 2026-07-21 — see CLAUDE.md).
 
 
 def _pt_iso(d, t):
@@ -129,23 +98,17 @@ def fetch_candidates():
 
 def fetch_history_fallback():
     """Full capacity_log from DATA_CUTOFF (paginated). Used only if day_profiles is
-    empty (e.g. before the first backfill), so a rollout gap can't blank the nowcast."""
-    BATCH, offset, rows = 9000, 0, []
-    while True:
-        batch = (
-            sb.table("capacity_log")
-            .select("timestamp,percent_full")
-            .gte("timestamp", _pt_iso(DATA_CUTOFF, time.min))
-            .range(offset, offset + BATCH - 1)
-            .order("timestamp")
-            .execute()
-            .data
-        )
-        rows.extend(batch)
-        if len(batch) < BATCH:
-            break
-        offset += BATCH
-    return rows
+    empty (e.g. before the first backfill), so a rollout gap can't blank the nowcast.
+
+    Effectively dead code now that day_profiles is a live view over capacity_log
+    (migrations/002_day_profiles_view.sql) — it always returns rows for any date with
+    data, so fetch_candidates() should never come back empty in normal operation.
+    Left in place as a defensive fallback (e.g. a transient view/permissions error)
+    rather than removed."""
+    return paginated_fetch(
+        sb, "capacity_log", "timestamp,percent_full",
+        gte=_pt_iso(DATA_CUTOFF, time.min), order="timestamp",
+    )
 
 
 # ---------------------------------------------------------------------------

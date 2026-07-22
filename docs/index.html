@@ -660,23 +660,40 @@ function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
 
+// In-session = NOT inside a winter/spring/summer break range. Mirrors
+// academic_calendar.py::is_semester_day (BREAK_RANGES) exactly, using the same
+// precise academic-calendar break dates rather than blunt month cutoffs, so the
+// client picks the same semester_only weekly curve the server computed. These
+// three lists must stay in sync with WINTER_BREAK_RANGES / SPRING_BREAK_RANGES /
+// SUMMER_BREAK_RANGES in academic_calendar.py (and the Swift copy in
+// TimeUtils.swift) when a year is added.
 function isSemesterDay(date) {
-  const pt    = new Date((date || new Date()).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-  const month = pt.getMonth() + 1;
-  const dom   = pt.getDate();
-  if (month >= 6 && month <= 8)          return false;
-  if (month === 12 && dom >= 16)         return false;
-  if (month === 1  && dom <= 12)         return false;
+  const pt = new Date((date || new Date()).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   const ds = pt.toLocaleDateString('en-CA');
   const breaks = [
+    // winter
+    ['2020-12-18','2021-01-18'], ['2021-12-17','2022-01-17'],
+    ['2022-12-16','2023-01-16'], ['2023-12-15','2024-01-15'],
+    ['2024-12-20','2025-01-20'], ['2025-12-19','2026-01-19'],
+    ['2026-12-18','2027-01-18'], ['2027-12-17','2028-01-17'],
+    // spring
     ['2021-03-20','2021-03-28'], ['2022-03-19','2022-03-27'],
     ['2023-03-25','2023-04-02'], ['2024-03-23','2024-03-31'],
     ['2025-03-22','2025-03-30'], ['2026-03-21','2026-03-29'],
     ['2027-03-20','2027-03-28'], ['2028-03-25','2028-04-02'],
+    // summer
+    ['2021-05-14','2021-08-24'], ['2022-05-13','2022-08-23'],
+    ['2023-05-12','2023-08-22'], ['2024-05-10','2024-08-27'],
+    ['2025-05-16','2025-08-26'], ['2026-05-15','2026-08-25'],
+    ['2027-05-14','2027-08-24'],
   ];
   return !breaks.some(([s, e]) => ds >= s && ds <= e);
 }
 
+// Manual JS mirror of academic_calendar.py's SUMMER_RANGES (Python consolidated
+// there 2026-07-21 — see CLAUDE.md). This frontend copy and RSFApp2.0's
+// TimeUtils.swift are NOT auto-generated from the Python source; keep all
+// three in sync by hand when adding a new year.
 const SUMMER_RANGES = [
   ['2024-05-10','2024-08-24'], ['2025-05-16','2025-08-23'],
   ['2026-05-15','2026-08-22'], ['2027-05-14','2027-08-21'],

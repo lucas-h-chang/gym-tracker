@@ -14,9 +14,11 @@ import os
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-import numpy as np
 import pandas as pd
 from supabase import create_client
+
+from academic_calendar import is_semester_day
+from supabase_io import paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
@@ -29,27 +31,8 @@ DATA_CUTOFF = date(2022, 1, 1)
 
 BATCH_SIZE = 500
 
-SPRING_BREAKS = [
-    ('2021-03-20', '2021-03-28'),
-    ('2022-03-19', '2022-03-27'),
-    ('2023-03-25', '2023-04-02'),
-    ('2024-03-23', '2024-03-31'),
-    ('2025-03-22', '2025-03-30'),
-    ('2026-03-21', '2026-03-29'),
-    ('2027-03-20', '2027-03-28'),
-    ('2028-03-25', '2028-04-02'),
-]
-
-
-def is_semester_day(d):
-    month, dom = d.month, d.day
-    is_summer = month in [6, 7, 8]
-    is_winter = (month == 12 and dom >= 16) or (month == 1 and dom <= 12)
-    is_sb = any(
-        pd.Timestamp(s).date() <= d <= pd.Timestamp(e).date()
-        for s, e in SPRING_BREAKS
-    )
-    return not (is_summer or is_winter or is_sb)
+# SPRING_BREAKS/is_semester_day live in academic_calendar.py (consolidated
+# 2026-07-21 — see CLAUDE.md).
 
 
 def _pt_iso(d, t):
@@ -59,24 +42,10 @@ def _pt_iso(d, t):
 
 def fetch_rows(gte_iso, lte_iso=None):
     """Paginated capacity_log fetch over a timestamp window (inclusive)."""
-    BATCH  = 9000
-    offset = 0
-    rows   = []
-    while True:
-        q = (
-            sb.table("capacity_log")
-            .select("timestamp,percent_full")
-            .gte("timestamp", gte_iso)
-        )
-        if lte_iso is not None:
-            q = q.lte("timestamp", lte_iso)
-        batch = q.range(offset, offset + BATCH - 1).order("timestamp").execute().data
-        rows.extend(batch)
-        if len(batch) < BATCH:
-            break
-        offset += BATCH
-        print(f"  Fetched {len(rows):,} rows...")
-    return rows
+    return paginated_fetch(
+        sb, "capacity_log", "timestamp,percent_full",
+        gte=gte_iso, lte=lte_iso, order="timestamp",
+    )
 
 
 def latest_profiled_date():

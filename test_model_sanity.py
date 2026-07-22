@@ -28,6 +28,18 @@ def load_model():
     with open("models/rf_model.pkl", "rb") as f:
         return pickle.load(f)
 
+def load_feature_names():
+    # The deployed pickle may predate feature additions to engineer_features
+    # (e.g. days_to_sem_start/end) — feature_names.pkl records what it was
+    # actually fit on, so we can reindex engineer_features()'s current output
+    # to match instead of sklearn raising "unseen at fit time". Mirrors
+    # backtest.py::load_rf()/rf_predict_grid()'s handling of the same drift.
+    try:
+        with open("models/feature_names.pkl", "rb") as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        return None
+
 @pytest.fixture(scope="module")
 def model():
     """Load the Random Forest once and share across all tests in this file."""
@@ -42,6 +54,9 @@ def predict(model, timestamp_str):
         'percent_full': [100 / 150 * 100]
     })
     X, _ = engineer_features(df)
+    feature_names = load_feature_names()
+    if feature_names is not None and list(X.columns) != list(feature_names):
+        X = X[feature_names]
     return float(model.predict(X)[0])
 
 

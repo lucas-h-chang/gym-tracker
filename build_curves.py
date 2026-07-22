@@ -12,7 +12,7 @@ from datetime import datetime
 import pandas as pd
 
 import curve_model as cm
-from train import parse_supabase_timestamps
+from supabase_io import parse_supabase_timestamps, paginated_fetch
 
 MIN_DISTINCT_DAYS = 1500  # mirrors train.py's row guard
 
@@ -22,21 +22,7 @@ def fetch_capacity_log():
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
     print("Loading data from Supabase capacity_log...")
-    BATCH, offset, rows = 9000, 0, []
-    while True:
-        batch = (
-            sb.table("capacity_log")
-            .select("timestamp,people_count")
-            .range(offset, offset + BATCH - 1)
-            .order("timestamp")
-            .execute()
-            .data
-        )
-        rows.extend(batch)
-        if len(batch) < BATCH:
-            break
-        offset += BATCH
-        print(f"  Fetched {len(rows):,} rows...")
+    rows = paginated_fetch(sb, "capacity_log", "timestamp,people_count", order="timestamp")
 
     df = pd.DataFrame(rows)
     df['timestamp'] = parse_supabase_timestamps(df['timestamp'])

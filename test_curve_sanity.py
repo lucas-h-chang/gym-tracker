@@ -16,7 +16,7 @@ from datetime import date, timedelta
 import pytest
 
 import curve_model as cm
-from academic_calendar import SEM_STARTS
+from academic_calendar import SEM_STARTS, is_summer_day as _is_summer_day, get_open_hours as _get_open_hours
 
 DOW_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
@@ -37,27 +37,9 @@ def pred(table, d, hour, minute=0):
     return m
 
 
-# Duplicated from predictions_builder.py (open-hours logic is intentionally
-# kept per-file across this project — see CLAUDE.md).
-SUMMER_RANGES = [
-    (date(2024, 5, 10), date(2024, 8, 24)),
-    (date(2025, 5, 16), date(2025, 8, 23)),
-    (date(2026, 5, 15), date(2026, 8, 22)),
-    (date(2027, 5, 14), date(2027, 8, 21)),
-]
-
-
-def _is_summer_day(d):
-    return any(s <= d <= e for s, e in SUMMER_RANGES)
-
-
-def _get_open_hours(day_name, d):
-    summer = _is_summer_day(d)
-    if day_name == 'Saturday':
-        return 8, 18
-    if day_name == 'Sunday':
-        return 8, (20 if summer else 23)
-    return 7, (20 if summer else 23)
+# _is_summer_day/_get_open_hours are now academic_calendar.is_summer_day /
+# get_open_hours (consolidated 2026-07-21 — see CLAUDE.md), imported above
+# under their original local names so the rest of this file is unchanged.
 
 
 # ==============================================================================

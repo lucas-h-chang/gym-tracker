@@ -23,32 +23,15 @@ import numpy as np
 import pandas as pd
 
 import curve_model as cm
-from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end
+from academic_calendar import (
+    classify_date, days_to_sem_start, days_to_sem_end, get_open_hours,
+)
 from train import engineer_features, parse_supabase_timestamps
 
 MAX_CAPACITY = 150
 
-# Duplicated from predictions_builder.py (open-hours logic is intentionally
-# kept per-file across this project rather than shared — see CLAUDE.md).
-SUMMER_RANGES = [
-    (date(2024, 5, 10), date(2024, 8, 24)),
-    (date(2025, 5, 16), date(2025, 8, 23)),
-    (date(2026, 5, 15), date(2026, 8, 22)),
-    (date(2027, 5, 14), date(2027, 8, 21)),
-]
-
-
-def is_summer_day(d):
-    return any(s <= d <= e for s, e in SUMMER_RANGES)
-
-
-def get_open_hours(day_name, d):
-    summer = is_summer_day(d)
-    if day_name == 'Saturday':
-        return 8, 18
-    if day_name == 'Sunday':
-        return 8, (20 if summer else 23)
-    return 7, (20 if summer else 23)
+# is_summer_day/get_open_hours/SUMMER_RANGES live in academic_calendar.py
+# (consolidated 2026-07-21 — see CLAUDE.md).
 
 
 def open_slots_grid(start_date, days):
@@ -149,7 +132,7 @@ def load_rf():
 def rf_predict_grid(rf, feature_names, grid):
     ts = [pd.Timestamp(f"{d} {slot // 4:02d}:{(slot % 4) * 15:02d}") for d, slot in grid]
     df = pd.DataFrame({'timestamp': ts, 'people_count': 100.0, 'percent_full': 66.7})
-    X, cols = engineer_features(df)
+    X, _ = engineer_features(df)
     if feature_names is not None and list(X.columns) != list(feature_names):
         X = X[feature_names]
     return rf.predict(X)

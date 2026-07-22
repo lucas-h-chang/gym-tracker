@@ -114,14 +114,15 @@ def test_feature_matrix_has_correct_columns():
     X, feature_names = engineer_features(make_df('2026-02-10 15:00:00'))
     expected = ['hour_numeric', 'week_of_year', 'is_weekend', 'is_finals',
                 'is_dead_week', 'is_first_week', 'is_break', 'is_holiday',
+                'days_to_sem_start', 'days_to_sem_end',
                 'day_Monday', 'day_Tuesday', 'day_Wednesday', 'day_Thursday',
                 'day_Friday', 'day_Saturday', 'day_Sunday']
     assert list(X.columns) == expected
     assert feature_names == expected
 
-def test_feature_matrix_has_15_features():
+def test_feature_matrix_has_17_features():
     X, _ = engineer_features(make_df('2026-02-10 15:00:00'))
-    assert X.shape[1] == 15
+    assert X.shape[1] == 17
 
 def test_all_features_are_numeric():
     X, _ = engineer_features(make_df('2026-02-10 15:00:00'))

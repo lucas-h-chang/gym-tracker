@@ -21,6 +21,27 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 MAX_CAPACITY = 150
 
+# ── Semester boundary dates (for days-to-boundary ramp features) ──────────────
+# is_break is a binary switch and can't represent the *ramp* into/out of a
+# semester: late August fills up as classes approach; December empties out after
+# finals. These signed, clipped distances to the nearest boundary give the model
+# that gradient. Sourced from the same official UCB calendars as the flags below.
+#   SEM_STARTS = instruction-begins dates (start of each first-week range)
+#   SEM_ENDS   = last day of finals (semester effectively ends / everyone leaves)
+SEM_STARTS = [
+    date(2020, 8, 26), date(2021, 1, 19), date(2021, 8, 25), date(2022, 1, 18),
+    date(2022, 8, 24), date(2023, 1, 17), date(2023, 8, 23), date(2024, 1, 16),
+    date(2024, 8, 28), date(2025, 1, 21), date(2025, 8, 27), date(2026, 1, 20),
+    date(2026, 8, 26), date(2027, 1, 19), date(2027, 8, 25), date(2028, 1, 18),
+]
+SEM_ENDS = [
+    date(2021, 5, 14), date(2022, 5, 13), date(2023, 5, 12), date(2024, 5, 10),
+    date(2025, 5, 16), date(2026, 5, 15), date(2027, 5, 14), date(2028, 5, 12),
+    date(2020, 12, 18), date(2021, 12, 17), date(2022, 12, 16), date(2023, 12, 15),
+    date(2024, 12, 20), date(2025, 12, 19), date(2026, 12, 18), date(2027, 12, 17),
+]
+BOUNDARY_CLIP = 30  # days; ramps saturate beyond ~4 weeks from a boundary
+
 
 def parse_supabase_timestamps(series):
     # Supabase returns TIMESTAMPTZ as UTC. Convert to PT wall-clock, then drop tz so
@@ -278,8 +299,26 @@ def engineer_features(df):
     day_dummies = day_dummies[['day_Monday', 'day_Tuesday', 'day_Wednesday',
                                 'day_Thursday', 'day_Friday', 'day_Saturday', 'day_Sunday']]
 
+    # --- Days to nearest semester boundary (signed, clipped) ---
+    # Signed distance in days to the closest instruction-start / finals-end date.
+    #   positive → boundary is still ahead (approaching); negative → it passed.
+    # Clipped to ±BOUNDARY_CLIP so mid-semester and deep-break rows saturate and
+    # only the transition weeks carry a gradient. This is the ramp is_break can't
+    # express — e.g. late August counts down toward a start while is_break is still 1.
+    row_ord = df['timestamp'].dt.normalize().map(pd.Timestamp.toordinal).to_numpy()
+
+    def signed_nearest(boundaries):
+        b = np.array([d.toordinal() for d in boundaries])
+        diff = b[None, :] - row_ord[:, None]          # + ahead, - behind
+        nearest = diff[np.arange(len(row_ord)), np.abs(diff).argmin(axis=1)]
+        return np.clip(nearest, -BOUNDARY_CLIP, BOUNDARY_CLIP)
+
+    df['days_to_sem_start'] = signed_nearest(SEM_STARTS)
+    df['days_to_sem_end']   = signed_nearest(SEM_ENDS)
+
     feature_cols = ['hour_numeric', 'week_of_year', 'is_weekend', 'is_finals',
-                    'is_dead_week', 'is_first_week', 'is_break', 'is_holiday']
+                    'is_dead_week', 'is_first_week', 'is_break', 'is_holiday',
+                    'days_to_sem_start', 'days_to_sem_end']
     X = pd.concat([df[feature_cols], day_dummies], axis=1)
 
     return X, list(X.columns)

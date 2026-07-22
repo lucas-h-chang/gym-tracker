@@ -1,0 +1,17 @@
+# Binary model artifacts
+models/rf_model.pkl
+models/feature_names.pkl
+
+# SQLite DB (obsolete)
+gym_history.db
+
+# PDF calendars (data already hardcoded in train.py)
+UCB_AcademicCalendar_*.pdf
+
+# Python bytecode
+__pycache__/
+
+# Large JSON caches — moved to legacy/ 2026-07-21
+legacy/predictions_cache.json
+legacy/weekly_cache.json
+docs/data.json

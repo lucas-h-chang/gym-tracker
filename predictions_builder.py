@@ -5,13 +5,13 @@ Runs daily at midnight PT via daily.yml.
 import os
 import json
 import pandas as pd
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
 import curve_model as cm
-from academic_calendar import classify_date
-from train import parse_supabase_timestamps
+from academic_calendar import classify_date, is_summer_day, get_open_hours
+from supabase_io import parse_supabase_timestamps, paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
 now = datetime.now(PT)
@@ -20,32 +20,11 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"
 
 BATCH_SIZE = 500
 
-# Summer-hours windows: derived from train.py summer-break ranges, end-shifted by -3 days
-# (RSF flips back to academic hours ~3 days before classes resume).
-SUMMER_RANGES = [
-    (date(2024, 5, 10), date(2024, 8, 24)),
-    (date(2025, 5, 16), date(2025, 8, 23)),
-    (date(2026, 5, 15), date(2026, 8, 22)),
-    (date(2027, 5, 14), date(2027, 8, 21)),
-]
-
-
-def is_summer_day(d):
-    return any(s <= d <= e for s, e in SUMMER_RANGES)
-
-
-def get_open_hours(day_name, d):
-    summer = is_summer_day(d)
-    if day_name == 'Saturday':
-        return 8, 18
-    if day_name == 'Sunday':
-        return 8, (20 if summer else 23)
-    return 7, (20 if summer else 23)
-
+# is_summer_day/get_open_hours/SUMMER_RANGES live in academic_calendar.py
+# (consolidated 2026-07-21 — see CLAUDE.md).
 
 CORRECTION_DAYS       = 28   # trailing window for residual computation
 CORRECTION_MIN_N      = 3    # min observations per (segment, regime, dow, hour, minute) cell to apply correction
-CORRECTION_HOUR_MIN   = 17   # only correct evening slots (5 PM onwards)
 CORRECTION_DECAY_HALFLIFE = 7  # days; residual weight = 0.5^(horizon/halflife), so the
                                # 28-day-trailing nowcast only moves the near-term days it
                                # can actually track and fades to the base curve far out.
@@ -124,22 +103,7 @@ def build_evening_correction(table):
     lo = (now - timedelta(days=CORRECTION_DAYS)).isoformat()
     hi = now.isoformat()
 
-    rows, offset = [], 0
-    while True:
-        batch = (
-            sb.table("capacity_log")
-            .select("timestamp,percent_full")
-            .gte("timestamp", lo)
-            .lte("timestamp", hi)
-            .order("timestamp")
-            .range(offset, offset + 8999)
-            .execute()
-            .data
-        )
-        rows.extend(batch)
-        if len(batch) < 9000:
-            break
-        offset += 9000
+    rows = paginated_fetch(sb, "capacity_log", "timestamp,percent_full", gte=lo, lte=hi, order="timestamp")
 
     if not rows:
         return {}
@@ -167,7 +131,7 @@ def build_evening_correction(table):
             correction[(seg, rg, int(dow), int(hr), int(mn))] = g['residual'].mean()
 
     n_cells = len(correction)
-    print(f"  Evening correction: {len(df):,} recent rows → {n_cells} (segment, regime, dow, hour, minute) cells")
+    print(f"  Nowcast correction (all open hours): {len(df):,} recent rows → {n_cells} (segment, regime, dow, hour, minute) cells")
     return correction
 
 
@@ -202,11 +166,14 @@ def compute_predictions(table, correction, days=91):
     for ts, p, seg, rg, dw, hr, mn, hz in zip(slot_ts, preds, segments, regimes, dows, hours, minutes, horizons):
         if p != p:  # NaN -> no curve matched this (phase, dow, slot)
             continue
-        if hr >= CORRECTION_HOUR_MIN:
-            # Decay the nowcast residual toward 0 as the forecast horizon grows:
-            # it tracks the current hot/cool stretch for ~a week, not 3 months out.
-            decay = 0.5 ** (hz / CORRECTION_DECAY_HALFLIFE)
-            p += decay * correction.get((seg, rg, dw, hr, mn), 0.0)
+        # Apply the trailing-residual nowcast to every open slot, not just
+        # evenings: a "running hot/cool" stretch is an all-day phenomenon, and
+        # backtest on the week-aware base showed all-hours strictly dominates
+        # evening-only (adds a morning gain, ~2.5% better on forecast days 1-7,
+        # evenings unchanged). Decay toward 0 as the horizon grows -- the
+        # 28-day nowcast only tracks the current stretch for ~a week.
+        decay = 0.5 ** (hz / CORRECTION_DECAY_HALFLIFE)
+        p += decay * correction.get((seg, rg, dw, hr, mn), 0.0)
         records.append({
             "slot_ts": ts,
             "pct":     round(min(max(float(p), 0.0), 100.0), 1),

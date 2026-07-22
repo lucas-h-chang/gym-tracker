@@ -1,16 +1,44 @@
 {
   "trained_at": "2026-07-13 11:23:43",
-  "date_range": "2021-01-05 \u2192 2026-07-13",
-  "training_rows": 117032,
-  "test_rows": 29258,
+  "evaluated_at": "2026-07-16 14:09:08",
+  "date_range": "2021-01-05 \u2192 2026-07-16",
+  "training_rows": 117163,
+  "test_rows": 29291,
   "rf": {
-    "rmse": 13.3,
-    "mae": 9.2
+    "rmse": 13.32,
+    "mae": 9.21
   },
   "baseline": {
-    "rmse": 15.61,
-    "mae": 10.83
+    "rmse": 15.63,
+    "mae": 10.84
   },
+  "segmented": {
+    "evening_peak_weekday": {
+      "n": 3427,
+      "mae": 10.85,
+      "bias": 4.43,
+      "baseline_mae": 11.97
+    },
+    "weekday_off_peak": {
+      "n": 10284,
+      "mae": 9.29,
+      "bias": 3.52,
+      "baseline_mae": 11.85
+    },
+    "weekend": {
+      "n": 7028,
+      "mae": 8.62,
+      "bias": 1.99,
+      "baseline_mae": 9.48
+    },
+    "break_periods": {
+      "n": 11606,
+      "mae": 8.51,
+      "bias": 0.64,
+      "baseline_mae": 9.6
+    }
+  },
+  "within_10pp": 67.1,
   "feature_importances": {
     "hour_numeric": 0.2462,
     "week_of_year": 0.1147,

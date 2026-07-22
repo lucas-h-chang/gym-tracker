@@ -250,3 +250,61 @@ def days_to_sem_start(d):
 def days_to_sem_end(d):
     """Signed, clipped distance to the nearest last-day-of-finals date. + = ahead, - = passed."""
     return _signed_nearest_clipped(_as_date(d), SEM_ENDS)
+
+
+# ── RSF open-hours calendar (consolidated 2026-07-21) ────────────────────────
+# This was copy-pasted into scraper.py, predictions_builder.py, weekly_builder.py,
+# today_builder.py, backtest.py, and test_curve_sanity.py; those now import
+# SUMMER_RANGES / is_summer_day / get_open_hours from here instead of keeping
+# their own copy. The non-Python mirrors (docs/index.html JS, RSFApp2.0's
+# TimeUtils.swift) are NOT touched by this consolidation and remain manual —
+# see CLAUDE.md.
+#
+# Derived from SUMMER_BREAK_RANGES above with the end date shifted -3 days
+# (RSF flips back to academic-year hours ~3 days before classes resume).
+SUMMER_RANGES = [
+    (date(2024, 5, 10), date(2024, 8, 24)),
+    (date(2025, 5, 16), date(2025, 8, 23)),
+    (date(2026, 5, 15), date(2026, 8, 22)),
+    (date(2027, 5, 14), date(2027, 8, 21)),
+]
+
+
+def is_summer_day(d):
+    d = _as_date(d)
+    return any(s <= d <= e for s, e in SUMMER_RANGES)
+
+
+def get_open_hours(day_name, d):
+    summer = is_summer_day(d)
+    if day_name == 'Saturday':
+        return 8, 18
+    if day_name == 'Sunday':
+        return 8, (20 if summer else 23)
+    return 7, (20 if summer else 23)
+
+
+def is_semester_day(d):
+    """
+    "Is this an in-session day" check used by the daily builders
+    (today_builder.py, weekly_builder.py, day_profiles_builder.py) to gate
+    similarity-candidate pooling and semester-only aggregates.
+
+    In-session = NOT inside a winter, spring, or summer break range
+    (BREAK_RANGES). regular, first_week, finals, dead_week, and holiday days are
+    all in-session; only the three break seasons are not. Using the exact
+    academic-calendar ranges (not the old month cutoffs of summer = month 6-8,
+    winter = Dec 16 / Jan 12) correctly labels the late-August first-week-of-fall
+    and the January semester-boundary days those cutoffs got wrong.
+
+    This is break-RANGE membership, which matches classify_date() on every day
+    except the ~1-2 per year where the last finals day coincides with the first
+    listed day of the following break: classify_date() calls that day "finals"
+    (phase priority), this gate calls it break. That seam is immaterial to the
+    candidate pooling / semester-only aggregates this gates, and keeping it as
+    plain range membership lets the JS (docs/index.html) and Swift
+    (TimeUtils.swift) copies mirror the same three break-range lists so all three
+    layers agree on 100% of days.
+    """
+    d = _as_date(d)
+    return not _in_any(d, BREAK_RANGES)
