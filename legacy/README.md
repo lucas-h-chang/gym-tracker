@@ -2,9 +2,14 @@
 
 Retired artifacts from the pre-curve-model era, moved here 2026-07-21 during the
 RF-retirement cleanup (see `handoffs/HANDOFF_MODEL_REDESIGN.md` and
-`handoffs/SPEC_CURVE_MODEL.md`), plus the two nightly builder scripts retired
-2026-07-22 when `day_profiles` and `weekly_averages` became live Postgres views
+`handoffs/SPEC_CURVE_MODEL.md`), plus `day_profiles_builder.py`, retired
+2026-07-22 when `day_profiles` became a live Postgres view
 (see `handoffs/SPEC_VIEWS_MIGRATION.md`).
+
+> **Note (2026-07-23):** `weekly_builder.py` was moved back OUT of here to the
+> `gym-tracker/` root and runs again in `daily.yml`. The `weekly_averages` view
+> (`003`/`004`) was reverted to a nightly table because it 57014'd — see
+> `handoffs/SPEC_WEEKLY_AVERAGES_REDESIGN.md`. Only `day_profiles` stays a view.
 
 ## What's actually in here
 
@@ -13,12 +18,6 @@ RF-retirement cleanup (see `handoffs/HANDOFF_MODEL_REDESIGN.md` and
   Already gitignored before this move (see `.gitignore` history); confirmed
   zero code references anywhere in the repo before moving it.
 - `weekly_cache.json` — same story, for the Supabase `weekly_averages` table.
-- `weekly_builder.py` — used to rebuild the `weekly_averages` table nightly
-  (truncate-then-insert) via `daily.yml`. Superseded by the `weekly_averages`
-  VIEW in `migrations/003_weekly_averages_view.sql`, which was translated
-  line-by-line from this file. No longer run; kept as that translation's
-  reference source. If the view's SQL ever needs updating, re-derive it from
-  this file, not from memory.
 - `day_profiles_builder.py` — used to rebuild the `day_profiles` table nightly
   (incremental upsert) via `daily.yml`. Superseded by the `day_profiles` VIEW
   in `migrations/002_day_profiles_view.sql`, translated line-by-line from this

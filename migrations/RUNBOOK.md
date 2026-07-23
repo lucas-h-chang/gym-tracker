@@ -220,3 +220,78 @@ none of the SQL in `migrations/` has been executed against real data. I
 read it back against `academic_calendar.py`, `day_profiles_builder.py`, and
 `weekly_builder.py` line by line and I'm confident in the translation, but
 Step 4 above is not optional — it is the actual test.
+
+
+Step 6 — perf fix: `weekly_averages` times out (2026-07-23 incident)
+------------------------------------------------------------------------
+
+If the site is showing `Supabase 500: weekly_averages?select=*&limit=10000`
+and the error body says `"code":"57014"` / `"canceling statement due to
+statement timeout"`, this is that. `003_weekly_averages_view.sql`'s
+`matched` CTE joined the full, unfiltered `capacity_log` history (182,924+
+rows) against an 84-row dimension table matched on `day_of_week` alone,
+applying each range type's time cutoff only *after* that ~12x fan-out. It
+was flagged as the expected failure mode in `SPEC_VIEWS_MIGRATION.md` when
+written, and crossed the statement timeout after about a day of data growth.
+
+Fix: in the Supabase SQL editor, paste and run the entire contents of
+`004_weekly_averages_perf_fix.sql`. It creates an index on
+`capacity_log(timestamp)` and replaces the view with one that filters each
+bounded range type (`last_week`/`last_month`/`last_6_months`/`last_year`/
+`this_semester`) against that index *before* doing any per-row timezone or
+day-of-week math, instead of scanning and bucketing all of history first and
+filtering after. `all_time` still does one full scan (unavoidable) but is no
+longer shared cost across every other branch.
+
+This does not change any output column, filter, or the synthetic
+closing-zero-row logic — same validation queries as Step 4c apply. Re-run:
+
+```sql
+select * from weekly_averages
+where day_of_week = 'Monday' and range_type = 'last_month' and semester_only = false
+order by hour_slot;
+```
+
+and confirm the shape/values match what you saw before this fix (if you
+still have them) or just that the query now returns in well under a second
+instead of timing out. Also worth doing once:
+
+```sql
+explain analyze select * from weekly_averages;
+```
+
+and confirming the plan uses `Index Scan` (or `Index Range Scan`) on
+`capacity_log` for the bounded branches, not a `Seq Scan` feeding a huge
+`Hash Join`/`Nested Loop` — that's the difference this fix is for.
+
+
+Step 7 — RETIRED: `weekly_averages` reverted from view to table (2026-07-23)
+------------------------------------------------------------------------------
+
+**Step 6 (`004`) did NOT fix the timeout. Both `003` and `004` are retired.**
+Do not apply them. The captured `explain (analyze, buffers)` proved the view
+is a ~13s, disk-spilling, full-history aggregation whose per-range cutoff can
+never use the timestamp index (the open-hours filter forces a Seq Scan), so
+no view rewrite fits the REST `anon` role's short statement_timeout — and it
+only grows. Full diagnosis: `handoffs/SPEC_WEEKLY_AVERAGES_REDESIGN.md`.
+
+Fix: `weekly_averages` goes back to being a plain TABLE rebuilt nightly by
+`weekly_builder.py` (moved back from `legacy/` to the `gym-tracker/` root; its
+step is re-added to `daily.yml`). `day_profiles` is unaffected — it stays a
+live view (002).
+
+In the Supabase SQL editor, paste and run the entire contents of
+`005_weekly_averages_revert_to_table.sql`. It drops the view and either
+renames `weekly_averages_old` back (if the original table was only renamed,
+never dropped — the likely state, since `003`'s Step 5 drop was probably
+never run) or creates a fresh empty table (if it was dropped). Either way it
+re-grants `select` to `anon, authenticated` and reloads the PostgREST schema.
+
+Then, if it created an empty table, run `python weekly_builder.py` once (or
+trigger the "Daily Data Build" workflow via `workflow_dispatch`) so it isn't
+empty until midnight PT. Confirm:
+
+```sql
+select count(*), count(distinct range_type) from weekly_averages;
+-- expect ~3000-3500 rows across 6 range_types, and the site stops 57014ing.
+```

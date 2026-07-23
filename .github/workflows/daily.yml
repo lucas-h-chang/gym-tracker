@@ -33,9 +33,16 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python predictions_builder.py
 
-      # weekly_averages and day_profiles are now live Postgres views over
-      # capacity_log (see migrations/002_day_profiles_view.sql and
-      # migrations/003_weekly_averages_view.sql) instead of nightly-built
-      # tables, so weekly_builder.py and day_profiles_builder.py no longer
-      # run here. Both scripts are kept in legacy/ as the reference the SQL
-      # was translated from.
+      # weekly_averages reverted from a live Postgres view back to a nightly-
+      # built table on 2026-07-23: the view (003/004) recomputed a ~13s,
+      # disk-spilling, full-history aggregation on every request and 57014'd
+      # against the anon role's short statement_timeout. See
+      # migrations/005_weekly_averages_revert_to_table.sql and
+      # handoffs/SPEC_WEEKLY_AVERAGES_REDESIGN.md. day_profiles stays a live
+      # view (002) — it's cheap and fine; day_profiles_builder.py remains in
+      # legacy/ as the reference the SQL was translated from.
+      - name: Build weekly averages → Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python weekly_builder.py
