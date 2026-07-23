@@ -52,11 +52,82 @@ def fetch_all_history():
     return paginated_fetch(sb, "capacity_log", "timestamp,percent_full", order="timestamp")
 
 
+DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+
+def period_type(d):
+    """Partition a date into 'summer' / 'semester' / 'break' for the Today
+    comparison card ("compared to usual <Day>s").
+
+    is_summer_day peels off the summer session first; the remaining days split
+    on is_semester_day — in-session ('semester') vs a winter/spring/holiday
+    break ('break'). These three must NOT be pooled: per academic_calendar.py,
+    a winter-break Tuesday 7pm runs ~6% while a summer-break Tuesday 7pm runs
+    ~78%, so a single "usual" baseline would match none of them.
+    """
+    if is_summer_day(d):
+        return 'summer'
+    if not is_semester_day(d):
+        return 'break'
+    return 'semester'
+
+
+def _emit_day_records(filtered, range_type, semester_only, records):
+    """Bucket `filtered` rows into per-day, per-15-min-slot averages (plus the
+    synthetic closing-zero row) and append them to `records`. Shared by both
+    the windowed range_types and the period-typed comparison slices."""
+    # Per-row open/close bounds based on each row's date — summer dates close
+    # earlier than academic-year dates, so filter row-by-row.
+    row_dates  = filtered['timestamp'].dt.date
+    row_summer = row_dates.apply(is_summer_day).to_numpy()
+    row_days   = filtered['day_of_week'].to_numpy()
+    row_open   = np.where(np.isin(row_days, ['Saturday', 'Sunday']), 8, 7)
+    row_close  = np.where(
+        row_days == 'Saturday', 18,
+        np.where(row_summer, 20, 23),
+    )
+    filtered = filtered.assign(_open_h=row_open, _close_h=row_close)
+
+    for day in DAYS:
+        academic_close = 18 if day == 'Saturday' else 23
+        day_data = filtered[
+            (filtered['day_of_week'] == day) &
+            (filtered['hour_numeric'] >= filtered['_open_h']) &
+            (filtered['hour_numeric'] <  filtered['_close_h'])
+        ].copy()
+
+        day_data['hour_slot'] = (day_data['hour_numeric'] * 4).round() / 4
+
+        avg = day_data.groupby('hour_slot').agg(
+            avg_pct=('percent_full', 'mean'),
+        ).reset_index()
+
+        # Use the actual max closing time from the data so summer-only ranges
+        # place the 0% at 20:00 (summer close) instead of 23:00 (academic
+        # close), which caused a long diagonal tail on the chart.
+        chart_close = int(day_data['_close_h'].max()) if len(day_data) > 0 else academic_close
+
+        # Drop any bin that rounded up to the close hour (e.g. a 22:58 reading
+        # binning to 23.0) so the synthetic close-zero we add below doesn't
+        # collide with it on the primary key.
+        avg = avg[avg['hour_slot'] < chart_close]
+        closing = pd.DataFrame([{'hour_slot': float(chart_close), 'avg_pct': 0.0}])
+        avg     = pd.concat([avg, closing], ignore_index=True)
+        avg     = avg.sort_values('hour_slot')
+
+        for _, row in avg.iterrows():
+            records.append({
+                'day_of_week':   day,
+                'hour_slot':     float(row['hour_slot']),
+                'range_type':    range_type,
+                'semester_only': semester_only,
+                'avg_pct':       round(float(row['avg_pct']), 1),
+            })
+
+
 def compute_weekly_averages(df):
     df['day_of_week']  = df['timestamp'].dt.day_name()
     df['hour_numeric'] = df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60
-
-    DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
     semester_start = get_semester_start(now.date())
     semester_days  = max((now.date() - semester_start).days, 1)
@@ -93,53 +164,22 @@ def compute_weekly_averages(df):
             else:
                 filtered = range_df
 
-            # Per-row open/close bounds based on each row's date — summer dates
-            # close earlier than academic-year dates, so filter row-by-row.
-            row_dates  = filtered['timestamp'].dt.date
-            row_summer = row_dates.apply(is_summer_day).to_numpy()
-            row_days   = filtered['day_of_week'].to_numpy()
-            row_open   = np.where(np.isin(row_days, ['Saturday', 'Sunday']), 8, 7)
-            row_close  = np.where(
-                row_days == 'Saturday', 18,
-                np.where(row_summer, 20, 23),
-            )
-            filtered = filtered.assign(_open_h=row_open, _close_h=row_close)
+            _emit_day_records(filtered, range_type, semester_only, records)
 
-            for day in DAYS:
-                academic_close = 18 if day == 'Saturday' else 23
-                day_data = filtered[
-                    (filtered['day_of_week'] == day) &
-                    (filtered['hour_numeric'] >= filtered['_open_h']) &
-                    (filtered['hour_numeric'] <  filtered['_close_h'])
-                ].copy()
-
-                day_data['hour_slot'] = (day_data['hour_numeric'] * 4).round() / 4
-
-                avg = day_data.groupby('hour_slot').agg(
-                    avg_pct=('percent_full', 'mean'),
-                ).reset_index()
-
-                # Use the actual max closing time from the data so summer-only
-                # ranges place the 0% at 20:00 (summer close) instead of 23:00
-                # (academic close), which caused a long diagonal tail on the chart.
-                chart_close = int(day_data['_close_h'].max()) if len(day_data) > 0 else academic_close
-
-                # Drop any bin that rounded up to the close hour (e.g. a 22:58
-                # reading binning to 23.0) so the synthetic close-zero we add
-                # below doesn't collide with it on the primary key.
-                avg = avg[avg['hour_slot'] < chart_close]
-                closing = pd.DataFrame([{'hour_slot': float(chart_close), 'avg_pct': 0.0}])
-                avg     = pd.concat([avg, closing], ignore_index=True)
-                avg     = avg.sort_values('hour_slot')
-
-                for _, row in avg.iterrows():
-                    records.append({
-                        'day_of_week':   day,
-                        'hour_slot':     float(row['hour_slot']),
-                        'range_type':    range_type,
-                        'semester_only': semester_only,
-                        'avg_pct':       round(float(row['avg_pct']), 1),
-                    })
+    # Period-typed, all-time comparison slices: "compared to usual <Day>s"
+    # picks whichever of these matches TODAY's period, so a summer Thursday is
+    # compared against every summer Thursday on record (not against in-session
+    # Thursdays). All-time window for a stable, always-populated baseline —
+    # year-over-year drift (~8pp) sits inside the reading noise floor (~15pp),
+    # while a this-year-only split would leave many period×weekday×hour cells
+    # near-empty. semester_only is not meaningful here (the period IS the
+    # filter), so it's stored False.
+    ptype_by_date = {dd: period_type(dd) for dd in df['timestamp'].dt.date.unique()}
+    period_series = df['timestamp'].dt.date.map(ptype_by_date)
+    for ptype, range_type in [('summer',   'all_summers'),
+                              ('semester', 'all_semesters'),
+                              ('break',    'all_breaks')]:
+        _emit_day_records(df[period_series == ptype], range_type, False, records)
 
     return records
 

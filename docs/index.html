@@ -154,10 +154,6 @@
       position: relative;
       padding: 32px 48px 0;
     }
-    .weekly-section {
-      padding-bottom: 60px;
-      margin-top: 48px;
-    }
     .chart-header {
       display: flex;
       align-items: center;
@@ -278,75 +274,6 @@
     .cal-day-selected.cal-day-today { color: #000; }
     .cal-day-empty { pointer-events: none; }
 
-    /* ── Weekly Controls ── */
-    .weekly-controls {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      flex-wrap: wrap;
-    }
-    .field {
-      position: relative;
-    }
-    .field::after {
-      content: '▾';
-      position: absolute;
-      right: 2px;
-      bottom: 8px;
-      font-size: 11px;
-      color: var(--sub);
-      pointer-events: none;
-      line-height: 1;
-    }
-    select {
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-      color: var(--text);
-      padding: 6px 20px 6px 0;
-      font-size: 13px;
-      font-family: var(--font);
-      cursor: pointer;
-      outline: none;
-      -webkit-appearance: none;
-      appearance: none;
-      min-width: 110px;
-      transition: border-color 0.15s;
-    }
-    select:focus { border-bottom-color: var(--text); }
-    select option { background: #1a1916; color: var(--text); }
-    .check-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--sub);
-      cursor: pointer;
-    }
-    input[type="checkbox"] {
-      accent-color: var(--cap-green);
-      width: 13px;
-      height: 13px;
-      cursor: pointer;
-    }
-
-    /* ── No Data Overlay ── */
-    .no-data-overlay {
-      display: none;
-      position: absolute;
-      inset: 0;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg);
-      color: var(--muted);
-      font-size: 12px;
-      font-family: var(--mono);
-      text-align: center;
-      padding: 24px;
-      pointer-events: none;
-      line-height: 1.7;
-    }
-
     /* ── Footer ── */
     footer {
       padding: 16px 48px;
@@ -440,7 +367,6 @@
     body.loading .skel-overlay        { display: flex; }
     body.loading #insight-row         { display: flex !important; }
     body.loading .chart-wrap canvas   { visibility: hidden; }
-    body.loading .no-data-overlay     { display: none !important; }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
@@ -450,7 +376,6 @@
         gap: 28px;
       }
       .chart-section { padding: 24px 20px 0; }
-      .weekly-section { padding-bottom: 40px; }
       header { padding: 0 24px; }
       .divider { margin: 0 24px; }
       .chart-header {
@@ -463,9 +388,6 @@
         -webkit-overflow-scrolling: touch;
         padding-bottom: 4px;
         width: 100%;
-      }
-      .weekly-controls {
-        gap: 16px;
       }
       footer { padding: 16px 24px; }
       .card-value { font-size: 33px; }
@@ -542,35 +464,6 @@
     </div>
   </div>
 
-  <!-- WEEKLY PATTERNS -->
-  <div class="chart-section weekly-section" id="section-weekly">
-    <div class="chart-header">
-      <h2 class="chart-title">Weekly Patterns</h2>
-      <div class="weekly-controls">
-        <div class="field">
-          <select id="day-select">
-            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
-          </select>
-        </div>
-        <div class="field">
-          <select id="range-select">
-            <option id="range-last-day-opt" value="Last 7 days">Last 7 days</option><option>Last month</option>
-            <option>Last 6 months</option><option>Last year</option><option>All time</option>
-          </select>
-        </div>
-        <label class="check-label">
-          <input type="checkbox" id="semester-check" checked>
-          Exclude breaks
-        </label>
-      </div>
-    </div>
-    <div class="chart-wrap">
-      <canvas id="weekly-chart" height="290"></canvas>
-      <div id="weekly-no-data" class="no-data-overlay"></div>
-      <div id="weekly-tooltip" class="chart-tooltip"></div>
-    </div>
-  </div>
 
 </main>
 
@@ -632,6 +525,10 @@ const RANGE_DB_TO_DISPLAY = {
   'last_week': 'Last 7 days', 'last_month': 'Last month',
   'last_6_months': 'Last 6 months', 'last_year': 'Last year',
   'all_time': 'All time', 'this_semester': 'This semester',
+  // All-time slices partitioned by academic period, for the "compared to
+  // usual <Day>s" card (see weekly_builder.py period_type / _emit_day_records).
+  'all_summers': 'All summers', 'all_semesters': 'All semesters',
+  'all_breaks': 'All breaks',
 };
 
 function buildTodayActuals(rows, today) {
@@ -660,36 +557,6 @@ function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
 
-// In-session = NOT inside a winter/spring/summer break range. Mirrors
-// academic_calendar.py::is_semester_day (BREAK_RANGES) exactly, using the same
-// precise academic-calendar break dates rather than blunt month cutoffs, so the
-// client picks the same semester_only weekly curve the server computed. These
-// three lists must stay in sync with WINTER_BREAK_RANGES / SPRING_BREAK_RANGES /
-// SUMMER_BREAK_RANGES in academic_calendar.py (and the Swift copy in
-// TimeUtils.swift) when a year is added.
-function isSemesterDay(date) {
-  const pt = new Date((date || new Date()).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-  const ds = pt.toLocaleDateString('en-CA');
-  const breaks = [
-    // winter
-    ['2020-12-18','2021-01-18'], ['2021-12-17','2022-01-17'],
-    ['2022-12-16','2023-01-16'], ['2023-12-15','2024-01-15'],
-    ['2024-12-20','2025-01-20'], ['2025-12-19','2026-01-19'],
-    ['2026-12-18','2027-01-18'], ['2027-12-17','2028-01-17'],
-    // spring
-    ['2021-03-20','2021-03-28'], ['2022-03-19','2022-03-27'],
-    ['2023-03-25','2023-04-02'], ['2024-03-23','2024-03-31'],
-    ['2025-03-22','2025-03-30'], ['2026-03-21','2026-03-29'],
-    ['2027-03-20','2027-03-28'], ['2028-03-25','2028-04-02'],
-    // summer
-    ['2021-05-14','2021-08-24'], ['2022-05-13','2022-08-23'],
-    ['2023-05-12','2023-08-22'], ['2024-05-10','2024-08-27'],
-    ['2025-05-16','2025-08-26'], ['2026-05-15','2026-08-25'],
-    ['2027-05-14','2027-08-24'],
-  ];
-  return !breaks.some(([s, e]) => ds >= s && ds <= e);
-}
-
 // Manual JS mirror of academic_calendar.py's SUMMER_RANGES (Python consolidated
 // there 2026-07-21 — see CLAUDE.md). This frontend copy and RSFApp2.0's
 // TimeUtils.swift are NOT auto-generated from the Python source; keep all
@@ -703,6 +570,46 @@ function isSummerHours(date) {
   const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
   return SUMMER_RANGES.some(([s, e]) => ds >= s && ds <= e);
 }
+
+// Manual JS mirror of academic_calendar.py's BREAK_RANGES (winter + spring +
+// summer break). Like SUMMER_RANGES above, NOT auto-generated — keep in sync
+// by hand when adding a year. Used only by periodTypeOf() to classify TODAY
+// for the "compared to usual <Day>s" card, so it mirrors weekly_builder.py's
+// period_type() exactly (summer peeled off first via isSummerHours, then a
+// non-in-session day is a "break").
+const BREAK_RANGES = [
+  // winter
+  ['2020-12-18','2021-01-18'], ['2021-12-17','2022-01-17'], ['2022-12-16','2023-01-16'],
+  ['2023-12-15','2024-01-15'], ['2024-12-20','2025-01-20'], ['2025-12-19','2026-01-19'],
+  ['2026-12-18','2027-01-18'], ['2027-12-17','2028-01-17'],
+  // spring
+  ['2021-03-20','2021-03-28'], ['2022-03-19','2022-03-27'], ['2023-03-25','2023-04-02'],
+  ['2024-03-23','2024-03-31'], ['2025-03-22','2025-03-30'], ['2026-03-21','2026-03-29'],
+  ['2027-03-20','2027-03-28'], ['2028-03-25','2028-04-02'],
+  // summer break (is_semester_day is false across these; summer session is
+  // peeled off first by isSummerHours, so these only catch the ~3-day tail
+  // between summer session end and the fall academic-hours flip)
+  ['2021-05-14','2021-08-24'], ['2022-05-13','2022-08-23'], ['2023-05-12','2023-08-22'],
+  ['2024-05-10','2024-08-27'], ['2025-05-16','2025-08-26'], ['2026-05-15','2026-08-25'],
+  ['2027-05-14','2027-08-24'],
+];
+
+function isSemesterDay(date) {
+  const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
+  return !BREAK_RANGES.some(([s, e]) => ds >= s && ds <= e);
+}
+
+// summer / semester / break, matching weekly_builder.py period_type().
+function periodTypeOf(date) {
+  if (isSummerHours(date))  return 'summer';
+  if (!isSemesterDay(date)) return 'break';
+  return 'semester';
+}
+
+// period_type -> the weekly_averages range_type carrying that all-time slice.
+const PERIOD_RANGE_TYPE = {
+  summer: 'all_summers', semester: 'all_semesters', break: 'all_breaks',
+};
 
 function getOpenHours(jsDay, date) {
   const summer = date != null && isSummerHours(date);
@@ -1192,98 +1099,6 @@ function updatePredChart(data) {
   });
 }
 
-// ── Weekly Chart ───────────────────────────────────────────────
-let weeklyChart = null;
-
-function updateRangeDayLabel() {
-  const day = document.getElementById('day-select').value;
-  document.getElementById('range-last-day-opt').textContent = `Last ${day}`;
-}
-
-function updateWeeklyChart(data) {
-  const day      = document.getElementById('day-select').value;
-  const range    = document.getElementById('range-select').value;
-  const semester = document.getElementById('semester-check').checked;
-  const raw      = data.weekly[`${day}|${range}|${semester}`] || [];
-  const hasData  = raw.some(p => p.y > 0);
-
-  const xMin = 7, xMax = 23;
-  const points = hasData ? raw.filter(p => p.x >= xMin && p.x <= xMax) : [];
-
-  document.getElementById('weekly-no-data').style.display = hasData ? 'none' : 'flex';
-
-  if (weeklyChart) {
-    weeklyChart.data.datasets[0].data = points;
-    weeklyChart.update();
-    return;
-  }
-
-  const ctx = document.getElementById('weekly-chart').getContext('2d');
-
-  weeklyChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      datasets: [{
-        data: points,
-        borderColor: '#6ee7b7',
-        backgroundColor: 'transparent',
-        borderWidth: 3.25,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        pointBackgroundColor: '#fff',
-        pointBorderColor: 'transparent',
-        tension: 0.35,
-        fill: true,
-      }]
-    },
-    options: {
-      parsing: false,
-      animation: { duration: 320 },
-      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
-      plugins: {
-        capacityGradient: { enabled: true },
-        nowLine: { show: false },
-        legend: { display: false },
-        tooltip: {
-          enabled: false,
-          external: makeExternalTooltip('weekly-tooltip'),
-          displayColors: false,
-          callbacks: {
-            title: (items) => items[0].raw.label || '',
-            label: (item) => `${Math.round(item.raw.y)}% capacity`,
-          }
-        }
-      },
-      scales: {
-        x: {
-          type: 'linear', min: xMin, max: xMax,
-          grid: { display: false },
-          border: { display: false },
-          ticks: {
-            color: '#5a5550',
-            font: { size: 11, family: "'Inter', sans-serif", weight: '500' },
-            stepSize: 2,
-            padding: 8,
-            callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
-          }
-        },
-        y: {
-          min: 0, max: 110,
-          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
-          border: { display: false },
-          ticks: {
-            color: '#5a5550',
-            font: { size: 10, family: "'Inter', sans-serif", weight: '500' },
-            stepSize: 25,
-            padding: 8,
-            callback: (v) => v > 0 ? `${v}%` : ''
-          }
-        }
-      }
-    }
-  });
-}
-
 // ── Data Warning ──────────────────────────────────────────────
 function showDataWarning(msg) {
   const el = document.getElementById('data-warning');
@@ -1354,8 +1169,16 @@ function computeDayComparisonAt(dayName, qH, data, forDate) {
     const pt = arr.find(p => p.x === h);
     return pt ? pt.y : null;
   }
+  // Compare against the same KIND of day: a summer Thursday vs usual summer
+  // Thursdays, an in-session one vs usual semester Thursdays, a break day vs
+  // usual break days. (The old "This semester only" slice went blank every
+  // summer, since there are no in-session days to average.)
+  const period    = periodTypeOf(forDate);
+  const rangeType = PERIOD_RANGE_TYPE[period];
+  const disp      = RANGE_DB_TO_DISPLAY[rangeType] || rangeType;
   return {
-    thisSemester: getWeeklyAt(`${dayName}|This semester|true`, qH),
+    period,
+    baseline: getWeeklyAt(`${dayName}|${disp}|false`, qH),
   };
 }
 
@@ -1456,7 +1279,7 @@ function renderInsightCards(data) {
     trendSubEl.textContent = '';
   }
 
-  // ── Card 3: Comparison (this semester only) ──
+  // ── Card 3: Comparison (vs usual day of this same period type) ──
   const compHeaderEl  = document.getElementById('insight-comp-header');
   const compVerdictEl = document.getElementById('insight-comp-verdict');
   const compDeltaEl   = document.getElementById('insight-comp-delta');
@@ -1468,7 +1291,7 @@ function renderInsightCards(data) {
     : 12;
   const cmp = computeDayComparisonAt(dayName, cmpH, data, new Date(predDate + 'T12:00:00'));
   const refPct = isToday ? livePct : null;
-  const baseline = cmp.thisSemester;
+  const baseline = cmp.baseline;
   const avgDelta = (baseline != null && refPct != null) ? Math.round(refPct - baseline) : null;
 
   if (avgDelta != null) {
@@ -1511,11 +1334,10 @@ async function init() {
   const today     = todayPT();
   const yesterday = shiftDate(today, -1);
 
-  let predRows, weeklyRows, actualsRows, todaySummaryRows;
+  let predRows, actualsRows, todaySummaryRows;
   try {
-    [predRows, weeklyRows, actualsRows, todaySummaryRows] = await Promise.all([
+    [predRows, actualsRows, todaySummaryRows] = await Promise.all([
       sbFetch(`predictions?select=slot_ts,pct&slot_ts=gte.${today}T00:00:00&slot_ts=lte.${shiftDate(today, 92)}T23:59:59&order=slot_ts.asc&limit=10000`),
-      sbFetch(`weekly_averages?select=*&limit=10000`),
       sbFetch(`capacity_log?timestamp=gte.${yesterday}T12:00:00Z&order=timestamp.asc&limit=2000`),
       sbFetch(`today_summary?date=eq.${today}&select=similarity_preds,blend_weight,computed_at`),
     ]);
@@ -1524,6 +1346,17 @@ async function init() {
     document.body.classList.remove('loading');
     showDataWarning(`Could not load gym data: ${e.message}`);
     return;
+  }
+
+  // Only feeds the small "compared to usual X" card, not the main charts --
+  // fetched outside the Promise.all above so a slow/failed weekly_averages
+  // query (see migrations/004_weekly_averages_perf_fix.sql) can't block the
+  // rest of the page.
+  let weeklyRows = [];
+  try {
+    weeklyRows = await sbFetch(`weekly_averages?select=*&limit=10000`);
+  } catch (e) {
+    console.error('weekly_averages load failed (comparison card will show "—"):', e);
   }
 
   const predictions = {};
@@ -1557,10 +1390,7 @@ async function init() {
     showDataWarning('Prediction data is unavailable — the daily build may not have run yet.');
   }
 
-  const pt = getPTNow();
   predDate = today;
-  document.getElementById('day-select').value = DAYS[pt.getDay()];
-  updateRangeDayLabel();
 
   window._insightData = data;
 
@@ -1632,14 +1462,7 @@ async function init() {
   document.addEventListener('click', () => { calPopup.style.display = 'none'; });
   calPopup.addEventListener('click', e => e.stopPropagation());
 
-  document.getElementById('day-select').addEventListener('change', () => { updateRangeDayLabel(); updateWeeklyChart(data); });
-  document.getElementById('range-select').addEventListener('change', () => updateWeeklyChart(data));
-  document.getElementById('semester-check').addEventListener('change', () => updateWeeklyChart(data));
-
-  document.getElementById('semester-check').checked = isSemesterDay(new Date());
-
   updatePredChart(data);
-  updateWeeklyChart(data);
   renderInsightCards(data);
 
   document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
