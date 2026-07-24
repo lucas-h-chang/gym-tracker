@@ -295,3 +295,52 @@ empty until midnight PT. Confirm:
 select count(*), count(distinct range_type) from weekly_averages;
 -- expect ~3000-3500 rows across 6 range_types, and the site stops 57014ing.
 ```
+
+
+Step 8 — lock down the raw history so the public can't bulk-download it (2026-07-24)
+--------------------------------------------------------------------------------------
+
+**Why.** The publishable anon key embedded in `docs/index.html` lets anyone page
+through your entire occupancy history via the REST API: `capacity_log` (~183k raw
+15-min readings back to 2022 — the ML training data) and `day_profiles` (~99k
+per-day summaries derived from it). Both are your product/moat sitting in the open.
+The website only needs the last ~36h of `capacity_log` (the "actual so far today"
+line) and never reads `day_profiles` (backend-only input to `today_builder.py`).
+
+**Safe because** every Python script (scraper / *_builder / train / build_curves)
+connects with `SUPABASE_SERVICE_KEY` = the `service_role`, which bypasses RLS and
+keeps its grants. Verified 2026-07-24: all six use `SUPABASE_SERVICE_KEY`.
+
+**Apply.** In the Supabase SQL editor, paste and run the entire contents of
+`006_lock_down_history.sql`. It (a) enables RLS on `capacity_log` and replaces any
+existing policies with a `timestamp > now() - interval '3 days'` read window for
+`anon`/`authenticated`, and (b) revokes public read on the `day_profiles` view.
+It ends with `notify pgrst, 'reload schema'`.
+
+**Validate immediately after** (all run as the SQL-editor role, which bypasses RLS,
+so these confirm the DATA is intact — the anon-facing effect is checked separately
+below):
+
+```sql
+-- capacity_log still has the full history (RLS only filters what anon SEES):
+select count(*) from capacity_log;                 -- expect ~183k, unchanged
+
+-- the RLS window is present and correct:
+select policyname, cmd, qual
+from pg_policies
+where schemaname = 'public' and tablename = 'capacity_log';
+-- expect two SELECT policies, qual referencing now() - interval '3 days'
+
+-- day_profiles no longer granted to the API roles:
+select grantee, privilege_type
+from information_schema.role_table_grants
+where table_name = 'day_profiles';
+-- expect NO rows for grantee = 'anon' or 'authenticated' (service_role is fine)
+```
+
+**Then tell me and I'll verify the anon-facing effect from here** using the public
+key (I can already reach the REST API read-only): confirm `capacity_log` returns
+only recent rows (not 183k), `day_profiles` returns 401/permission-denied, and the
+site's exact "actual today" query still returns its ~36h slice unchanged.
+
+**Rollback** is documented at the bottom of `006_lock_down_history.sql`.
