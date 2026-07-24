@@ -46,10 +46,14 @@ with open("models/feature_names.pkl", "rb") as f: ...
 
 to compute the RF baseline column in every backtest report (`backtest_report.json`),
 exactly as `HANDOFF_MODEL_REDESIGN.md` §7 intended ("archive RF code ... don't
-delete — it's the comparison baseline"). `eval_model.py` and `compare_cutoffs.py`
-(RF-specific analysis scripts) have the same live dependency on `train.py`.
+delete — it's the comparison baseline").
 
-Moving `train.py` out of the project root would have broken all three without a
+> The two RF-specific one-off analysis scripts that shared this dependency —
+> `eval_model.py` and `compare_cutoffs.py` — were deleted 2026-07-23 as orphaned
+> (nothing referenced them; `backtest.py`'s baseline column supersedes them).
+> `backtest.py` remains the sole live reader that keeps `train.py` here.
+
+Moving `train.py` out of the project root would have broken `backtest.py` without a
 messier fix (package-ifying `legacy/`, or duplicating `engineer_features`), which
 is a bigger change than "mechanical de-duplication and dead-code removal" should
 make. So `train.py`, `test_model_sanity.py`, `test_features.py`,
@@ -59,6 +63,6 @@ that `train.yml` is deleted) but still live-read by the backtest/eval tooling.
 
 If a future pass wants to actually relocate them, the clean way is to make
 `legacy/` an importable package (or fetch the RF baseline as read-only historical
-data instead of live-loading the pickle) and update `backtest.py` /
-`eval_model.py` / `compare_cutoffs.py` accordingly — that's a real refactor, not
-a move, and belongs in its own change with its own verification.
+data instead of live-loading the pickle) and update `backtest.py` accordingly —
+that's a real refactor, not a move, and belongs in its own change with its own
+verification.
