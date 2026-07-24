@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bear Meter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://njhxcwcvyorwqlfacnal.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1337,7 +1340,10 @@ async function init() {
   let predRows, actualsRows, todaySummaryRows;
   try {
     [predRows, actualsRows, todaySummaryRows] = await Promise.all([
-      sbFetch(`predictions?select=slot_ts,pct&slot_ts=gte.${today}T00:00:00&slot_ts=lte.${shiftDate(today, 92)}T23:59:59&order=slot_ts.asc&limit=10000`),
+      // First paint only needs the visible pills (today .. today+4). The rest
+      // of the 90-day horizon (calendar "More" days) loads in the background
+      // below so it can't slow the initial render.
+      sbFetch(`predictions?select=slot_ts,pct&slot_ts=gte.${today}T00:00:00&slot_ts=lte.${shiftDate(today, 4)}T23:59:59&order=slot_ts.asc&limit=10000`),
       sbFetch(`capacity_log?timestamp=gte.${yesterday}T12:00:00Z&order=timestamp.asc&limit=2000`),
       sbFetch(`today_summary?date=eq.${today}&select=similarity_preds,blend_weight,computed_at`),
     ]);
@@ -1467,9 +1473,28 @@ async function init() {
 
   document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
   document.body.classList.remove('loading');
+
+  // Background-load the rest of the 90-day horizon (calendar "More" days) after
+  // first paint. Merges into the same `predictions` object the rendered view
+  // already references, then re-renders so a day the user may have navigated to
+  // via the calendar fills in automatically once it arrives.
+  sbFetch(`predictions?select=slot_ts,pct&slot_ts=gte.${shiftDate(today, 5)}T00:00:00&slot_ts=lte.${shiftDate(today, 92)}T23:59:59&order=slot_ts.asc&limit=10000`)
+    .then(rows => {
+      rows.forEach(r => { predictions[slotTsToKey(r.slot_ts)] = r.pct; });
+      updatePredChart(data);
+      renderInsightCards(data);
+    })
+    .catch(e => console.error('background predictions load failed:', e));
 }
 
-init();
+// chart.js is loaded with `defer`, which executes before DOMContentLoaded but
+// after this inline script parses. Gating init on DOMContentLoaded guarantees
+// the Chart global exists before updatePredChart runs.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 </script>
 </body>
 </html>
