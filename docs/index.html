@@ -298,6 +298,9 @@
       z-index: 10;
       --dot-rgb: 110, 231, 183;
     }
+    /* Only the expanding halo. The solid dot core is a native canvas point
+       (see the Actual dataset's scriptable pointRadius) so it stays perfectly
+       glued to the line. This ring is centered on that same point. */
     .pulse-dot::before {
       content: '';
       position: absolute;
@@ -305,14 +308,6 @@
       border-radius: 50%;
       background: rgba(var(--dot-rgb), 0.35);
       animation: pulse-ring 2s ease-out infinite;
-    }
-    .pulse-dot::after {
-      content: '';
-      position: absolute;
-      inset: 3px;
-      border-radius: 50%;
-      background: rgb(var(--dot-rgb));
-      box-shadow: 0 0 8px rgba(var(--dot-rgb), 0.5);
     }
     @keyframes pulse-ring {
       0%   { transform: scale(0.8); opacity: 0.9; }
@@ -820,6 +815,15 @@ function positionPulseDot(chart, lastPt) {
   const pulseDot = document.getElementById('pulse-dot');
   if (!pulseDot) return;
 
+  // The solid core is drawn on the canvas as a native point; this element is
+  // only the pulsing halo. Keep it hidden until the chart is actually visible
+  // (canvas is visibility:hidden during body.loading) so it never flashes in
+  // empty space before the chart's entrance animation runs.
+  if (document.body.classList.contains('loading')) {
+    pulseDot.style.display = 'none';
+    return;
+  }
+
   const { scales } = chart;
   const dotX = scales.x.getPixelForValue(lastPt.x);
   const dotY = scales.y.getPixelForValue(lastPt.y);
@@ -1014,10 +1018,23 @@ function updatePredChart(data) {
           borderColor: '#6ee7b7',
           backgroundColor: 'transparent',
           borderWidth: 3.25,
-          pointRadius: 0,
+          // The live "now" dot is rendered as a native point on the last actual
+          // point (the live point built in updatePredChart), so it animates in
+          // with the line and stays glued to the exact seam where actual meets
+          // predicted, with no DOM overlay drifting off the curve. Only shown
+          // while the gym is open (nowLine.show); the DOM .pulse-dot adds the halo.
+          pointRadius: (c) => {
+            const show = c.chart.options.plugins?.nowLine?.show;
+            return (show && c.dataIndex === c.dataset.data.length - 1) ? 5 : 0;
+          },
           pointHoverRadius: 5,
-          pointBackgroundColor: '#fff',
+          pointBackgroundColor: (c) => {
+            const isLast = c.dataIndex === c.dataset.data.length - 1;
+            const y = c.dataset.data[c.dataIndex]?.y;
+            return (isLast && y != null) ? `rgb(${pctColorRGB(y)})` : '#fff';
+          },
           pointBorderColor: 'transparent',
+          pointBorderWidth: 0,
           tension: 0.35,
           fill: true,
           order: 1,
@@ -1271,8 +1288,7 @@ function renderInsightCards(data) {
 
     const arrows = { up: '↑', down: '↓', flat: '→' };
     const subColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--sub)';
-    const sign = trend.delta >= 0 ? '+' : '';
-    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${sign}${trend.delta}%</span>`;
+    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${Math.abs(trend.delta)}%</span>`;
   } else {
     trendValEl.textContent = '—';
     trendValEl.style.color = 'var(--sub)';
@@ -1315,6 +1331,7 @@ function renderInsightCards(data) {
 
     compVerdictEl.textContent = verdict;
     compVerdictEl.className = `card-value comp-verdict ${verdictClass}`;
+    compVerdictEl.style.color = '';
     compDeltaEl.innerHTML = `<span class="comp-verdict ${verdictClass}">${absDelta}% ${higher ? 'higher' : 'lower'}</span>`;
   } else {
     compVerdictEl.textContent = '—';
