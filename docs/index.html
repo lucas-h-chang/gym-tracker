@@ -789,7 +789,6 @@ const capacityGradientPlugin = {
     });
   }
 };
-Chart.register(capacityGradientPlugin);
 
 // NOW indicator: pulsing dot at the live point (positioned via CSS element).
 // The live point itself — same x/y the actual line is extended to and the
@@ -816,7 +815,6 @@ const nowLinePlugin = {
     positionPulseDot(chart, lastPt);
   }
 };
-Chart.register(nowLinePlugin);
 
 function positionPulseDot(chart, lastPt) {
   const pulseDot = document.getElementById('pulse-dot');
@@ -861,7 +859,6 @@ const scrubLinePlugin = {
     ctx.restore();
   }
 };
-Chart.register(scrubLinePlugin);
 
 // ── Day Pills ────────────────────────────────────────────────
 function buildPillDates() {
@@ -1329,6 +1326,9 @@ function renderInsightCards(data) {
 
 // ── Boot ───────────────────────────────────────────────────────
 async function init() {
+  // chart.js loads with `defer`, so it isn't available until DOMContentLoaded
+  // (which gates this init call). Register plugins here, not at parse time.
+  Chart.register(capacityGradientPlugin, nowLinePlugin, scrubLinePlugin);
   updateStatusBar();
   // Live capacity is server-cached for 30s (see api/live-capacity.js), so
   // polling any faster than that just re-fetches the same cached value.
