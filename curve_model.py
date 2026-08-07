@@ -13,7 +13,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, SEM_STARTS, slot_of
+from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, SEM_STARTS
 
 MAX_CAPACITY = 150
 
@@ -104,7 +104,7 @@ def prepare_slots(df, week_cap=WEEK_CAP):
     df = df[df['people_count'] > 5].copy()
     df['percent_full'] = df['people_count'].astype(float) / MAX_CAPACITY * 100
     df['date'] = df['timestamp'].dt.normalize()
-    df['slot'] = slot_of(df['timestamp'])
+    df['slot'] = df['timestamp'].dt.hour * 4 + df['timestamp'].dt.minute // 15
 
     collapsed = df.groupby(['date', 'slot'], as_index=False)['percent_full'].mean()
     collapsed['dow'] = collapsed['date'].dt.dayofweek
