@@ -19,6 +19,13 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
+# train.py deliberately keeps its OWN frozen copy of the calendar ranges (see
+# academic_calendar.py's docstring) until the RF is retired. slot_of is the one
+# exception: it is slot arithmetic, not calendar data, and the entire point of
+# the 2026-08-06 fix is that every consumer share a single bucketing rule.
+# Re-inlining a copy here would recreate the bug it was written to remove.
+from academic_calendar import slot_of
+
 MAX_CAPACITY = 150
 
 # ── Semester boundary dates (for days-to-boundary ramp features) ──────────────
@@ -434,7 +441,7 @@ if __name__ == "__main__":
     key_cols = ['dow_num', 'slot', 'is_break']
     base_df = pd.DataFrame({
         'dow_num':      df['timestamp'].dt.dayofweek.values,
-        'slot':         (df['timestamp'].dt.hour * 4 + df['timestamp'].dt.minute // 15).values,
+        'slot':         slot_of(df['timestamp']).values,
         'is_break':     X['is_break'].values,
         'percent_full': y,
     })

@@ -308,3 +308,54 @@ def is_semester_day(d):
     """
     d = _as_date(d)
     return not _in_any(d, BREAK_RANGES)
+
+
+# ── 15-minute slot bucketing (consolidated 2026-08-06) ───────────────────────
+
+SLOTS_PER_DAY = 96  # 24h x 4 quarter-hours
+
+
+def slot_of(timestamps):
+    """
+    Map PT wall-clock timestamps onto their quarter-hour slot index (0-95),
+    rounding to the NEAREST boundary rather than flooring.
+
+    A scrape normally lands ~30s past its boundary, where floor and nearest
+    agree. They diverge once a run is delayed more than 7.5 minutes -- which
+    is exactly what a GitHub Actions runner-queue backlog produces. Flooring
+    a 15:40 reading files it at 15:30, ten minutes before it was taken;
+    nearest files it at 15:45, five minutes after. Nearest is never worse.
+
+    This has to match the SQL in migrations/002_day_profiles_view.sql
+    (round((hour + minute/60) * 4) / 4), weekly_builder.py's hour_slot, and
+    the JS in docs/index.html::buildTodayActuals -- all of which already
+    round. curve_model.py, predictions_builder.py, and train.py's baseline
+    floored instead, so the same reading landed in two different slots
+    depending on which consumer read it. This function is the one definition
+    they all now share.
+
+    Rounding can push a 23:52:30+ reading to slot 96 (a 24:00 that does not
+    exist). scraper.py's open-hours gate makes that unreachable for live data
+    -- the RSF closes at 23:00 -- but backfilled history is not gated, so the
+    result is clamped to 95 rather than silently wrapping into the next day
+    while the accompanying `date` column still says today.
+
+    Seconds are deliberately dropped, not rounded in. Every existing nearest
+    implementation truncates to whole minutes -- the SQL uses extract(minute),
+    the JS uses getMinutes(), weekly_builder uses dt.minute -- so counting
+    seconds here would be marginally more accurate and would disagree with all
+    three on the ~30s band either side of each 7.5-minute midpoint. Matching
+    them matters more than the extra precision.
+
+    Dropping seconds also removes any rounding-mode hazard: with whole-minute
+    input, minutes/15 can never land on an exact .5 (that would need a
+    fractional minute), so pandas' round-half-to-even and Postgres'
+    round-half-away-from-zero cannot disagree.
+
+    Args:
+        timestamps: pandas Series of tz-naive PT datetimes.
+    Returns:
+        Int64 Series of slot indices in [0, 95].
+    """
+    minutes = timestamps.dt.hour * 60 + timestamps.dt.minute
+    return (minutes / 15).round().clip(upper=SLOTS_PER_DAY - 1).astype(int)
