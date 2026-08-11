@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1341,7 +1342,7 @@ function renderInsightCards(data) {
   }
 }
 
-// ── Boot ───────────────────────────────────────────────────────
+// ── Boot ───���───────────────────────────────────────────────────
 async function init() {
   // chart.js loads with `defer`, so it isn't available until DOMContentLoaded
   // (which gates this init call). Register plugins here, not at parse time.
