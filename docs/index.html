@@ -356,7 +356,11 @@
       inset: 0;
       display: none;
       flex-direction: column;
-      justify-content: center;
+      /* Top-aligned, not centered: the bars stand in for the label/value/sub
+         stack below them, which starts at the top of the card. Centering them
+         floated the placeholder ~14px off the text it was standing in for, so
+         everything visibly jumped on reveal. */
+      justify-content: flex-start;
       gap: 12px;
       padding: 0;
       z-index: 2;
@@ -365,6 +369,11 @@
     body.loading .skel-overlay        { display: flex; }
     body.loading #insight-row         { display: flex !important; }
     body.loading .chart-wrap canvas   { visibility: hidden; }
+    /* Hide the real content rather than trusting the overlay to paint over it.
+       An opaque box only covers what it happens to overlap, so a card that
+       outgrows min-height (a wrapped "VS USUAL WEDNESDAYS", a long verdict)
+       leaked text past the bars. Same idiom as the canvas rule above. */
+    body.loading .insight-card > *:not(.skel-overlay) { visibility: hidden; }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
@@ -430,7 +439,7 @@
         <div class="skel" style="width:45%;height:42px;animation-delay:.1s"></div>
         <div class="skel" style="width:35%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="card-label">IN THE NEXT 30 MIN</span>
+      <span class="card-label">NEXT 30 MIN</span>
       <span class="card-value" id="insight-trend-val">&mdash;</span>
       <span class="card-sub" id="insight-trend-sub"></span>
     </div>
@@ -441,7 +450,7 @@
         <div class="skel" style="width:55%;height:42px;animation-delay:.1s"></div>
         <div class="skel" style="width:45%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="card-label" id="insight-comp-header">COMPARED TO USUAL &mdash;</span>
+      <span class="card-label" id="insight-comp-header">VS USUAL &mdash;</span>
       <span class="card-value" id="insight-comp-verdict">&mdash;</span>
       <span class="card-sub" id="insight-comp-delta"></span>
     </div>
@@ -698,17 +707,21 @@ function updateStatusBar() {
   const pt = getPTNow();
   const { open, close } = getOpenHours(pt.getDay(), pt);
   const isOpen = pt.getHours() >= open && pt.getHours() < close;
-  if (isOpen) {
-    fetch('/api/live-capacity')
-      .then(r => r.json())
-      .then(d => {
-        const pct = Math.round(d.capacity_pct);
-        const count = Math.round((pct / 100) * 150);
-        liveCapacity = { count, pct };
-        if (window._insightData) renderInsightCards(window._insightData);
-      })
-      .catch(() => {});
-  }
+  if (!isOpen) return Promise.resolve();
+
+  // The promise is returned so wake() can wait on this and the forecast
+  // refresh together. Without that, coming back to a tab paints a fresh live %
+  // against a forecast that's still minutes old, and computeTrend() reads the
+  // difference as a real move.
+  return fetch('/api/live-capacity')
+    .then(r => r.json())
+    .then(d => {
+      const pct = Math.round(d.capacity_pct);
+      const count = Math.round((pct / 100) * 150);
+      liveCapacity = { count, pct };
+      if (window._insightData) renderInsightCards(window._insightData);
+    })
+    .catch(() => {});
 }
 
 // ── Prediction Chart ───────────────────────────────────────────
@@ -842,8 +855,90 @@ function positionPulseDot(chart, lastPt) {
 // together and never drift apart.
 setInterval(() => {
   if (!predChart || predDate !== todayPT()) return;
-  if (window._insightData) updatePredChart(window._insightData);
+  if (!window._insightData) return;
+  updatePredChart(window._insightData);
+  // computeTrend() subtracts a forecast slot from the *live* reading, so the
+  // moment those two describe different instants the card doesn't just go
+  // stale, it inverts: a live 42% against a forecast still holding 31% reads
+  // as "Getting quieter" while the gym is filling. Re-render on the same tick
+  // as the chart so both halves of that subtraction always agree on "now".
+  renderInsightCards(window._insightData);
 }, 15000);
+
+// ── Today's data refresh ─────────────────────────────────────
+// The 15s tick above only redraws from data already in memory, and
+// updateStatusBar() only refreshes the single live-% reading. Neither pulls
+// new capacity_log rows, so a tab left open draws one straight line from
+// whatever bin was loaded at boot to the live point, and the real curve in
+// between never fills in. Re-pull the two tables that actually change during
+// the day: capacity_log (scraper.py, every 15 min) and today_summary
+// (today_builder.py, every 15 min). predictions and weekly_averages are
+// daily/nightly builds, so they stay as loaded.
+let bootDate = '';
+let refreshInFlight = false;
+let lastRefreshAt = 0;
+
+function formatBuiltAt(computedAt) {
+  if (!computedAt) return null;
+  return new Date(computedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles',
+    month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' PT';
+}
+
+async function refreshTodayData() {
+  const data = window._insightData;
+  if (!data) return;
+
+  // Returning to a tab can fire visibilitychange, focus and pageshow within
+  // milliseconds of each other. Collapse them so one trip back is one fetch,
+  // not three, and so the 5-min timer can't overlap a wake-up refresh.
+  if (refreshInFlight || Date.now() - lastRefreshAt < 10000) return;
+
+  // The date rolled over while the tab sat open. Day pills, calendar bounds
+  // and the whole prediction window are built around the boot-time date, so
+  // reloading is the only honest way to move to the new day. Rare by
+  // definition (once per open tab, at midnight PT).
+  if (todayPT() !== bootDate) {
+    location.reload();
+    return;
+  }
+
+  refreshInFlight = true;
+
+  // Narrower than the boot query, which starts at yesterday 12:00Z purely as
+  // a safe margin. buildTodayActuals() discards everything that isn't today
+  // PT anyway, and PT is UTC-7/-8, so today's PT midnight is always >= today
+  // 00:00Z. Halving the payload matters here because this repeats all day.
+  let actualsRows, todaySummaryRows;
+  try {
+    [actualsRows, todaySummaryRows] = await Promise.all([
+      sbFetch(`capacity_log?timestamp=gte.${bootDate}T00:00:00Z&order=timestamp.asc&limit=2000`),
+      sbFetch(`today_summary?date=eq.${bootDate}&select=similarity_preds,blend_weight,computed_at`),
+    ]);
+  } catch (e) {
+    // Offline, or a Supabase blip. Keep rendering what we already have and
+    // let the next tick retry rather than blanking a working page.
+    console.error('refreshTodayData failed:', e);
+    return;
+  } finally {
+    refreshInFlight = false;
+    lastRefreshAt = Date.now();
+  }
+
+  data.today_actuals = buildTodayActuals(actualsRows, bootDate);
+
+  const ts = todaySummaryRows[0] || {};
+  data.today_similarity_preds = ts.similarity_preds || [];
+  data.today_blend_weight     = ts.blend_weight || 0;
+
+  const builtAt = formatBuiltAt(ts.computed_at);
+  if (builtAt) {
+    data.built_at = builtAt;
+    document.getElementById('footer-built').textContent = `UPDATED ${builtAt}`;
+  }
+
+  if (predDate === bootDate) updatePredChart(data);
+  renderInsightCards(data);
+}
 
 // Scrub line on hover
 const scrubLinePlugin = {
@@ -1125,7 +1220,15 @@ function showDataWarning(msg) {
 }
 
 // ── Insight Cards ─────────────────────────────────────────────
-function getBlendedSlots(data, fromH, toH, date) {
+// Half-open [fromH, toH) by default, which is what the full-day curve wants:
+// called with the closing hour, it must stop at the last slot INSIDE opening
+// hours (10:45 PM), not draw a point at the moment the doors shut.
+//
+// `includeEnd` closes the interval to [fromH, toH], for the "next 30 min" card.
+// That window is 30 minutes because the card says so, and excluding its far edge
+// meant that on an exact quarter-hour — 4:00, 4:15, … — the last slot considered
+// was only 15 minutes out while the label still promised 30.
+function getBlendedSlots(data, fromH, toH, date, includeEnd = false) {
   const dateStr = date || todayPT();
   const isToday = dateStr === todayPT();
   const simMap = {};
@@ -1136,7 +1239,7 @@ function getBlendedSlots(data, fromH, toH, date) {
   for (let h = Math.floor(fromH); h <= Math.floor(toH); h++) {
     for (const m of [0, 15, 30, 45]) {
       const slotH = h + m / 60;
-      if (slotH < fromH || slotH >= toH) continue;
+      if (slotH < fromH || (includeEnd ? slotH > toH : slotH >= toH)) continue;
       const key  = `${dateStr}_${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
       const pred = data.predictions[key];
       if (pred == null) continue;
@@ -1168,7 +1271,7 @@ function computeTrend(data, livePct) {
     sub   = 'first 30 min · projected';
   }
 
-  const slots = getBlendedSlots(data, fromH, toH, predDate);
+  const slots = getBlendedSlots(data, fromH, toH, predDate, true);
   if (slots.length < 2) return null;
 
   const startY = (isToday && livePct != null) ? livePct : slots[0].y;
@@ -1282,14 +1385,19 @@ function renderInsightCards(data) {
   const trend = computeTrend(data, livePct);
 
   if (trend && isToday) {
-    const labels  = { up: 'Getting busier', down: 'Getting quieter', flat: 'Holding steady' };
+    const labels  = { up: 'Filling up', down: 'Clearing out', flat: 'Holding steady' };
     const dirColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--text)';
     trendValEl.textContent = labels[trend.dir];
     trendValEl.style.color = dirColor;
 
+    // Magnitude only — the arrow already carries the direction — plus the time
+    // the window actually ends (computeTrend's last slot), so the number reads
+    // as a forecast to a moment rather than floating free. Kept identical to
+    // RSFApp2.0's TodayView trendCard.
     const arrows = { up: '↑', down: '↓', flat: '→' };
     const subColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--sub)';
-    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${Math.abs(trend.delta)}%</span>`;
+    const byTime = formatTime(trend.toH, trend.toMin);
+    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${Math.abs(trend.delta)}% by ${byTime}</span>`;
   } else {
     trendValEl.textContent = '—';
     trendValEl.style.color = 'var(--sub)';
@@ -1301,7 +1409,7 @@ function renderInsightCards(data) {
   const compVerdictEl = document.getElementById('insight-comp-verdict');
   const compDeltaEl   = document.getElementById('insight-comp-delta');
 
-  compHeaderEl.textContent = `COMPARED TO USUAL ${dayName.toUpperCase()}S`;
+  compHeaderEl.textContent = `VS USUAL ${dayName.toUpperCase()}S`;
 
   const cmpH = isToday
     ? Math.round((pt.getHours() + pt.getMinutes() / 60) * 4) / 4
@@ -1315,25 +1423,26 @@ function renderInsightCards(data) {
     const absDelta = Math.abs(avgDelta);
     const higher = avgDelta > 0;
 
+    // Sentence case, kept identical to RSFApp2.0's computeComparison verdicts.
     let verdict, verdictClass;
     if (absDelta > 15) {
-      verdict = higher ? 'Much Busier' : 'Much Quieter';
+      verdict = higher ? 'Much busier' : 'Much quieter';
       verdictClass = higher ? 'much-busier' : 'much-quieter';
     } else if (absDelta > 6) {
       verdict = higher ? 'Busier' : 'Quieter';
       verdictClass = higher ? 'busier' : 'quieter';
     } else if (absDelta > 3) {
-      verdict = higher ? 'A Bit Busier' : 'A Bit Quieter';
+      verdict = higher ? 'A bit busier' : 'A bit quieter';
       verdictClass = higher ? 'bit-busier' : 'bit-quieter';
     } else {
-      verdict = 'Average';
+      verdict = 'About average';
       verdictClass = 'average';
     }
 
     compVerdictEl.textContent = verdict;
     compVerdictEl.className = `card-value comp-verdict ${verdictClass}`;
     compVerdictEl.style.color = '';
-    compDeltaEl.innerHTML = `<span class="comp-verdict ${verdictClass}">${absDelta}% ${higher ? 'higher' : 'lower'}</span>`;
+    compDeltaEl.innerHTML = `<span class="comp-verdict ${verdictClass}">${absDelta}% ${higher ? 'above' : 'below'} usual</span>`;
   } else {
     compVerdictEl.textContent = '—';
     compVerdictEl.className = 'card-value comp-verdict';
@@ -1396,10 +1505,7 @@ async function init() {
   Object.values(weekly).forEach(arr => arr.sort((a, b) => a.x - b.x));
 
   const ts = todaySummaryRows[0] || {};
-  const built_at = ts.computed_at
-    ? new Date(ts.computed_at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles',
-        month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' PT'
-    : today;
+  const built_at = formatBuiltAt(ts.computed_at) || today;
 
   const data = {
     predictions,
@@ -1414,7 +1520,11 @@ async function init() {
     showDataWarning('Prediction data is unavailable — the daily build may not have run yet.');
   }
 
+  // predDate follows the day pills; bootDate is pinned to the day this page
+  // actually loaded, so refreshTodayData() can tell "user is browsing Friday"
+  // apart from "the clock rolled past midnight".
   predDate = today;
+  bootDate = today;
 
   window._insightData = data;
 
@@ -1491,6 +1601,35 @@ async function init() {
 
   document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
   document.body.classList.remove('loading');
+
+  // Two triggers, because neither covers the other. The interval handles a
+  // tab left open in the foreground (visibilitychange never fires there);
+  // the visibility handler catches the backgrounded-tab case, where browsers
+  // throttle timers hard enough that a tab can sit hours behind. New
+  // capacity_log rows only land every 15 min, so 5 min is well inside the
+  // useful resolution without polling for its own sake.
+  setInterval(refreshTodayData, 5 * 60 * 1000);
+
+  // No single event covers every way a tab comes back into view, so listen for
+  // all three and let refreshTodayData() de-dupe. visibilitychange misses
+  // app/window switches where the tab never technically hides; focus misses
+  // same-window tab switches; mobile Safari can restore from bfcache and fire
+  // only pageshow. Live capacity and the curve refresh together here so the
+  // dot can't jump to a new value while the line it sits on stays behind.
+  // init() just loaded all of this, and pageshow fires on first load too, so
+  // start the cooldown here to stop the boot pageshow re-fetching immediately.
+  lastRefreshAt = Date.now();
+
+  const wake = async () => {
+    if (document.visibilityState === 'hidden') return;
+    // Settle both before the final render so the live % and the forecast the
+    // trend card subtracts it from always describe the same moment.
+    await Promise.allSettled([updateStatusBar(), refreshTodayData()]);
+    if (window._insightData) renderInsightCards(window._insightData);
+  };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('focus', wake);
+  window.addEventListener('pageshow', wake);
 
   // Background-load the rest of the 90-day horizon (calendar "More" days) after
   // first paint. Merges into the same `predictions` object the rendered view
