@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bear Meter">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Cg transform='rotate%28135 50 50%29' fill='none' stroke-width='11' stroke-linecap='round'%3E%3Ccircle cx='50' cy='50' r='32' stroke='%232f2f36' stroke-dasharray='150.8 201.1'/%3E%3Ccircle cx='50' cy='50' r='32' stroke='%236ee7b7' stroke-dasharray='93.5 201.1'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="manifest" href="/manifest.json">
   <title>About — Bear Meter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -25,6 +32,11 @@
       font-family: var(--font);
       font-size: 14px;
       min-height: 100vh;
+      min-height: 100dvh;
+      -webkit-text-size-adjust: 100%;
+      /* hidden, not clip: see index.html — body's overflow propagates to the
+         viewport, and clip on one axis forces the other to clip as well. */
+      overflow-x: hidden;
     }
 
     /* ── Header ── */
@@ -93,11 +105,16 @@
       color: var(--muted);
     }
 
+    /* Gutters match the home page's phone layout (cardGutter: 20 on iOS), and
+       pick up the safe-area insets so landscape keeps text clear of the notch. */
     @media (max-width: 768px) {
-      header { padding: 0 24px; }
-      .content { padding: 56px 24px 80px; }
+      header   { padding: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      .content { padding: 48px calc(20px + env(safe-area-inset-right)) 80px calc(20px + env(safe-area-inset-left)); }
       h1 { font-size: 28px; }
-      footer { padding: 16px 24px; }
+      footer {
+        padding: 16px calc(20px + env(safe-area-inset-right))
+                 calc(16px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+      }
     }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>

@@ -2,8 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover lets the page paint under the notch and home
+       indicator; footer pads itself back out with env(safe-area-inset-bottom). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Bear Meter</title>
+
+  <!-- Without this the mobile address bar renders white above a #0a0a0f page. -->
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bear Meter">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- The tab icon is the capacity gauge from icon-180.png, inlined as SVG so
+       it stays sharp at every size with no extra request. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Cg transform='rotate%28135 50 50%29' fill='none' stroke-width='11' stroke-linecap='round'%3E%3Ccircle cx='50' cy='50' r='32' stroke='%232f2f36' stroke-dasharray='150.8 201.1'/%3E%3Ccircle cx='50' cy='50' r='32' stroke='%236ee7b7' stroke-dasharray='93.5 201.1'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="manifest" href="/manifest.json">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://njhxcwcvyorwqlfacnal.supabase.co" crossorigin>
@@ -32,7 +46,18 @@
       color: var(--text);
       font-family: var(--font);
       font-size: 14px;
+      /* dvh tracks the iOS Safari URL bar as it retracts; vh is the fallback
+         for browsers without it, and undershoots by the bar's height. */
       min-height: 100vh;
+      min-height: 100dvh;
+      /* Stops iOS inflating body text when the phone is rotated. */
+      -webkit-text-size-adjust: 100%;
+      /* Backstop against sideways scroll; the tooltip clamp is the actual fix.
+         hidden, NOT clip: body's overflow propagates to the viewport (html is
+         visible), and a clip on one axis forces the other to clip too, which
+         would leave the page unable to scroll vertically. hidden resolves the
+         other axis to auto instead. */
+      overflow-x: hidden;
     }
 
     /* ── Data Warning ── */
@@ -107,6 +132,18 @@
       align-items: baseline;
       gap: 6px;
     }
+    /* Mirrors the 10pt Circle() beside the iOS capacity value
+       (TodayView.swift:141-145). Desktop never shows it — the phone layout
+       turns it on in the media query — so this is inert above 768px. */
+    .live-dot {
+      display: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+      align-self: center;
+      background: var(--sub);
+    }
     .card-sub {
       font-size: 14px;
       color: var(--sub);
@@ -169,12 +206,34 @@
       color: var(--text);
       letter-spacing: -0.01em;
     }
+    /* Chart.js's documented responsive setup: the WRAPPER owns the dimensions
+       and the canvas is left alone to fill it. Two things depend on that.
+
+       Height: the canvas used to carry height="340", which Chart.js reads once
+       at construction to lock an aspect ratio it then preserves forever. Widen
+       the window and the chart grew proportionally taller; rotate a phone to
+       landscape and the near-square portrait ratio inflated it to ~680px.
+       A fixed wrapper height plus maintainAspectRatio:false removes the ratio
+       from the picture entirely.
+
+       Sharpness: this rule used to be `width: 100% !important`. Chart.js sizes
+       the canvas by writing an inline style.width next to a matching backing
+       store canvas.width, and an !important stylesheet rule beats a
+       non-important inline style — so the browser stretched whatever bitmap
+       was last rendered to fill the container and Chart.js could never correct
+       the display size. That mismatch is what showed up as blur on resize. */
     .chart-wrap {
       position: relative;
+      height: 340px;
     }
     .chart-wrap canvas {
       display: block;
-      width: 100% !important;
+      /* Scrubbing the chart must not also scroll the page. Without this a drag
+         across the curve is claimed by the browser as a vertical pan, so the
+         readout jitters while the page slides under your finger. iOS gets the
+         same behaviour from GymChart's DragGesture(minimumDistance: 0), which
+         consumes the drag before the enclosing ScrollView sees it. */
+      touch-action: none;
     }
 
     /* ── Day Pills ── */
@@ -280,6 +339,9 @@
     /* ── Footer ── */
     footer {
       padding: 16px 48px;
+      /* Clears the iPhone home indicator now that viewport-fit=cover lets the
+         page extend under it. Resolves to 0 everywhere else. */
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
       text-align: right;
     }
     footer span {
@@ -351,6 +413,11 @@
       border-radius: 4px;
       animation: skel-pulse 1.5s ease-in-out infinite;
     }
+    /* The bar standing in for a .card-value. Its height lives here rather than
+       inline so the phone layout, where the values are 34px and 22px instead of
+       desktop's 40px, can shrink it — otherwise the cards would visibly shrink
+       the moment real data replaced a too-tall placeholder. */
+    .skel-val { height: 42px; }
     .skel-overlay {
       position: absolute;
       inset: 0;
@@ -375,16 +442,88 @@
        leaked text past the bars. Same idiom as the canvas rule above. */
     body.loading .insight-card > *:not(.skel-overlay) { visibility: hidden; }
 
-    /* ── Responsive ── */
+    /* ── Responsive ──────────────────────────────────────────────
+       The phone layout mirrors the iOS app's Today tab
+       (RSFApp2.0/Views/TodayView.swift:58-119) so the two products read as one:
+       a full-width capacity card over a pair of side-by-side insight cards,
+       then a divider, then the chart. Every rule below is scoped to this
+       breakpoint — desktop is untouched by all of it. */
     @media (max-width: 768px) {
+      /* cardGutter: CGFloat = 20 (CardText.swift). Header, cards, divider,
+         chart and footer all start on the same vertical line, as on iOS.
+         The safe-area insets are 0 in portrait and non-zero in landscape, where
+         viewport-fit=cover would otherwise let the notch sit over the gutter. */
+      header         { padding: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      .divider       { margin: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      /* 16px, matching GymChart's .padding(.horizontal, cardGutter - 4), so the
+         plot runs closer to the screen edges than the text gutter does. */
+      .chart-section { padding: 16px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left)); }
+      footer         { padding: 16px calc(20px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
+
+      /* Stacking all three cards pushed the chart ~450px down, below the fold
+         on every phone. This is the iOS VStack(spacing: 22) wrapping an
+         HStack(alignment: .top, spacing: 16). */
       .insight-row {
-        flex-direction: column;
-        padding: 20px 24px;
-        gap: 28px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 16px;
+        /* Wider than iOS's 22 because the capacity card ends on a small grey
+           sub-line; at 22 the two cards read as attached to it. */
+        row-gap: 28px;
+        align-items: start;
+        /* Asymmetric on purpose: the bottom is tight because .card-sub already
+           reserves a line under each value, so the visual gap to the divider is
+           bigger than the number suggests. */
+        padding: 20px calc(20px + env(safe-area-inset-right)) 14px calc(20px + env(safe-area-inset-left));
       }
-      .chart-section { padding: 24px 20px 0; }
-      header { padding: 0 24px; }
-      .divider { margin: 0 24px; }
+      /* The skeleton state forces display:flex !important to survive
+         .insight-row.hidden; without a matching override the placeholder would
+         lay out as a flex column and then snap into the grid on first paint. */
+      body.loading #insight-row { display: grid !important; }
+      #insight-status { grid-column: 1 / -1; }
+
+      /* No min-height on the phone. It was reserving room for a sub-line the
+         closed state never fills, which is what left the dead band between the
+         two small cards and the divider. Height stability instead comes from
+         .card-sub always occupying a line (below), which is how iOS does it:
+         CardSub renders " " with .opacity(0) rather than collapsing. */
+      .insight-card   { min-height: 0; gap: 8px; }
+      .card-sub       { min-height: 1.25em; }
+
+      /* .inter(34, .bold) and .inter(22, .bold) in TodayView. */
+      #insight-pct { font-size: 34px; }
+      /* min() is the CSS stand-in for iOS's .lineLimit(1).minimumScaleFactor():
+         caps at the iOS size on a normal phone and scales down on narrow ones.
+         "Holding steady", the longest value either card shows, needs it — at a
+         flat 22px it wraps in a 167px column and drops that card's sub-line
+         below its neighbour's, which is exactly the misalignment the nowrap
+         and the shared min-height below are there to prevent. */
+      #insight-trend-val, #insight-comp-verdict {
+        font-size: min(22px, 5.6vw);
+        white-space: nowrap;
+      }
+      #insight-status .skel-val { height: 36px; }
+      #insight-trend .skel-val, #insight-comparison .skel-val { height: 24px; }
+
+      .live-dot.on   { display: block; }
+      .card-label    { letter-spacing: 1.2px; }  /* CardLabel .kerning(1.2) */
+
+      /* Single-line, as in iOS CardLabel: these two cards sit side by side, and
+         a label that wraps in one but not the other pushes its value down and
+         breaks the shared baseline. "VS USUAL WEDNESDAYS" is the longest string
+         and fits at 10px on a 390px phone; the ellipsis only ever engages on
+         something as narrow as an SE. */
+      #insight-trend .card-label,
+      #insight-comparison .card-label {
+        font-size: 10px;
+        letter-spacing: 0.8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card-sub      { font-size: 13px; }        /* CardSub .inter(13) */
+      .cap-bar-track { height: 6px; }            /* CapacityBar frame(height: 6) */
+
       .chart-header {
         flex-direction: column;
         align-items: flex-start;
@@ -396,8 +535,46 @@
         padding-bottom: 4px;
         width: 100%;
       }
-      footer { padding: 16px 24px; }
-      .card-value { font-size: 33px; }
+
+      /* GymChart is .frame(height: 200), but that 200 is all plot — SwiftUI
+         Charts lays its axis labels inside it. Chart.js adds the x-axis row and
+         the top padding on top of the plot area, so matching iOS's *plot* means
+         a taller box here. */
+      .chart-wrap { height: 246px; }
+
+      /* Exactly the iOS pill: .inter(13) with .padding(.horizontal, 18) and
+         .padding(.vertical, 8). An earlier pass pushed these to a 40px touch
+         target, which overshot the app it is supposed to match — and at 32px
+         they are still comfortably tappable. */
+      .pill { padding: 8px 18px; font-size: 13px; }
+
+      .cal-popup {
+        /* Was a fixed 260px, which left 7 columns of ~35px. Fill the gutters
+           instead so the day cells can be square-ish. */
+        width: min(320px, calc(100vw - 40px));
+        padding: 14px;
+        /* The open handler sets right:0 inline, which would put the popup flush
+           against the screen edge. Margin isn't part of that inline offset, so
+           it's what pulls the popup back onto the 20px gutter. */
+        margin-right: calc(20px + env(safe-area-inset-right));
+      }
+      .cal-day, .cal-dow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cal-day {
+        min-height: 40px;
+        padding: 0;
+        font-size: 15px;
+      }
+      .cal-dow { min-height: 28px; padding: 0; }
+      .cal-nav-btn {
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 18px;
+      }
+      .cal-header { margin-bottom: 6px; }
     }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
@@ -418,12 +595,13 @@
     <div class="insight-card" id="insight-status">
       <div class="skel-overlay">
         <div class="skel" style="width:60%;height:12px"></div>
-        <div class="skel" style="width:50%;height:42px;animation-delay:.1s"></div>
+        <div class="skel skel-val" style="width:50%;animation-delay:.1s"></div>
         <div class="skel" style="width:100%;height:7px;animation-delay:.15s"></div>
         <div class="skel" style="width:40%;height:12px;animation-delay:.2s"></div>
       </div>
       <span class="card-label" id="insight-status-label">LIVE CAPACITY</span>
       <div class="val-row">
+        <span class="live-dot" id="insight-live-dot"></span>
         <span class="card-value" id="insight-pct">&mdash;</span>
         <span class="card-label" id="insight-pct-tag"></span>
       </div>
@@ -436,7 +614,7 @@
     <div class="insight-card" id="insight-trend">
       <div class="skel-overlay">
         <div class="skel" style="width:70%;height:12px"></div>
-        <div class="skel" style="width:45%;height:42px;animation-delay:.1s"></div>
+        <div class="skel skel-val" style="width:45%;animation-delay:.1s"></div>
         <div class="skel" style="width:35%;height:14px;animation-delay:.15s"></div>
       </div>
       <span class="card-label">NEXT 30 MIN</span>
@@ -447,7 +625,7 @@
     <div class="insight-card" id="insight-comparison">
       <div class="skel-overlay">
         <div class="skel" style="width:80%;height:12px"></div>
-        <div class="skel" style="width:55%;height:42px;animation-delay:.1s"></div>
+        <div class="skel skel-val" style="width:55%;animation-delay:.1s"></div>
         <div class="skel" style="width:45%;height:14px;animation-delay:.15s"></div>
       </div>
       <span class="card-label" id="insight-comp-header">VS USUAL &mdash;</span>
@@ -466,7 +644,7 @@
     </div>
     <div id="cal-popup" class="cal-popup" style="display:none"></div>
     <div class="chart-wrap">
-      <canvas id="pred-chart" height="340"></canvas>
+      <canvas id="pred-chart"></canvas>
       <div id="pulse-dot" class="pulse-dot" style="display:none"></div>
       <div id="pred-tooltip" class="chart-tooltip"></div>
     </div>
@@ -692,12 +870,31 @@ function makeExternalTooltip(tooltipId) {
 
     const gap = 14;
     const chartArea = context.chart.chartArea;
-    const preferLeft = tt.caretX - w - gap >= chartArea.left;
-    const left = preferLeft ? (tt.caretX - w - gap) : (tt.caretX + gap);
-    const top  = tt.caretY - h / 2;
+    // The wrapper, not the plot area, is what the box can actually overflow —
+    // it's the positioning context, and anything past its right edge scrolls
+    // the whole page sideways on a phone.
+    const wrap = el.parentElement;
+    const wrapW = wrap.clientWidth;
+    const wrapH = wrap.clientHeight;
 
-    el.style.left = left + 'px';
-    el.style.top  = top + 'px';
+    let left, top;
+    if (wrapW < 480) {
+      // Too narrow to put a ~170px nowrap box beside the caret on either side,
+      // so sit it above the point and centre it instead.
+      left = tt.caretX - w / 2;
+      top  = tt.caretY - h - gap;
+      // Above the plot area there's only the 36px of layout padding, so if the
+      // point is near the top the box has to flip below it.
+      if (top < 0) top = tt.caretY + gap;
+    } else {
+      const preferLeft = tt.caretX - w - gap >= chartArea.left;
+      left = preferLeft ? (tt.caretX - w - gap) : (tt.caretX + gap);
+      top  = tt.caretY - h / 2;
+    }
+
+    // Clamp last, so every branch above is guaranteed to land inside the wrapper.
+    el.style.left = Math.max(0, Math.min(left, wrapW - w)) + 'px';
+    el.style.top  = Math.max(0, Math.min(top,  wrapH - h)) + 'px';
     el.style.opacity = 1;
   };
 }
@@ -727,6 +924,35 @@ function updateStatusBar() {
 // ── Prediction Chart ───────────────────────────────────────────
 let predChart = null;
 let predDate  = '';
+
+function isPhone() { return window.innerWidth <= 768; }
+
+// iOS keeps every 2nd hour on a phone (GymChart: stride(from:through:by: 2))
+// and affords it by dropping the space: "7AM", not "7 AM". Same trick here, so
+// the web shows the app's tick density instead of thinning to every 3rd hour.
+function formatHourTick(h) {
+  return isPhone() ? formatHour(h).replace(' ', '') : formatHour(h);
+}
+
+// Top padding gives the pulse dot's halo room above a near-100% curve. 36px of
+// a 340px chart is fine; the same 36px eats an eighth of the phone's box.
+function chartTopPad() { return isPhone() ? 22 : 36; }
+
+// Re-resolve the breakpoint-dependent options on rotation or a window drag.
+// Chart.js re-renders on resize via its own ResizeObserver, but the top padding
+// is read once into the options object, and the tick callbacks
+// (formatHourTick, the y-axis afterBuildTicks) only re-run on an update — so
+// crossing 768 has to force one.
+let _wasPhone = isPhone();
+window.addEventListener('resize', () => {
+  if (!predChart) return;
+  const pad     = chartTopPad();
+  const phoneNow = isPhone();
+  if (predChart.options.layout.padding.top === pad && phoneNow === _wasPhone) return;
+  _wasPhone = phoneNow;
+  predChart.options.layout.padding.top = pad;
+  predChart.update('none');
+});
 
 function shiftDate(dateStr, delta) {
   const d = new Date(dateStr + 'T12:00:00');
@@ -1102,7 +1328,25 @@ function updatePredChart(data) {
     return;
   }
 
-  const ctx = document.getElementById('pred-chart').getContext('2d');
+  const canvasEl = document.getElementById('pred-chart');
+  const ctx = canvasEl.getContext('2d');
+
+  // Touch has no "moved away" event, so Chart.js leaves the last touched point
+  // active and the readout hangs around after you lift your finger. iOS clears
+  // it in DragGesture's .onEnded; this is the same thing. Guarded on
+  // pointerType so a desktop mouse still keeps its hover tooltip.
+  if (!canvasEl.dataset.liftBound) {
+    canvasEl.dataset.liftBound = '1';
+    const clearActive = (e) => {
+      if (e.pointerType === 'mouse' || !predChart) return;
+      predChart.setActiveElements([]);
+      predChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      predChart.update('none');
+    };
+    canvasEl.addEventListener('pointerup', clearActive);
+    canvasEl.addEventListener('pointercancel', clearActive);
+    canvasEl.addEventListener('pointerleave', clearActive);
+  }
 
   predChart = new Chart(ctx, {
     type: 'line',
@@ -1155,8 +1399,12 @@ function updatePredChart(data) {
     },
     options: {
       parsing: false,
+      // The .chart-wrap height is the single source of truth for how tall the
+      // chart is (see its CSS comment). Without this Chart.js would re-derive a
+      // height from an aspect ratio and fight the wrapper.
+      maintainAspectRatio: false,
       animation: { duration: 320 },
-      layout: { padding: { top: 36 } },
+      layout: { padding: { top: chartTopPad() } },
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         capacityGradient: { enabled: true },
@@ -1192,13 +1440,23 @@ function updatePredChart(data) {
             font: { size: 11, family: "'Inter', sans-serif", weight: '500' },
             stepSize: 2,
             padding: 8,
-            callback: (v) => Number.isInteger(v) ? formatHour(v) : ''
+            callback: (v) => Number.isInteger(v) ? formatHourTick(v) : ''
           }
         },
         y: {
           min: 0, max: 110,
           grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
           border: { display: false },
+          // The 110 ceiling is headroom for the curve, not a value worth
+          // labelling, but Chart.js includes the bound by default and prints
+          // "110%" jammed against "100%". iOS lists its ticks explicitly
+          // (AxisMarks(values: [25, 50, 75, 100])); match that on the phone,
+          // where the collision is worst. Desktop is left as-is deliberately.
+          afterBuildTicks: (axis) => {
+            if (isPhone()) {
+              axis.ticks = [25, 50, 75, 100].map(value => ({ value }));
+            }
+          },
           ticks: {
             color: '#5a5550',
             font: { size: 10, family: "'Inter', sans-serif", weight: '500' },
@@ -1322,7 +1580,22 @@ function renderInsightCards(data) {
   const pctTagEl    = document.getElementById('insight-pct-tag');
   const capFill     = document.getElementById('insight-cap-fill');
   const capLabel    = document.getElementById('insight-cap-label');
+  const liveDotEl   = document.getElementById('insight-live-dot');
   pctTagEl.textContent = '';
+
+  // Only rendered on the phone layout (see .live-dot). display, not opacity:
+  // iOS reserves the dot's slot with .opacity(0), but on the web that left
+  // "CLOSED" indented 16px past the LIVE CAPACITY label above it and the
+  // "Opens tomorrow at" line below it, which read as a misalignment bug.
+  // Removing it from the flow keeps every closed/error state flush left.
+  // A class, not an inline display: an inline style would beat the base
+  // `.live-dot { display: none }` and leak the dot onto desktop, which never
+  // shows it.
+  const setLiveDot = (color) => {
+    liveDotEl.style.background = color || 'transparent';
+    liveDotEl.classList.toggle('on', !!color);
+  };
+  setLiveDot(null);
 
   if (isToday) {
     const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
@@ -1331,6 +1604,7 @@ function renderInsightCards(data) {
     if (gymIsOpen && livePct != null) {
       pctEl.textContent = `${livePct.toFixed(0)}%`;
       pctEl.style.color = pctColor(livePct);
+      setLiveDot(pctColor(livePct));
 
       const fillCls = livePct >= 90 ? 'critical' : livePct >= 80 ? 'high' : livePct >= 60 ? 'mid' : '';
       capFill.style.width = `${Math.min(livePct, 100)}%`;
@@ -1576,6 +1850,14 @@ async function init() {
     });
   }
 
+  // Paired with the document-level pointerdown dismiss below: without this the
+  // trigger's own tap would bubble up, close the popup, and then the click
+  // handler would immediately re-open it, so tapping "More" while open could
+  // never close it.
+  document.getElementById('day-pills').addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#cal-trigger')) e.stopPropagation();
+  });
+
   document.getElementById('day-pills').addEventListener('click', (e) => {
     const calTrigger = e.target.closest('#cal-trigger');
     if (!calTrigger) return;
@@ -1593,7 +1875,12 @@ async function init() {
     calPopup.style.display = 'block';
   });
 
-  document.addEventListener('click', () => { calPopup.style.display = 'none'; });
+  // pointerdown, not click: Safari on iOS doesn't deliver click from taps on
+  // non-interactive elements, so tapping the page background to dismiss the
+  // calendar silently did nothing on an iPhone. pointerdown fires identically
+  // for desktop mouse input.
+  document.addEventListener('pointerdown', () => { calPopup.style.display = 'none'; });
+  calPopup.addEventListener('pointerdown', e => e.stopPropagation());
   calPopup.addEventListener('click', e => e.stopPropagation());
 
   updatePredChart(data);
