@@ -455,9 +455,8 @@
          viewport-fit=cover would otherwise let the notch sit over the gutter. */
       header         { padding: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       .divider       { margin: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
-      /* 16px, matching GymChart's .padding(.horizontal, cardGutter - 4), so the
-         plot runs closer to the screen edges than the text gutter does. */
-      .chart-section { padding: 16px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left)); }
+      /* Title and pills stay on the 20px gutter with the cards above them. */
+      .chart-section { padding: 16px calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       footer         { padding: 16px calc(20px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
 
       /* Stacking all three cards pushed the chart ~450px down, below the fold
@@ -465,7 +464,12 @@
          HStack(alignment: .top, spacing: 16). */
       .insight-row {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        /* minmax(0, 1fr), not 1fr: a grid item defaults to min-width:auto, so
+           the nowrap "VS USUAL THURSDAYS" label sets a floor on its column's
+           width and pushes the whole row past the viewport. That is what shows
+           up as the page sitting ~20px to the left with its gutter gone, and
+           it also stops the label's text-overflow:ellipsis from ever engaging. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         column-gap: 16px;
         /* Wider than iOS's 22 because the capacity card ends on a small grey
            sub-line; at 22 the two cards read as attached to it. */
@@ -487,7 +491,7 @@
          two small cards and the divider. Height stability instead comes from
          .card-sub always occupying a line (below), which is how iOS does it:
          CardSub renders " " with .opacity(0) rather than collapsing. */
-      .insight-card   { min-height: 0; gap: 8px; }
+      .insight-card   { min-height: 0; min-width: 0; gap: 8px; }
       .card-sub       { min-height: 1.25em; }
 
       /* .inter(34, .bold) and .inter(22, .bold) in TodayView. */
@@ -540,7 +544,16 @@
          Charts lays its axis labels inside it. Chart.js adds the x-axis row and
          the top padding on top of the plot area, so matching iOS's *plot* means
          a taller box here. */
-      .chart-wrap { height: 246px; }
+      .chart-wrap {
+        height: 246px;
+        /* Bleed out of the section's gutter so the plot runs edge to edge.
+           Nothing is lost on the left: Chart.js reserves that strip inside the
+           canvas for the "100%"/"75%" labels, so those become the buffer
+           instead of empty padding. The right keeps a small 8px margin, since
+           the curve itself runs right up to the closing hour. */
+        margin-left: calc(-20px - env(safe-area-inset-left));
+        margin-right: calc(-12px - env(safe-area-inset-right));
+      }
 
       /* Exactly the iOS pill: .inter(13) with .padding(.horizontal, 18) and
          .padding(.vertical, 8). An earlier pass pushed these to a 40px touch
@@ -1331,21 +1344,26 @@ function updatePredChart(data) {
   const canvasEl = document.getElementById('pred-chart');
   const ctx = canvasEl.getContext('2d');
 
-  // Touch has no "moved away" event, so Chart.js leaves the last touched point
-  // active and the readout hangs around after you lift your finger. iOS clears
-  // it in DragGesture's .onEnded; this is the same thing. Guarded on
-  // pointerType so a desktop mouse still keeps its hover tooltip.
+  // Chart.js's default event list is
+  // ['mousemove','mouseout','click','touchstart','touchmove'] — no touchend.
+  // Nothing ever tells it a touch finished, so the last touched point stays
+  // active and the readout hangs there after you lift your finger. iOS clears
+  // it in DragGesture's .onEnded; this is the equivalent.
+  //
+  // Two things are needed, and an earlier pointerup version had only the
+  // second: preventDefault on touchend suppresses the synthetic mousemove
+  // Safari fires afterwards at the same coordinates, which would otherwise
+  // re-activate the point immediately after it was cleared. mouseout is then
+  // Chart.js's own reset path (_handleEvent forces active = [] for it), which
+  // clears the tooltip and the scrub line together.
   if (!canvasEl.dataset.liftBound) {
     canvasEl.dataset.liftBound = '1';
-    const clearActive = (e) => {
-      if (e.pointerType === 'mouse' || !predChart) return;
-      predChart.setActiveElements([]);
-      predChart.tooltip.setActiveElements([], { x: 0, y: 0 });
-      predChart.update('none');
+    const endTouch = (e) => {
+      if (e.cancelable) e.preventDefault();
+      canvasEl.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
     };
-    canvasEl.addEventListener('pointerup', clearActive);
-    canvasEl.addEventListener('pointercancel', clearActive);
-    canvasEl.addEventListener('pointerleave', clearActive);
+    canvasEl.addEventListener('touchend', endTouch, { passive: false });
+    canvasEl.addEventListener('touchcancel', endTouch, { passive: false });
   }
 
   predChart = new Chart(ctx, {
@@ -1386,6 +1404,13 @@ function updatePredChart(data) {
           backgroundColor: 'transparent',
           borderWidth: 2.6,
           borderDash: [6, 5],
+          // Round caps and joins. The dash pattern already matched GymChart's
+          // dash: [6, 5], but Chart.js defaults to butt caps and miter joins
+          // while iOS strokes with StrokeStyle(lineCap: .round, lineJoin:
+          // .round) — which is the whole reason the same numbers read as hard
+          // rectangles here and soft lozenges in the app.
+          borderCapStyle: 'round',
+          borderJoinStyle: 'round',
           pointRadius: 0,
           pointHoverRadius: 5,
           pointBackgroundColor: '#fff',
