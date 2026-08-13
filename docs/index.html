@@ -453,6 +453,7 @@
          chart and footer all start on the same vertical line, as on iOS.
          The safe-area insets are 0 in portrait and non-zero in landscape, where
          viewport-fit=cover would otherwise let the notch sit over the gutter. */
+      #data-warning  { padding: 10px calc(20px + env(safe-area-inset-right)) 10px calc(20px + env(safe-area-inset-left)); }
       header         { padding: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       .divider       { margin: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       /* Title and pills stay on the 20px gutter with the cards above them. */
@@ -1738,10 +1739,17 @@ function renderInsightCards(data) {
       verdictClass = 'average';
     }
 
+    // At exactly 0 the above/below split has nothing to describe, and
+    // "0% below usual" reads as a rendering bug rather than a dead-on match.
+    // Kept identical to RSFApp2.0's computeComparison deltaText.
+    const deltaText = absDelta === 0
+      ? '0% right on usual'
+      : `${absDelta}% ${higher ? 'above' : 'below'} usual`;
+
     compVerdictEl.textContent = verdict;
     compVerdictEl.className = `card-value comp-verdict ${verdictClass}`;
     compVerdictEl.style.color = '';
-    compDeltaEl.innerHTML = `<span class="comp-verdict ${verdictClass}">${absDelta}% ${higher ? 'above' : 'below'} usual</span>`;
+    compDeltaEl.innerHTML = `<span class="comp-verdict ${verdictClass}">${deltaText}</span>`;
   } else {
     compVerdictEl.textContent = '—';
     compVerdictEl.className = 'card-value comp-verdict';
