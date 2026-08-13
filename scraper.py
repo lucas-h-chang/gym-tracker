@@ -1,3 +1,23 @@
+"""
+scraper.py — takes one live RSF occupancy reading and appends it to capacity_log.
+
+NOT ON THE 15-MINUTE PATH ANY MORE (2026-08-13). The production scraper is now
+api/scrape.js, running on Vercel and poked by cron-job.org. This file is kept as
+a manual backfill tool and escape hatch: run it by hand if the Vercel endpoint
+ever misbehaves, and it will write an identical row.
+
+    SUPABASE_URL=... SUPABASE_SERVICE_KEY=... DENSITY_TOKEN=... python3 scraper.py
+
+Why the move: a reading is irreplaceable (Density's /count only reports *now*),
+and GitHub Actions must allocate a VM before any code runs. On 2026-08-06 that
+queue backed up 8-17 minutes and dropped several readings. Vercel invokes an
+already-deployed function, so there is no allocation step to get stuck in. The
+derived builders (today_builder.py, send_workout_notifications.py) stay in
+.github/workflows/scrape.yml because they recompute from Supabase, so a delay
+costs nothing. See handoffs/SPEC_VERCEL_SCRAPE.md.
+
+Keep this file's behaviour in sync with api/scrape.js.
+"""
 import os
 import sys
 import requests

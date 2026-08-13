@@ -1,0 +1,100 @@
+// scrape.js — takes one live RSF occupancy reading and appends it to
+// capacity_log. This is the production scraper as of 2026-08-13; it replaces
+// the `Scrape live count → Supabase` step that used to run scraper.py inside
+// .github/workflows/scrape.yml.
+//
+// WHY THIS MOVED OFF GITHUB ACTIONS
+// A reading is irreplaceable: Density's /count endpoint only reports *now*, so
+// a scrape missed at 15:45 is gone forever. GitHub Actions has to allocate a
+// VM from a shared pool before any code runs, and on 2026-08-06 that queue
+// backed up 8-17 minutes and dropped several readings outright. Vercel invokes
+// an already-deployed function, so there is no allocation step to get stuck in.
+// The derived builders (today_builder.py, send_workout_notifications.py) stay
+// on Actions: they recompute from data already in Supabase, so a delay costs
+// nothing.
+//
+// scraper.py is intentionally left in place as a manual backfill / escape
+// hatch. It is no longer on the 15-minute path.
+//
+// Scheduling: cron-job.org GETs this endpoint every 15 minutes with the
+// x-scrape-secret header. Like scraper.py, it self-gates on open hours, so the
+// schedule does not need seasonal adjustment.
+
+const { createClient } = require('@supabase/supabase-js');
+const { ptNow, getOpenHours } = require('./_hours');
+
+const DENSITY_URL = 'https://api.density.io/v2/spaces/spc_863128347956216317/count';
+const MAX_CAP = 150;
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+module.exports = async function handler(req, res) {
+  // Every invocation must actually hit Density and write a row, so this must
+  // never be served from the edge cache the way live-capacity.js is.
+  res.setHeader('Cache-Control', 'no-store');
+
+  // 1. Auth. Unlike live-capacity.js (which only overwrites a 30-second display
+  //    cache) this appends to permanent history, so an open endpoint would let
+  //    anyone inject fabricated readings into the training data.
+  const provided = req.headers['x-scrape-secret'] || (req.query && req.query.key);
+  if (!process.env.SCRAPE_SECRET || provided !== process.env.SCRAPE_SECRET) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  // 2. Open-hours gate, same contract as scraper.py: cron fires through
+  //    academic-year hours year-round, so we exit quietly when the RSF is
+  //    actually closed (e.g. summer evenings) rather than logging zeros.
+  const now = ptNow();
+  const [openH, closeH] = getOpenHours(now.weekday, now.date);
+  const nowHour = now.hour + now.minute / 60;
+  if (nowHour < openH || nowHour >= closeH) {
+    console.log(`[scrape] RSF closed (open ${openH}:00-${closeH}:00); skipping insert.`);
+    return res.status(200).json({ skipped: 'closed', open: openH, close: closeH });
+  }
+
+  // 3. Read Density, with one quick retry. The Actions job retried 3x with 5s
+  //    sleeps; a single 1s retry fits comfortably inside the function timeout
+  //    and the next cron tick is only 15 minutes out either way.
+  let count;
+  for (const attempt of [1, 2]) {
+    try {
+      const resp = await fetch(DENSITY_URL, {
+        headers: { Authorization: `Bearer ${process.env.DENSITY_TOKEN}` },
+      });
+      if (!resp.ok) throw new Error(`Density returned ${resp.status}`);
+      count = (await resp.json()).count;
+      break;
+    } catch (err) {
+      console.error(`[scrape] density attempt ${attempt} failed:`, err.message);
+      if (attempt === 2) {
+        return res.status(502).json({ error: 'density unavailable', details: err.message });
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  // 4. Append. Both the raw count and the derived percentage are stored, to
+  //    match scraper.py and the existing capacity_log schema. (live-capacity.js
+  //    keeps only a percentage, but that is a display cache, not history.)
+  //    timestamp is written as UTC; scraper.py wrote a PT offset. capacity_log
+  //    .timestamp is timestamptz, so both record the identical instant.
+  const pct = Math.round((count / MAX_CAP) * 1000) / 10;
+  const timestamp = new Date().toISOString();
+
+  const { error } = await supabase.from('capacity_log').insert({
+    timestamp,
+    people_count: count,
+    percent_full: pct,
+  });
+
+  if (error) {
+    console.error('[scrape] capacity_log insert failed:', JSON.stringify(error));
+    return res.status(500).json({ error: 'insert failed', details: error.message });
+  }
+
+  console.log(`[scrape] ${timestamp} Saved: ${count} people (${pct}%)`);
+  return res.status(200).json({ timestamp, people_count: count, percent_full: pct });
+};
