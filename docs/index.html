@@ -1763,6 +1763,19 @@ async function init() {
   let weeklyRows = [];
   try {
     weeklyRows = await sbFetch(`weekly_averages?select=*&limit=10000`);
+    // An empty-but-successful response is NOT "no data yet" -- the nightly
+    // build always writes ~4.5k rows. It means the browser's anon role can
+    // read the table but every row is filtered away, i.e. RLS is enabled with
+    // no SELECT policy (this happened 2026-08-13, fixed by migration 007).
+    // The catch below can't see that case, so it blanked the card silently.
+    if (weeklyRows.length === 0) {
+      console.warn(
+        'weekly_averages returned 0 rows to the anon key — the comparison card ' +
+        'will show "—". The nightly build writes ~4,500 rows, so this is almost ' +
+        'certainly RLS enabled without a SELECT policy. See ' +
+        'migrations/007_weekly_averages_anon_read.sql.'
+      );
+    }
   } catch (e) {
     console.error('weekly_averages load failed (comparison card will show "—"):', e);
   }
