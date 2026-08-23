@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <!-- viewport-fit=cover lets the page paint under the notch and home
-       indicator; footer pads itself back out with env(safe-area-inset-bottom). -->
+       indicator. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Bear Meter</title>
 
@@ -336,21 +336,6 @@
     .cal-day-selected.cal-day-today { color: #000; }
     .cal-day-empty { pointer-events: none; }
 
-    /* ── Footer ── */
-    footer {
-      padding: 16px 48px;
-      /* Clears the iPhone home indicator now that viewport-fit=cover lets the
-         page extend under it. Resolves to 0 everywhere else. */
-      padding-bottom: calc(16px + env(safe-area-inset-bottom));
-      text-align: right;
-    }
-    footer span {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-      letter-spacing: 0.03em;
-    }
-
     /* ── Pulse Dot (live indicator) ── */
     .pulse-dot {
       position: absolute;
@@ -450,7 +435,7 @@
        breakpoint — desktop is untouched by all of it. */
     @media (max-width: 768px) {
       /* cardGutter: CGFloat = 20 (CardText.swift). Header, cards, divider,
-         chart and footer all start on the same vertical line, as on iOS.
+         and chart all start on the same vertical line, as on iOS.
          The safe-area insets are 0 in portrait and non-zero in landscape, where
          viewport-fit=cover would otherwise let the notch sit over the gutter. */
       #data-warning  { padding: 10px calc(20px + env(safe-area-inset-right)) 10px calc(20px + env(safe-area-inset-left)); }
@@ -458,7 +443,6 @@
       .divider       { margin: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       /* Title and pills stay on the 20px gutter with the cards above them. */
       .chart-section { padding: 16px calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
-      footer         { padding: 16px calc(20px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
 
       /* Stacking all three cards pushed the chart ~450px down, below the fold
          on every phone. This is the iOS VStack(spacing: 22) wrapping an
@@ -666,10 +650,6 @@
 
 
 </main>
-
-<footer>
-  <span id="footer-built"></span>
-</footer>
 
 <script>
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1118,12 +1098,6 @@ let bootDate = '';
 let refreshInFlight = false;
 let lastRefreshAt = 0;
 
-function formatBuiltAt(computedAt) {
-  if (!computedAt) return null;
-  return new Date(computedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles',
-    month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' PT';
-}
-
 async function refreshTodayData() {
   const data = window._insightData;
   if (!data) return;
@@ -1169,12 +1143,6 @@ async function refreshTodayData() {
   const ts = todaySummaryRows[0] || {};
   data.today_similarity_preds = ts.similarity_preds || [];
   data.today_blend_weight     = ts.blend_weight || 0;
-
-  const builtAt = formatBuiltAt(ts.computed_at);
-  if (builtAt) {
-    data.built_at = builtAt;
-    document.getElementById('footer-built').textContent = `UPDATED ${builtAt}`;
-  }
 
   if (predDate === bootDate) updatePredChart(data);
   renderInsightCards(data);
@@ -1812,7 +1780,6 @@ async function init() {
   Object.values(weekly).forEach(arr => arr.sort((a, b) => a.x - b.x));
 
   const ts = todaySummaryRows[0] || {};
-  const built_at = formatBuiltAt(ts.computed_at) || today;
 
   const data = {
     predictions,
@@ -1820,7 +1787,6 @@ async function init() {
     today_actuals:           buildTodayActuals(actualsRows, today),
     today_similarity_preds:  ts.similarity_preds || [],
     today_blend_weight:      ts.blend_weight || 0,
-    built_at,
   };
 
   if (Object.keys(predictions).length === 0) {
@@ -1919,7 +1885,6 @@ async function init() {
   updatePredChart(data);
   renderInsightCards(data);
 
-  document.getElementById('footer-built').textContent = `UPDATED ${data.built_at}`;
   document.body.classList.remove('loading');
 
   // Two triggers, because neither covers the other. The interval handles a
