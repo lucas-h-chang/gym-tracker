@@ -1,5 +1,11 @@
 name: Scrape Gym Data
 
+# NOTE: the 15-minute READING is NOT taken here. api/scrape.js on Vercel owns it
+# (since 2026-08-13, commit 24878b1). The scraper.py step that used to live in
+# this file was removed 2026-08-24: its Vercel replacement had been failing on a
+# bad SUPABASE_SERVICE_KEY, so Actions silently kept scraping and the migration
+# never actually took effect. This workflow now only runs the DERIVED builders,
+# which recompute from Supabase and so tolerate runner-queue delay.
 on:
   workflow_dispatch:  # triggered externally by cron-job.org every 15 minutes
 
@@ -24,19 +30,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install requests supabase pandas numpy pytz cryptography httpx[http2]
-
-      - name: Scrape live count → Supabase
-        continue-on-error: true
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          DENSITY_TOKEN: ${{ secrets.DENSITY_TOKEN }}
-        run: |
-          for i in 1 2 3; do
-            python scraper.py && break
-            echo "Attempt $i failed, retrying in 5s..."
-            sleep 5
-          done
 
       - name: Build today similarity preds → Supabase
         env:
