@@ -22,6 +22,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { ptNow, getOpenHours } = require('./_hours');
+const { isSensorStalled } = require('./_sensor');
 
 const DENSITY_URL = 'https://api.density.io/v2/spaces/spc_863128347956216317/count';
 const MAX_CAP = 150;
@@ -84,10 +85,24 @@ module.exports = async function handler(req, res) {
   const pct = Math.round((count / MAX_CAP) * 1000) / 10;
   const timestamp = new Date().toISOString();
 
+  // 4a. Flag, don't drop. Density keeps serving a plausible small number when
+  //     the RSF's counter dies (see api/_sensor.js), and an unflagged zero is
+  //     worse than a gap: day_profiles and weekly_builder.py average raw
+  //     percent_full with no floor, so a stalled day silently drags down the
+  //     "vs usual <Day>s" baseline for that weekday forever. Writing the row
+  //     with sensor_ok = false keeps the forensic record and keeps the stall
+  //     detector fed (it reads this very table to find its run) while taking
+  //     the reading out of every downstream average. See migration 008.
+  const stall = await isSensorStalled(supabase, count);
+  if (stall.stalled) {
+    console.warn(`[scrape] SENSOR STALL: ${stall.reason} (since ${stall.since}) — logging ${count} with sensor_ok=false`);
+  }
+
   const { error } = await supabase.from('capacity_log').insert({
     timestamp,
     people_count: count,
     percent_full: pct,
+    sensor_ok: !stall.stalled,
   });
 
   if (error) {
@@ -95,6 +110,11 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'insert failed', details: error.message });
   }
 
-  console.log(`[scrape] ${timestamp} Saved: ${count} people (${pct}%)`);
-  return res.status(200).json({ timestamp, people_count: count, percent_full: pct });
+  console.log(`[scrape] ${timestamp} Saved: ${count} people (${pct}%)${stall.stalled ? ' [sensor_ok=false]' : ''}`);
+  return res.status(200).json({
+    timestamp,
+    people_count: count,
+    percent_full: pct,
+    sensor_ok: !stall.stalled,
+  });
 };

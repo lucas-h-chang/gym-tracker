@@ -5,6 +5,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+const { isSensorStalled } = require('./_sensor');
+
 const DENSITY_URL = 'https://api.density.io/v2/spaces/spc_863128347956216317/count';
 const MAX_CAP     = 150;
 const FRESH_SECS  = 30;
@@ -22,7 +24,7 @@ module.exports = async function handler(req, res) {
   try {
     const { data, error } = await supabase
       .from('live_capacity')
-      .select('capacity_pct, recorded_at')
+      .select('capacity_pct, recorded_at, sensor_ok')
       .eq('id', 1)
       .maybeSingle();
     if (error) {
@@ -41,6 +43,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       capacity_pct: cached.capacity_pct,
       recorded_at:  cached.recorded_at,
+      // Carried through the cache rather than recomputed: the stall check
+      // costs a capacity_log query, and the whole point of this row is that
+      // 30 seconds of clients share one origin hit.
+      sensor_ok:    cached.sensor_ok !== false,
       source:       'cache',
       age_seconds:  Math.round(ageSecs),
     });
@@ -57,10 +63,23 @@ module.exports = async function handler(req, res) {
     const pct   = Math.round((count / MAX_CAP) * 1000) / 10;
     const now   = new Date().toISOString();
 
+    // Density does not error when the RSF's hardware dies — it keeps serving a
+    // small plausible number. Without this the pill renders that number as
+    // fact, and the trend and comparison cards then build confident sentences
+    // on top of it. See api/_sensor.js for why the rule is a run of floor
+    // readings and not a percentage threshold.
+    const stall = await isSensorStalled(supabase, count);
+    if (stall.stalled) {
+      console.warn(`[live-capacity] SENSOR STALL: ${stall.reason} (since ${stall.since})`);
+    }
+
     // Upsert single row (id=1) — same shape live-capacity-sync.yml used.
     const { error: upsertErr } = await supabase
       .from('live_capacity')
-      .upsert({ id: 1, capacity_pct: pct, recorded_at: now }, { onConflict: 'id' });
+      .upsert(
+        { id: 1, capacity_pct: pct, recorded_at: now, sensor_ok: !stall.stalled },
+        { onConflict: 'id' }
+      );
     if (upsertErr) {
       console.error('[live-capacity] cache WRITE error:', JSON.stringify(upsertErr));
     }
@@ -68,6 +87,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       capacity_pct: pct,
       recorded_at:  now,
+      sensor_ok:    !stall.stalled,
       source:       'density',
       age_seconds:  0,
     });
@@ -78,6 +98,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         capacity_pct:   cached.capacity_pct,
         recorded_at:    cached.recorded_at,
+        sensor_ok:      cached.sensor_ok !== false,
         source:         'cache_stale',
         age_seconds:    Math.round(ageSecs),
         upstream_error: err.message,

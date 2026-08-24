@@ -270,12 +270,66 @@ SUMMER_RANGES = [
 ]
 
 
+# ── Full-facility closures ──────────────────────────────────────────────────
+# Days the RSF is shut entirely. Distinct from a break (quiet, but normal
+# hours) and from a holiday (which HOLIDAYS already covers as a crowd effect,
+# not a closure).
+#
+# Caltopia is Cal's start-of-year org fair; it takes over the RSF, which closes
+# for it. Every fall semester in SEM_STARTS begins on a Wednesday, so the
+# Sunday and Monday before instruction are start-3 and start-2. Fall 2026 also
+# closed the Tuesday (start-1) — observed directly, not assumed to recur, which
+# is why these are listed rather than generated.
+#
+# Listing them explicitly matches every other range in this file and means a
+# year that breaks the pattern is a one-line edit instead of a special case
+# inside a generator.
+#
+# WHY THIS MATTERS BEYOND DISPLAY: on a closure day Density still answers, and
+# it answers with 0-2 people. Without this list the scrapers log a full day of
+# near-zero readings, which then sink that weekday's "usual" baseline in
+# weekly_averages and day_profiles — and api/_sensor.js reads the same flat run
+# as a dead occupancy sensor. The 2026-08-23 closure produced exactly that
+# false alarm.
+CLOSURES = [
+    (date(2021, 8, 22), date(2021, 8, 23), "Caltopia"),
+    (date(2022, 8, 21), date(2022, 8, 22), "Caltopia"),
+    (date(2023, 8, 20), date(2023, 8, 21), "Caltopia"),
+    (date(2024, 8, 25), date(2024, 8, 26), "Caltopia"),
+    (date(2025, 8, 24), date(2025, 8, 25), "Caltopia"),
+    (date(2026, 8, 23), date(2026, 8, 25), "Caltopia"),  # Tuesday closed too
+    (date(2027, 8, 22), date(2027, 8, 23), "Caltopia"),
+]
+
+
+def closure_reason(d):
+    """The reason the RSF is shut on `d`, or None if it keeps normal hours."""
+    d = _as_date(d)
+    for start, end, reason in CLOSURES:
+        if start <= d <= end:
+            return reason
+    return None
+
+
+def is_closed_day(d):
+    return closure_reason(d) is not None
+
+
 def is_summer_day(d):
     d = _as_date(d)
     return any(s <= d <= e for s, e in SUMMER_RANGES)
 
 
 def get_open_hours(day_name, d):
+    # A full closure returns the EMPTY interval [0, 0) rather than a sentinel,
+    # because every caller already gates on `open <= now < close`. That test is
+    # false for all 24 hours against [0, 0), so scraper.py, api/scrape.js,
+    # today_builder.py, predictions_builder.py, weekly_builder.py and
+    # freshness.yml all report "closed" for the whole day without a single
+    # change at the call site. Adding a sentinel would have meant editing six
+    # gates and mirroring the new branch into each of them.
+    if d is not None and is_closed_day(d):
+        return 0, 0
     summer = is_summer_day(d)
     if day_name == 'Saturday':
         return 8, 18

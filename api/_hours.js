@@ -8,6 +8,7 @@
 //   gym-tracker/academic_calendar.py            <- source of truth
 //   gym-tracker/docs/index.html                 (SUMMER_RANGES + BREAK_RANGES)
 //   gym-tracker/migrations/001_is_semester_day.sql
+//   gym-tracker/migrations/009_caltopia_closures.sql (CLOSURES, as SQL)
 //   gym-tracker/.github/workflows/freshness.yml (inlined copy)
 //   RSFApp2.0/.../TimeUtils.swift
 //
@@ -48,6 +49,28 @@ function ptNow() {
   };
 }
 
+// Manual mirror of academic_calendar.py's CLOSURES. Days the RSF is shut
+// entirely — Caltopia takes over the building the Sunday and Monday before
+// fall instruction begins (Tuesday too in 2026). Density keeps answering on
+// those days, with 0-2 people, so without this the scraper logs a full day of
+// near-zero readings into the baselines and api/_sensor.js reads the flat run
+// as a dead sensor.
+const CLOSURES = [
+  ['2021-08-22', '2021-08-23', 'Caltopia'],
+  ['2022-08-21', '2022-08-22', 'Caltopia'],
+  ['2023-08-20', '2023-08-21', 'Caltopia'],
+  ['2024-08-25', '2024-08-26', 'Caltopia'],
+  ['2025-08-24', '2025-08-25', 'Caltopia'],
+  ['2026-08-23', '2026-08-25', 'Caltopia'],
+  ['2027-08-22', '2027-08-23', 'Caltopia'],
+];
+
+/** dateStr: 'YYYY-MM-DD' in PT. Returns the closure reason, or null. */
+function closureReason(dateStr) {
+  const hit = CLOSURES.find(([s, e]) => dateStr >= s && dateStr <= e);
+  return hit ? hit[2] : null;
+}
+
 /** dateStr: 'YYYY-MM-DD' in PT. */
 function isSummerDay(dateStr) {
   return SUMMER_RANGES.some(([start, end]) => dateStr >= start && dateStr <= end);
@@ -59,6 +82,10 @@ function isSummerDay(dateStr) {
  * "open" for 7.0 <= now < 23.0, so the last scrape of the day is 22:45.
  */
 function getOpenHours(weekday, dateStr) {
+  // Empty interval [0, 0) on a closure day — `nowHour >= 0 && nowHour < 0` is
+  // false at every hour, so existing gates report "closed" all day with no
+  // change at the call site. Mirrors academic_calendar.get_open_hours().
+  if (closureReason(dateStr)) return [0, 0];
   const summer = isSummerDay(dateStr);
   if (weekday === 'Saturday') return [8, 18];
   if (weekday === 'Sunday') return [8, summer ? 20 : 23];
@@ -72,4 +99,6 @@ function isOpenNow(now = ptNow()) {
   return { open: nowHour >= openH && nowHour < closeH, openH, closeH };
 }
 
-module.exports = { SUMMER_RANGES, ptNow, isSummerDay, getOpenHours, isOpenNow };
+module.exports = {
+  SUMMER_RANGES, CLOSURES, ptNow, isSummerDay, closureReason, getOpenHours, isOpenNow,
+};

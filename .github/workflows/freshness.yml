@@ -4,6 +4,17 @@ name: Data Freshness Monitor
 # Density token or API change silently stops data collection with all-green runs.
 # This job independently checks that capacity_log is being written while the gym
 # is open, and opens a GitHub issue if the data goes stale.
+#
+# It also checks the readings are PLAUSIBLE, not just present. On 2026-08-23 the
+# RSF's own counter died while Density kept answering: rows arrived every 15
+# minutes exactly on schedule, so every freshness check passed, but each one
+# said 0-2 people from open through midday. Liveness and validity are different
+# failures and the freshness-only version could not see the second one.
+#
+# The plausibility rule is deliberately re-derived here from people_count rather
+# than reading capacity_log.sensor_ok, so this stays an INDEPENDENT monitor: if
+# api/_sensor.js ever stops flagging, this still fires. Thresholds mirror
+# api/_sensor.js (<= 5 people, 6 consecutive readings) — see that file for why.
 
 on:
   schedule:
@@ -50,9 +61,30 @@ jobs:
               (date(2026, 5, 15), date(2026, 8, 22)),
               (date(2027, 5, 14), date(2027, 8, 21)),
           ]
+          # Mirror of academic_calendar.py CLOSURES — days the RSF is shut entirely
+          # (Caltopia takes the building the Sunday/Monday before fall instruction;
+          # Tuesday too in 2026). Density still answers 0-2 people on those days, so
+          # without this both the freshness check and the plausibility check below
+          # would fire on a perfectly healthy closed gym.
+          CLOSURES = [
+              (date(2021, 8, 22), date(2021, 8, 23)),
+              (date(2022, 8, 21), date(2022, 8, 22)),
+              (date(2023, 8, 20), date(2023, 8, 21)),
+              (date(2024, 8, 25), date(2024, 8, 26)),
+              (date(2025, 8, 24), date(2025, 8, 25)),
+              (date(2026, 8, 23), date(2026, 8, 25)),
+              (date(2027, 8, 22), date(2027, 8, 23)),
+          ]
+          def is_closed_day(d):
+              return any(s <= d <= e for s, e in CLOSURES)
           def is_summer_day(d):
               return any(s <= d <= e for s, e in SUMMER_RANGES)
           def get_open_hours(day_name, d):
+              # Empty interval on a closure day, same contract as
+              # academic_calendar.get_open_hours() — the gate below then reports
+              # closed for all 24 hours without a separate branch.
+              if is_closed_day(d):
+                  return 0, 0
               summer = is_summer_day(d)
               if day_name == 'Saturday':
                   return 8, 18
@@ -68,7 +100,8 @@ jobs:
           open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
           now_hour = now.hour + now.minute / 60
           if now_hour < open_h or now_hour >= close_h:
-              print(f"RSF closed (open {open_h}:00-{close_h}:00); skipping freshness check.")
+              why = "closed all day (facility closure)" if close_h <= open_h else f"open {open_h}:00-{close_h}:00"
+              print(f"RSF closed ({why}); skipping freshness check.")
               emit("stale", "false")
               sys.exit(0)
 
@@ -77,7 +110,7 @@ jobs:
           resp = requests.get(
               url,
               headers={"apikey": key, "Authorization": f"Bearer {key}"},
-              params={"select": "timestamp", "order": "timestamp.desc", "limit": 1},
+              params={"select": "timestamp,people_count", "order": "timestamp.desc", "limit": 6},
               timeout=15,
           )
           resp.raise_for_status()
@@ -86,6 +119,7 @@ jobs:
           if not rows:
               print("capacity_log is EMPTY.")
               emit("stale", "true")
+              emit("title", "Scraper stale — no fresh RSF data")
               emit("detail", "capacity_log has no rows at all")
               sys.exit(0)
 
@@ -96,10 +130,30 @@ jobs:
 
           if age_min > THRESHOLD:
               emit("stale", "true")
+              emit("title", "Scraper stale — no fresh RSF data")
               emit("detail", f"Newest capacity_log row is {age_min:.0f} min old "
                              f"(threshold {THRESHOLD} min) while the RSF is open — scraper may be down.")
-          else:
-              emit("stale", "false")
+              sys.exit(0)
+
+          # --- Plausibility: is the hardware alive, not just the pipeline? -------
+          FLOOR, RUN = 5, 6
+          counts = [r.get("people_count") for r in rows]
+          if len(rows) >= RUN and all(c is not None and c <= FLOOR for c in counts):
+              oldest = datetime.fromisoformat(rows[-1]["timestamp"].replace("Z", "+00:00"))
+              print(f"SENSOR STALL: last {RUN} readings all <= {FLOOR} people: {counts}")
+              emit("stale", "true")
+              emit("title", "RSF sensor stalled — readings are arriving but implausible")
+              emit("detail",
+                   f"The last {RUN} capacity_log readings are all <= {FLOOR} people "
+                   f"({counts}), spanning {oldest.astimezone(PT):%H:%M} to "
+                   f"{latest.astimezone(PT):%H:%M} PT while the RSF is open. Rows are "
+                   f"arriving on schedule, so the scraper is healthy — this points at "
+                   f"the RSF's own occupancy hardware. The site suppresses the live "
+                   f"pill and comparison card automatically (api/_sensor.js); no "
+                   f"action is needed beyond confirming with the RSF.")
+              sys.exit(0)
+
+          emit("stale", "false")
           PY
 
       - name: Open issue if stale
@@ -107,6 +161,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           DETAIL: ${{ steps.check.outputs.detail }}
+          TITLE:  ${{ steps.check.outputs.title }}
         with:
           script: |
             // De-dupe: an hourly cron would otherwise file a new issue every hour
@@ -123,6 +178,6 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner, repo: context.repo.repo,
               labels: ['data-freshness'],
-              title: `Scraper stale — no fresh RSF data (${new Date().toISOString().slice(0,10)})`,
+              title: `${process.env.TITLE || 'Scraper stale — no fresh RSF data'} (${new Date().toISOString().slice(0,10)})`,
               body: `${detail}\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });

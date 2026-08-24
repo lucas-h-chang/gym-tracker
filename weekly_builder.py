@@ -13,6 +13,7 @@ from academic_calendar import (
     is_summer_day,
     get_open_hours,
     is_semester_day,
+    is_closed_day,
 )
 from supabase_io import paginated_fetch
 
@@ -48,8 +49,18 @@ def get_semester_start(today):
 
 
 def fetch_all_history():
-    """Fetch all capacity_log from Supabase (paginated)."""
-    return paginated_fetch(sb, "capacity_log", "timestamp,percent_full", order="timestamp")
+    """Fetch all capacity_log from Supabase (paginated).
+
+    sensor_ok is selected so main() can drop readings taken while the RSF's
+    counter was dead (migration 008). Unlike the ML path, this builder has no
+    people_count floor -- it averages raw percent_full -- so a stalled day
+    would otherwise sink the "vs usual <Day>s" baseline for that weekday
+    permanently. Filtering happens in pandas rather than here because
+    paginated_fetch has no .eq() hook (see its docstring).
+    """
+    return paginated_fetch(
+        sb, "capacity_log", "timestamp,percent_full,sensor_ok", order="timestamp"
+    )
 
 
 DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -190,9 +201,35 @@ def main():
     print(f"  {len(rows):,} rows loaded")
 
     df = pd.DataFrame(rows)
+
+    # Drop hardware-outage readings. Tolerates the column being absent so this
+    # still runs against a database where 008 hasn't been applied yet.
+    if 'sensor_ok' in df.columns:
+        before = len(df)
+        df = df[df['sensor_ok'] != False].drop(columns=['sensor_ok'])  # noqa: E712
+        if before != len(df):
+            print(f"  dropped {before - len(df):,} rows flagged sensor_ok = false")
+
     # Keep a naive copy for timezone-naive cutoff comparisons
     df['timestamp']       = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
     df['timestamp_naive'] = df['timestamp'].dt.tz_localize(None)
+
+    # Drop full-facility closure days (Caltopia). Density keeps reporting 0-2
+    # people while the building is shut, and those readings would otherwise
+    # become part of "usual Sundays" for every year on record.
+    #
+    # This cannot ride on academic_calendar.get_open_hours()' empty-interval
+    # short-circuit the way the other gates do: _emit_day_records() re-derives
+    # the open/close bounds inline with numpy for speed, so it never calls that
+    # function. main() is the one choke point every range_type flows through,
+    # so the exclusion goes here, before any slice is cut — and after the
+    # timestamp parse above, so the 300k ISO strings are only parsed once.
+    ts_dates       = df['timestamp'].dt.date
+    closed_by_date = {d: is_closed_day(d) for d in ts_dates.unique()}
+    closed_mask    = ts_dates.map(closed_by_date)
+    if closed_mask.any():
+        print(f"  dropped {int(closed_mask.sum()):,} rows on RSF closure days")
+        df = df[~closed_mask]
 
     print("Computing weekly averages...")
     records = compute_weekly_averages(df)

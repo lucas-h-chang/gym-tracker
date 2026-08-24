@@ -226,6 +226,28 @@
       position: relative;
       height: 340px;
     }
+    /* A closure day has no curve to draw, and a bare grid with nothing on it
+       reads as a failed load. The reason sits where the curve would have been. */
+    .chart-closed {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+      pointer-events: none;
+    }
+    .chart-closed .cc-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #f87171;
+    }
+    .chart-closed .cc-sub {
+      font-size: 12px;
+      color: var(--sub);
+    }
     .chart-wrap canvas {
       display: block;
       /* Scrubbing the chart must not also scroll the page. Without this a drag
@@ -643,6 +665,7 @@
     <div id="cal-popup" class="cal-popup" style="display:none"></div>
     <div class="chart-wrap">
       <canvas id="pred-chart"></canvas>
+      <div id="chart-closed" class="chart-closed" style="display:none"></div>
       <div id="pulse-dot" class="pulse-dot" style="display:none"></div>
       <div id="pred-tooltip" class="chart-tooltip"></div>
     </div>
@@ -791,11 +814,49 @@ const PERIOD_RANGE_TYPE = {
   summer: 'all_summers', semester: 'all_semesters', break: 'all_breaks',
 };
 
+// Manual JS mirror of academic_calendar.py's CLOSURES — days the RSF is shut
+// entirely. Caltopia takes over the building the Sunday and Monday before fall
+// instruction begins (Tuesday too in 2026). Like SUMMER_RANGES above, NOT
+// auto-generated: keep in sync by hand when adding a year.
+const CLOSURES = [
+  ['2021-08-22', '2021-08-23', 'Caltopia'],
+  ['2022-08-21', '2022-08-22', 'Caltopia'],
+  ['2023-08-20', '2023-08-21', 'Caltopia'],
+  ['2024-08-25', '2024-08-26', 'Caltopia'],
+  ['2025-08-24', '2025-08-25', 'Caltopia'],
+  ['2026-08-23', '2026-08-25', 'Caltopia'],
+  ['2027-08-22', '2027-08-23', 'Caltopia'],
+];
+
+function closureReason(date) {
+  const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
+  const hit = CLOSURES.find(([s, e]) => ds >= s && ds <= e);
+  return hit ? hit[2] : null;
+}
+
 function getOpenHours(jsDay, date) {
+  // Empty interval on a closure day, matching academic_calendar.get_open_hours():
+  // every `open <= h < close` test is false for all 24 hours, so the day reads
+  // as closed everywhere without special-casing each caller.
+  if (date != null && closureReason(date)) return { open: 0, close: 0 };
   const summer = date != null && isSummerHours(date);
   if (jsDay === 6) return { open: 8, close: 18 };
   if (jsDay === 0) return { open: 8, close: summer ? 20 : 23 };
   return { open: 7, close: summer ? 20 : 23 };
+}
+
+// The next date the RSF actually opens. "Opens tomorrow at 8:00 AM" is wrong
+// on the Saturday night before a Caltopia closure, and wrong again on each day
+// inside a multi-day one, so the reopen day is searched for rather than
+// assumed to be tomorrow. Bounded so a bad CLOSURES entry can't spin.
+function nextOpenDate(from) {
+  const d = new Date(from.getTime());
+  for (let i = 0; i < 14; i++) {
+    d.setDate(d.getDate() + 1);
+    const { open, close } = getOpenHours(d.getDay(), d);
+    if (close > open) return { date: new Date(d.getTime()), open, isTomorrow: i === 0 };
+  }
+  return null;
 }
 
 function formatHour(h) {
@@ -909,7 +970,10 @@ function updateStatusBar() {
     .then(d => {
       const pct = Math.round(d.capacity_pct);
       const count = Math.round((pct / 100) * 150);
-      liveCapacity = { count, pct };
+      // sensor_ok is false when api/_sensor.js has seen a run of floor
+      // readings, i.e. Density is still answering but the RSF's own counter is
+      // dead. Absent (older cached rows, or a deploy skew) means "assume fine".
+      liveCapacity = { count, pct, sensorOk: d.sensor_ok !== false };
       if (window._insightData) renderInsightCards(window._insightData);
     })
     .catch(() => {});
@@ -974,6 +1038,10 @@ function buildPredPoints(data, dateStr) {
       points.push({ x: h + m / 60, y: Math.round(pred * 10) / 10, label: formatTime(h, m) });
     }
   }
+  // A closure day has the empty interval [0, 0): no slots, and no closing
+  // zero-point either — pushing one would drop a stray marker at midnight,
+  // outside the chart's fixed 7-23 axis.
+  if (close <= open) return [];
   points.push({ x: close, y: 0, label: formatTime(close, 0) });
   return points;
 }
@@ -1241,10 +1309,15 @@ function updatePredChart(data) {
   const showNow   = isToday && gymIsOpen;
 
   const allPredPoints = buildPredPoints(data, predDate);
-  const actualPoints = isToday
+  // During an outage the logged readings are a flat line just above zero.
+  // Drawing it would render a hardware failure as a genuinely empty gym, so
+  // the actual series is dropped and the forecast is drawn across the whole
+  // day instead of only from now onward.
+  const liveToday = isToday && !sensorIsDown();
+  const actualPoints = liveToday
     ? (data.today_actuals || []).filter(p => p.x <= nowVal)
     : [];
-  let predPoints = isToday
+  let predPoints = liveToday
     ? allPredPoints.filter(p => p.x >= nowVal)
     : allPredPoints;
 
@@ -1297,6 +1370,18 @@ function updatePredChart(data) {
   }
 
   document.getElementById('chart-title').textContent = chartTitle(predDate);
+
+  const closedFor = closureReason(predDay);
+  const closedEl  = document.getElementById('chart-closed');
+  if (closedFor) {
+    closedEl.innerHTML =
+      `<span class="cc-title">Closed for ${closedFor}</span>` +
+      `<span class="cc-sub">The RSF is shut all day</span>`;
+    closedEl.style.display = 'flex';
+  } else {
+    closedEl.style.display = 'none';
+  }
+
   updatePillStates();
 
   if (predChart) {
@@ -1471,6 +1556,28 @@ function showDataWarning(msg) {
   el.style.display = 'block';
 }
 
+const SENSOR_WARNING =
+  "RSF's occupancy sensor looks stuck \u2014 the live count and the usual-day " +
+  "comparison are paused until it recovers. The forecast is unaffected.";
+
+function sensorIsDown() {
+  return !!(liveCapacity && liveCapacity.sensorOk === false);
+}
+
+// Separate from showDataWarning's one-shot load errors because this one has to
+// clear itself when the hardware comes back — and must not wipe a load-failure
+// message that's already on screen, hence the ownership check before hiding.
+function setSensorWarning(down) {
+  const el = document.getElementById('data-warning');
+  if (down) {
+    el.textContent = SENSOR_WARNING;
+    el.style.display = 'block';
+  } else if (el.textContent === SENSOR_WARNING) {
+    el.textContent = '';
+    el.style.display = 'none';
+  }
+}
+
 // ── Insight Cards ─────────────────────────────────────────────
 // Half-open [fromH, toH) by default, which is what the full-day curve wants:
 // called with the closing hour, it must stop at the last slot INSIDE opening
@@ -1563,10 +1670,22 @@ function renderInsightCards(data) {
   const pt        = getPTNow();
   const predDay   = new Date(predDate + 'T12:00:00');
   const dayName   = DAYS[predDay.getDay()];
-  const livePct   = liveCapacity ? liveCapacity.pct : null;
-  const liveCount = liveCapacity ? liveCapacity.count : null;
+  // A stalled counter is routed into the "no live reading" path rather than
+  // given a new UI state of its own: every card already has a designed
+  // fallback for that (— for capacity, forecast-only trend, — for the
+  // comparison), and reusing them is what stops the page asserting 1% as fact
+  // and then stacking "Filling up" and "Much quieter than usual Sundays" on
+  // top of it. See api/_sensor.js.
+  const sensorDown = sensorIsDown();
+  setSensorWarning(sensorDown);
+  const livePct   = (liveCapacity && !sensorDown) ? liveCapacity.pct : null;
+  const liveCount = (liveCapacity && !sensorDown) ? liveCapacity.count : null;
 
   const { open: openH, close: closeH } = getOpenHours(predDay.getDay(), predDay);
+  // Caltopia shuts the whole building, so the day has no forecast to show and
+  // no live count to take — the card names the reason instead of showing a
+  // bare dash the reader has to interpret.
+  const closure = closureReason(predDay);
 
   // ── Card 1: Status / Capacity ──
   const statusLabel = document.getElementById('insight-status-label');
@@ -1613,24 +1732,39 @@ function renderInsightCards(data) {
       pctEl.textContent = '—';
       pctEl.style.color = 'var(--sub)';
       capFill.style.width = '0%';
-      capLabel.textContent = 'Live count unavailable';
+      capLabel.textContent = sensorDown ? 'RSF sensor offline' : 'Live count unavailable';
     } else {
-      const nowH = pt.getHours() + pt.getMinutes() / 60;
-      const isBeforeOpen = nowH < openH;
-      const tomorrow = new Date(pt.getTime() + 24 * 60 * 60 * 1000);
-      const nextOpen = isBeforeOpen ? openH : getOpenHours(tomorrow.getDay(), tomorrow).open;
-      const prefix   = isBeforeOpen ? 'Opens at' : 'Opens tomorrow at';
-
       pctEl.textContent = 'CLOSED';
       pctEl.style.color = '#f87171';
       pctEl.style.fontSize = '';
       capFill.style.width = '0%';
-      capLabel.textContent = `${prefix} ${formatTime(nextOpen, 0)}`;
+
+      const nowH = pt.getHours() + pt.getMinutes() / 60;
+      const isBeforeOpen = closeH > openH && nowH < openH;
+      if (closure) {
+        capLabel.textContent = `Closed for ${closure}`;
+      } else if (isBeforeOpen) {
+        capLabel.textContent = `Opens at ${formatTime(openH, 0)}`;
+      } else {
+        // Searched, not assumed: on the Saturday night before a Caltopia
+        // closure the gym does NOT open tomorrow, and the previous
+        // "Opens tomorrow at 8:00 AM" stated that as fact.
+        const next = nextOpenDate(pt);
+        capLabel.textContent = next
+          ? `Opens ${next.isTomorrow ? 'tomorrow' : DAYS[next.date.getDay()]} at ${formatTime(next.open, 0)}`
+          : 'Closed';
+      }
     }
   } else {
     statusLabel.textContent = 'DAILY FORECAST';
     const allSlots = getBlendedSlots(data, openH, closeH, predDate);
-    if (allSlots.length) {
+    if (closure) {
+      pctEl.textContent = 'CLOSED';
+      pctEl.style.color = '#f87171';
+      pctEl.style.fontSize = '';
+      capFill.style.width = '0%';
+      capLabel.textContent = `Closed for ${closure}`;
+    } else if (allSlots.length) {
       const peak = allSlots.reduce((a, b) => b.y > a.y ? b : a);
       pctEl.textContent = `${Math.round(peak.y)}%`;
       pctEl.style.color = pctColor(peak.y);

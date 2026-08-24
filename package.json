@@ -4,5 +4,8 @@
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
+  },
+  "scripts": {
+    "test": "node api/_sensor.test.js"
   }
 }
