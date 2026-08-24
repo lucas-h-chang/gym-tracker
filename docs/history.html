@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bear Meter - History</title>
+
+  <meta name="theme-color" content="#0a0a0f">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0a0f'/%3E%3Cg transform='rotate%28135 50 50%29' fill='none' stroke-width='11' stroke-linecap='round'%3E%3Ccircle cx='50' cy='50' r='32' stroke='%232f2f36' stroke-dasharray='150.8 201.1'/%3E%3Ccircle cx='50' cy='50' r='32' stroke='%236ee7b7' stroke-dasharray='93.5 201.1'/%3E%3C/g%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    /* The chart, its colours, tooltip, pills and calendar are lifted verbatim
+       from docs/index.html so a past day here looks exactly like today does on
+       the live site. Everything index.html wraps around the chart - insight
+       cards, live pill, predictions - is deliberately absent: this is a
+       look-at-the-data tool, not a second front end. The comments explaining
+       WHY each shared rule is the way it is live in index.html. */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0a0a0f;
+      --text:   #e8e6e3;
+      --sub:    #8a8480;
+      --muted:  #4a4540;
+      --border: rgba(255,255,255,0.06);
+      --font:   'Inter', -apple-system, sans-serif;
+      --mono:   'JetBrains Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      -webkit-text-size-adjust: 100%;
+      overflow-x: hidden;
+    }
+
+    #data-warning {
+      display: none;
+      text-align: center;
+      padding: 10px 24px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      font-family: var(--mono);
+      background: rgba(248, 113, 113, 0.07);
+      border-bottom: 1px solid rgba(248, 113, 113, 0.12);
+      color: #f87171;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      padding: 22px 48px 0;
+    }
+    .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .logo span { color: var(--sub); font-weight: 500; }
+    .home-link {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--sub);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .home-link:hover { color: var(--text); }
+
+    .chart-section { position: relative; padding: 24px 48px 0; }
+
+    /* ── Controls ── */
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .control-row.hidden { display: none; }
+    .stepper { display: flex; align-items: center; gap: 4px; }
+    .control-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+    .pill {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 7px 18px;
+      background: transparent;
+      color: var(--sub);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .pill:hover:not(:disabled) { border-color: rgba(255,255,255,0.22); color: var(--text); }
+    .pill.active {
+      background: #ececec;
+      border-color: #ececec;
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+    .pill:disabled { opacity: 0.25; cursor: default; }
+    /* Square-ish so the arrows read as one unit with the label between them. */
+    .pill-step { padding: 7px 12px; font-family: var(--mono); }
+    .pill-wide { min-width: 168px; text-align: center; }
+    .pill-dow  { padding: 7px 13px; }
+
+    .ghost-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--sub);
+      cursor: pointer;
+      user-select: none;
+      margin-left: 2px;
+    }
+    .ghost-toggle input { accent-color: #6ee7b7; cursor: pointer; }
+
+    /* ── Title line ── */
+    .chart-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 5px;
+    }
+    /* One line of provenance + the two numbers worth reading off a curve.
+       Plain text on purpose - cards would be more UI than this needs. */
+    .chart-sub {
+      font-size: 13px;
+      color: var(--sub);
+      line-height: 1.4;
+      margin-bottom: 14px;
+      min-height: 1.4em;
+    }
+    .chart-sub .sep  { color: var(--muted); padding: 0 7px; }
+    .chart-sub b     { color: var(--text); font-weight: 600; }
+    .chart-sub .dates {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Chart ── */
+    .chart-wrap { position: relative; height: 420px; }
+    .chart-wrap canvas { display: block; touch-action: none; }
+
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      z-index: 20;
+      background: #1e1c1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .chart-tooltip .tt-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sub);
+      margin-bottom: 6px;
+    }
+    .chart-tooltip .tt-row { font-size: 15px; color: var(--text); line-height: 1.4; }
+    .chart-tooltip .tt-row b { font-weight: 700; }
+    .chart-tooltip .tt-row.tt-dim { font-size: 13px; color: var(--sub); }
+
+    body.loading .chart-wrap canvas { visibility: hidden; }
+
+    /* Covers the plot when a selection has nothing behind it, so an empty grid
+       never reads as a failed load. */
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-align: center;
+      padding: 0 24px;
+    }
+    .empty-state.on { display: flex; }
+    .empty-state .es-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .empty-state .es-sub   { font-size: 13px; color: var(--sub); max-width: 400px; line-height: 1.4; }
+
+    /* ── Calendar popup ── */
+    .cal-popup {
+      position: absolute;
+      background: #141310;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px;
+      z-index: 100;
+      width: 260px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .cal-month-label { font-size: 14px; font-weight: 600; color: var(--text); }
+    .cal-nav-btn {
+      background: none;
+      border: none;
+      color: var(--sub);
+      cursor: pointer;
+      font-size: 15px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    .cal-nav-btn:hover { color: var(--text); }
+    .cal-nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .cal-dow {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      padding: 4px 0;
+      font-weight: 600;
+    }
+    .cal-day {
+      text-align: center;
+      padding: 6px 2px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--sub);
+      transition: background 0.12s, color 0.12s;
+    }
+    .cal-day:hover:not(.cal-day-disabled):not(.cal-day-selected) {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    .cal-day-disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+    .cal-day-selected { background: #6ee7b7; color: #000; font-weight: 700; }
+    .cal-day-today { color: #6ee7b7; font-weight: 700; }
+    .cal-day-selected.cal-day-today { color: #000; }
+    .cal-day-empty { pointer-events: none; }
+
+    /* ── Keyboard hint ── */
+    .hint {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 16px 48px 28px;
+      font-family: var(--mono);
+      letter-spacing: 0.03em;
+    }
+    kbd {
+      font-family: var(--mono);
+      font-size: 11px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--sub);
+    }
+
+    @media (max-width: 768px) {
+      header         { padding: 16px calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      .chart-section { padding: 16px calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      .hint          { padding: 14px calc(20px + env(safe-area-inset-right)) 24px calc(20px + env(safe-area-inset-left)); }
+
+      /* Seven weekday pills plus a month stepper cannot fit a phone width, so
+         the row scrolls sideways rather than wrapping into three ragged rows. */
+      .control-row {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+        margin-bottom: 14px;
+      }
+      .control-row > * { flex: none; }
+      .pill      { padding: 8px 18px; font-size: 13px; }
+      .pill-dow  { padding: 8px 12px; }
+      .pill-wide { min-width: 150px; }
+
+      .chart-wrap {
+        height: 280px;
+        /* Bleed out of the gutter so the plot runs edge to edge; Chart.js keeps
+           the y-labels inside the canvas, so they become the left buffer. */
+        margin-left: calc(-20px - env(safe-area-inset-left));
+        margin-right: calc(-12px - env(safe-area-inset-right));
+      }
+
+      .cal-popup {
+        width: min(320px, calc(100vw - 40px));
+        padding: 14px;
+      }
+      .cal-day, .cal-dow { display: flex; align-items: center; justify-content: center; }
+      .cal-day  { min-height: 40px; padding: 0; font-size: 15px; }
+      .cal-dow  { min-height: 28px; padding: 0; }
+      .cal-nav-btn { min-width: 40px; min-height: 40px; font-size: 18px; }
+      .cal-header { margin-bottom: 6px; }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body class="loading">
+
+<div id="data-warning"></div>
+
+<header>
+  <div class="logo">Bear Meter <span>· History</span></div>
+  <a href="/" class="home-link">Live site →</a>
+</header>
+
+<div class="chart-section" id="section-history">
+
+  <!-- Mode -->
+  <div class="control-row" id="mode-row">
+    <div class="stepper" id="mode-pills">
+      <button class="pill active" data-mode="day">Single day</button>
+      <button class="pill" data-mode="agg">Weekday average</button>
+    </div>
+  </div>
+
+  <!-- Single-day selector -->
+  <div class="control-row" id="controls-day">
+    <div class="stepper">
+      <button class="pill pill-step" id="day-prev" title="Previous day with data">&#8249;</button>
+      <button class="pill pill-wide" id="day-label">&mdash;</button>
+      <button class="pill pill-step" id="day-next" title="Next day with data">&#8250;</button>
+    </div>
+    <div class="control-sep"></div>
+    <button class="pill" id="day-latest">Latest</button>
+  </div>
+
+  <!-- Weekday-average selector -->
+  <div class="control-row hidden" id="controls-agg">
+    <div class="stepper" id="dow-pills"></div>
+    <div class="control-sep"></div>
+    <div class="stepper">
+      <button class="pill pill-step" id="mon-prev" title="Previous month">&#8249;</button>
+      <button class="pill pill-wide" id="mon-label">&mdash;</button>
+      <button class="pill pill-step" id="mon-next" title="Next month">&#8250;</button>
+    </div>
+    <label class="ghost-toggle">
+      <input type="checkbox" id="ghost-check" checked>
+      Show each day
+    </label>
+  </div>
+
+  <div id="cal-popup" class="cal-popup" style="display:none"></div>
+
+  <h2 class="chart-title" id="chart-title">&nbsp;</h2>
+  <p class="chart-sub" id="chart-sub">&nbsp;</p>
+
+  <div class="chart-wrap">
+    <canvas id="hist-chart"></canvas>
+    <div id="hist-tooltip" class="chart-tooltip"></div>
+    <div class="empty-state" id="empty-state">
+      <div class="es-title" id="es-title">No readings</div>
+      <div class="es-sub" id="es-sub"></div>
+    </div>
+  </div>
+</div>
+
+<p class="hint">
+  <kbd>←</kbd> <kbd>→</kbd> step · <kbd>D</kbd> single day · <kbd>W</kbd> weekday average
+</p>
+
+<script>
+const DAYS        = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DAYS_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS      = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+const MONTHS_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// A date with fewer readings than this is not a real day. The scraper writes
+// ~64 rows across a normal open day, so single digits are an outage tail or a
+// partial first/last day - not something to average or offer as selectable.
+const MIN_READINGS = 20;
+
+// ── Formatting (same behaviour as docs/index.html) ────────────────────
+function formatHour(h) {
+  if (h === 0 || h === 24) return '12 AM';
+  if (h === 12) return '12 PM';
+  return h > 12 ? `${h - 12} PM` : `${h} AM`;
+}
+function formatTime(h, m) {
+  const period = h >= 12 ? 'PM' : 'AM';
+  const dh = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+  return m === 0 ? `${dh}:00 ${period}` : `${dh}:${String(m).padStart(2, '0')} ${period}`;
+}
+function slotToLabel(slot) {
+  const h = Math.floor(slot);
+  return formatTime(h, Math.round((slot - h) * 60));
+}
+
+// Parse YYYY-MM-DD as a LOCAL date at noon. Noon, not midnight: it keeps the
+// value clear of both DST transitions, so getDay() can never slip a day.
+function dateObj(ds) { return new Date(ds + 'T12:00:00'); }
+function fmtDate(ds) {
+  const d = dateObj(ds);
+  return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+function fmtDateShort(ds) {
+  const d = dateObj(ds);
+  return `${MONTHS_ABBR[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+function shiftDate(ds, delta) {
+  const d = dateObj(ds);
+  d.setDate(d.getDate() + delta);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function monthOf(ds) { return ds.slice(0, 7); }
+function shiftMonth(ms, delta) {
+  let [y, m] = ms.split('-').map(Number);
+  m += delta;
+  y += Math.floor((m - 1) / 12);
+  m = ((m - 1) % 12 + 12) % 12 + 1;
+  return `${y}-${String(m).padStart(2,'0')}`;
+}
+function fmtMonth(ms) {
+  const [y, m] = ms.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${y}`;
+}
+
+// ── State ─────────────────────────────────────────────────────────────
+let meta       = null;    // { first_date, last_date, today }
+let mode       = 'day';   // 'day' | 'agg'
+let selDate    = null;    // YYYY-MM-DD
+let selMonth   = null;    // YYYY-MM
+let selDow     = 1;       // 0=Sun … 6=Sat
+let showGhosts = true;
+let histChart  = null;
+
+// If /api/history is gated by HISTORY_KEY, the key rides along in this page's
+// own URL (?k=...) and is forwarded on every call - so bookmarking the page
+// with the key is all the setup there is. Empty when the gate is off.
+const API_KEY = new URLSearchParams(location.search).get('k') || '';
+function api(path) {
+  return `/api/history?${path}${API_KEY ? `&k=${encodeURIComponent(API_KEY)}` : ''}`;
+}
+
+// month key -> Promise<{ days }>. Each month is fetched at most once per page
+// load; /api/history's own CDN cache covers repeat visits and reloads.
+const monthCache = new Map();
+
+function loadMonth(ms, { force = false } = {}) {
+  if (force) monthCache.delete(ms);
+  if (!monthCache.has(ms)) {
+    const p = fetch(api(`month=${ms}`))
+      .then(r => {
+        if (!r.ok) throw new Error(`history ${r.status}`);
+        return r.json();
+      })
+      .then(v => { p._resolved = v; return v; })
+      .catch(err => {
+        // Drop the rejected promise so one transient failure doesn't poison
+        // this month for the rest of the session.
+        monthCache.delete(ms);
+        throw err;
+      });
+    monthCache.set(ms, p);
+  }
+  return monthCache.get(ms);
+}
+
+// Synchronous read for paths that must not go async again: the calendar's
+// per-day availability, and the prev/next walk's has-data test.
+function cachedMonth(ms) {
+  const p = monthCache.get(ms);
+  return p && p._resolved ? p._resolved : null;
+}
+function hasData(ds) {
+  const m = cachedMonth(monthOf(ds));
+  const e = m && m.days[ds];
+  return !!e && e.n >= MIN_READINGS;
+}
+
+// ── Curve assembly ────────────────────────────────────────────────────
+// Points arrive as [[slot, pct], …]. Anchor the curve at zero one slot outside
+// the first and last reading so a finished day rises from and falls back to
+// the axis, matching how index.html drops the actual line to 0 at closing.
+// Without it the gradient fill ends in a vertical cliff.
+function toPoints(pairs) {
+  if (!pairs || !pairs.length) return [];
+  const pts = pairs.map(([x, y]) => ({ x, y, label: slotToLabel(x) }));
+  const first = pts[0], last = pts[pts.length - 1];
+  const out = [];
+  if (first.x - 0.25 >= 0 && first.y > 0) {
+    out.push({ x: first.x - 0.25, y: 0, label: slotToLabel(first.x - 0.25), _anchor: true });
+  }
+  out.push(...pts);
+  if (last.y > 0) {
+    out.push({ x: last.x + 0.25, y: 0, label: slotToLabel(last.x + 0.25), _anchor: true });
+  }
+  return out;
+}
+
+// Average one weekday's curves within a month.
+//
+// A slot is kept only when at least half the contributing days recorded it.
+// Otherwise a single day whose scrape ran long - or a month where one Monday
+// fell in summer hours and closed at 8 PM while the rest closed at 11 - drags
+// a thin, unrepresentative tail across the right-hand side of the average.
+function aggregate(monthData, dow) {
+  const dates = Object.keys(monthData.days)
+    .filter(ds => dateObj(ds).getDay() === dow && monthData.days[ds].n >= MIN_READINGS)
+    .sort();
+  if (!dates.length) return { dates: [], pairs: [], spread: new Map() };
+
+  const acc = new Map();   // slot -> { sum, n, min, max }
+  dates.forEach(ds => {
+    monthData.days[ds].pts.forEach(([slot, pct]) => {
+      const a = acc.get(slot);
+      if (a) {
+        a.sum += pct; a.n += 1;
+        if (pct < a.min) a.min = pct;
+        if (pct > a.max) a.max = pct;
+      } else {
+        acc.set(slot, { sum: pct, n: 1, min: pct, max: pct });
+      }
+    });
+  });
+
+  const quorum = Math.ceil(dates.length / 2);
+  const kept = [...acc.entries()]
+    .filter(([, a]) => a.n >= quorum)
+    .sort((a, b) => a[0] - b[0]);
+
+  const spread = new Map();
+  kept.forEach(([slot, a]) => spread.set(slot, { min: a.min, max: a.max, n: a.n }));
+
+  return {
+    dates,
+    pairs: kept.map(([slot, a]) => [slot, Math.round((a.sum / a.n) * 10) / 10]),
+    spread,
+  };
+}
+
+function peakAndAvg(pairs) {
+  if (!pairs || !pairs.length) return null;
+  let peak = -1, peakSlot = null, sum = 0;
+  pairs.forEach(([slot, pct]) => {
+    if (pct > peak) { peak = pct; peakSlot = slot; }
+    sum += pct;
+  });
+  return { peak, peakSlot, avg: sum / pairs.length };
+}
+
+// ── Chart.js plugins (identical to docs/index.html) ───────────────────
+const capacityGradientPlugin = {
+  id: 'capacityGradient',
+  // beforeDatasetsUpdate, not beforeDatasetsDraw: Chart.js resolves the fill
+  // colour during update, so a draw-phase hook lags one cycle and is invisible
+  // on first paint.
+  beforeDatasetsUpdate(chart) {
+    if (!chart.options.plugins?.capacityGradient?.enabled) return;
+    const { ctx, scales } = chart;
+    if (!scales?.y) return;
+
+    const yBottom = scales.y.getPixelForValue(0);
+    const yTop    = scales.y.getPixelForValue(110);
+
+    chart.data.datasets.forEach(ds => {
+      // The faint per-day lines keep their flat grey; running them through the
+      // capacity gradient would make five overlapping curves as loud as the
+      // average they are meant to sit behind.
+      if (ds._ghost) return;
+
+      const lineOp = 1.0, fillOp = 0.35;
+
+      const lg = ctx.createLinearGradient(0, yBottom, 0, yTop);
+      lg.addColorStop(0,      `rgba(110,231,183,${lineOp})`);
+      lg.addColorStop(45/110, `rgba(110,231,183,${lineOp})`);
+      lg.addColorStop(60/110, `rgba(251,191,36,${lineOp})`);
+      lg.addColorStop(80/110, `rgba(248,113,113,${lineOp})`);
+      lg.addColorStop(1,      `rgba(185,28,28,${lineOp})`);
+      ds.borderColor = lg;
+
+      const fg = ctx.createLinearGradient(0, yBottom, 0, yTop);
+      fg.addColorStop(0,      `rgba(110,231,183,${fillOp * 0.1})`);
+      fg.addColorStop(0.08,   `rgba(110,231,183,${fillOp * 0.45})`);
+      fg.addColorStop(45/110, `rgba(110,231,183,${fillOp})`);
+      fg.addColorStop(60/110, `rgba(251,191,36,${fillOp})`);
+      fg.addColorStop(80/110, `rgba(248,113,113,${fillOp})`);
+      fg.addColorStop(1,      `rgba(185,28,28,${fillOp})`);
+      ds.backgroundColor = fg;
+    });
+  }
+};
+
+const scrubLinePlugin = {
+  id: 'scrubLine',
+  afterDraw(chart) {
+    const active = chart.tooltip?.getActiveElements();
+    if (!active || !active.length) return;
+    const { ctx, chartArea: a } = chart;
+    const x = active[0].element.x;
+    if (x < a.left || x > a.right) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, a.top);
+    ctx.lineTo(x, a.bottom);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+// Same external-tooltip idiom as index.html (an HTML box, so the value can be
+// bolded - a canvas tooltip renders every line in one uniform font). One
+// difference: it bolds EVERY percentage, not just the first number, because
+// the aggregate view's range row carries two.
+function makeExternalTooltip(tooltipId) {
+  return (context) => {
+    const el = document.getElementById(tooltipId);
+    if (!el) return;
+    const tt = context.tooltip;
+
+    if (tt.opacity === 0) { el.style.opacity = 0; return; }
+
+    let html = '';
+    if (tt.title?.length) html += `<div class="tt-title">${tt.title[0]}</div>`;
+    (tt.body || []).forEach(b => {
+      b.lines.forEach(line => {
+        const dim  = line.startsWith('~');       // marks a secondary row
+        const text = (dim ? line.slice(1) : line).replace(/\d+%/g, m => `<b>${m}</b>`);
+        html += `<div class="tt-row${dim ? ' tt-dim' : ''}">${text}</div>`;
+      });
+    });
+    el.innerHTML = html;
+
+    // Measure off-screen first so we know which side to place the box on.
+    el.style.left = '0px';
+    el.style.top  = '0px';
+    const w = el.offsetWidth, h = el.offsetHeight;
+
+    const gap = 14;
+    const chartArea = context.chart.chartArea;
+    // The wrapper, not the plot area, is what the box can actually overflow -
+    // anything past its right edge scrolls the whole page sideways on a phone.
+    const wrap  = el.parentElement;
+    const wrapW = wrap.clientWidth, wrapH = wrap.clientHeight;
+
+    let left, top;
+    if (wrapW < 480) {
+      left = tt.caretX - w / 2;
+      top  = tt.caretY - h - gap;
+      if (top < 0) top = tt.caretY + gap;
+    } else {
+      const preferLeft = tt.caretX - w - gap >= chartArea.left;
+      left = preferLeft ? (tt.caretX - w - gap) : (tt.caretX + gap);
+      top  = tt.caretY - h / 2;
+    }
+
+    // Clamp last, so every branch above lands inside the wrapper.
+    el.style.left = Math.max(0, Math.min(left, wrapW - w)) + 'px';
+    el.style.top  = Math.max(0, Math.min(top,  wrapH - h)) + 'px';
+    el.style.opacity = 1;
+  };
+}
+
+function isPhone() { return window.innerWidth <= 768; }
+function formatHourTick(h) { return isPhone() ? formatHour(h).replace(' ', '') : formatHour(h); }
+function chartTopPad() { return isPhone() ? 22 : 36; }
+
+// Chart.js re-renders on resize itself, but the top padding is read once into
+// the options object and the tick callbacks only re-run on update - so
+// crossing the 768 breakpoint has to force one.
+let _wasPhone = isPhone();
+window.addEventListener('resize', () => {
+  if (!histChart) return;
+  const pad = chartTopPad(), phoneNow = isPhone();
+  if (histChart.options.layout.padding.top === pad && phoneNow === _wasPhone) return;
+  _wasPhone = phoneNow;
+  histChart.options.layout.padding.top = pad;
+  histChart.update('none');
+});
+
+// ── Chart ─────────────────────────────────────────────────────────────
+function tooltipLabel() {
+  return (item) => `${item.dataset.label}: ${Math.round(item.raw.y)}%`;
+}
+// Leading "~" marks the row as secondary; the renderer strips it and dims it.
+function tooltipAfterBody(spread) {
+  return (items) => {
+    if (!spread || !items.length) return [];
+    const s = spread.get(items[0].raw.x);
+    if (!s || s.n < 2) return [];
+    return [`~${Math.round(s.min)}% – ${Math.round(s.max)}% across ${s.n} days`];
+  };
+}
+
+// `spread` carries per-slot min/max across the averaged days (aggregate mode
+// only) and is null in single-day mode.
+function drawChart(mainPoints, ghostSeries, spread) {
+  const mainDataset = {
+    label: mode === 'agg' ? 'Average' : 'Occupancy',
+    data: mainPoints,
+    borderWidth: 3.25,
+    pointRadius: 0,
+    pointHoverRadius: 5,
+    pointBackgroundColor: '#fff',
+    pointBorderColor: 'transparent',
+    pointBorderWidth: 0,
+    tension: 0.35,
+    fill: true,
+    order: 10,          // highest order draws last - on top of the ghosts
+  };
+
+  const ghostDatasets = (ghostSeries || []).map(g => ({
+    label: g.label,
+    data: g.points,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    tension: 0.35,
+    fill: false,
+    order: 1,
+    _ghost: true,
+  }));
+
+  const datasets = [mainDataset, ...ghostDatasets];
+
+  if (histChart) {
+    histChart.data.datasets = datasets;
+    histChart.options.plugins.tooltip.callbacks.label     = tooltipLabel();
+    histChart.options.plugins.tooltip.callbacks.afterBody = tooltipAfterBody(spread);
+    histChart.update();
+    return;
+  }
+
+  const canvasEl = document.getElementById('hist-chart');
+  const ctx = canvasEl.getContext('2d');
+
+  // Chart.js's default event list has no touchend, so on a phone the last
+  // touched point stays active after you lift your finger. Same fix as
+  // index.html: synthesise the mouseout Chart.js already resets on, and
+  // preventDefault so Safari's synthetic mousemove can't re-activate it.
+  if (!canvasEl.dataset.liftBound) {
+    canvasEl.dataset.liftBound = '1';
+    const endTouch = (e) => {
+      if (e.cancelable) e.preventDefault();
+      canvasEl.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    };
+    canvasEl.addEventListener('touchend', endTouch, { passive: false });
+    canvasEl.addEventListener('touchcancel', endTouch, { passive: false });
+  }
+
+  histChart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      parsing: false,
+      // .chart-wrap's height is the single source of truth for how tall the
+      // chart is; without this Chart.js re-derives one from an aspect ratio.
+      maintainAspectRatio: false,
+      animation: { duration: 320 },
+      layout: { padding: { top: chartTopPad() } },
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+      plugins: {
+        capacityGradient: { enabled: true },
+        legend: { display: false },
+        tooltip: {
+          enabled: false,
+          external: makeExternalTooltip('hist-tooltip'),
+          displayColors: false,
+          // The zero anchors are synthetic padding, not readings - reporting
+          // "Occupancy: 0%" for them would claim a measurement never taken.
+          // Ghosts are excluded so hovering an aggregate doesn't stack five
+          // near-identical rows.
+          filter: (item) => !item.dataset._ghost && !item.raw?._anchor,
+          callbacks: {
+            title: (items) => items[0].raw.label || '',
+            label: tooltipLabel(),
+            afterBody: tooltipAfterBody(spread),
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear', min: 7, max: 23,
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            color: '#5a5550',
+            font: { size: 11, family: "'Inter', sans-serif", weight: '500' },
+            stepSize: 2,
+            padding: 8,
+            callback: (v) => Number.isInteger(v) ? formatHourTick(v) : ''
+          }
+        },
+        y: {
+          min: 0, max: 110,
+          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
+          border: { display: false },
+          // 110 is headroom, not a value worth labelling, and Chart.js would
+          // otherwise print "110%" jammed against "100%".
+          afterBuildTicks: (axis) => {
+            if (isPhone()) axis.ticks = [25, 50, 75, 100].map(value => ({ value }));
+          },
+          ticks: {
+            color: '#5a5550',
+            font: { size: 10, family: "'Inter', sans-serif", weight: '500' },
+            stepSize: 25,
+            padding: 8,
+            callback: (v) => v > 0 ? `${v}%` : ''
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────
+function setEmpty(on, title, sub) {
+  const el = document.getElementById('empty-state');
+  el.classList.toggle('on', on);
+  if (on) {
+    document.getElementById('es-title').textContent = title;
+    document.getElementById('es-sub').textContent   = sub || '';
+  }
+}
+
+function summaryHtml(pairs, extra) {
+  const s = peakAndAvg(pairs);
+  if (!s) return extra || '&nbsp;';
+  return `Peak <b>${Math.round(s.peak)}%</b> at ${slotToLabel(s.peakSlot)}` +
+         `<span class="sep">·</span>Avg <b>${Math.round(s.avg)}%</b>` +
+         (extra ? `<span class="sep">·</span>${extra}` : '');
+}
+
+async function render() {
+  updateControls();
+
+  const titleEl = document.getElementById('chart-title');
+  const subEl   = document.getElementById('chart-sub');
+
+  if (mode === 'day') {
+    const ms = monthOf(selDate);
+    titleEl.textContent = fmtDate(selDate);
+    subEl.textContent   = 'Loading…';
+
+    let monthData;
+    try {
+      monthData = await loadMonth(ms);
+    } catch (e) { return showLoadError(e); }
+    // The user may have moved on while the fetch was in flight.
+    if (mode !== 'day' || monthOf(selDate) !== ms) return;
+
+    const entry = monthData.days[selDate];
+    const pairs = entry && entry.n >= MIN_READINGS ? entry.pts : null;
+
+    if (!pairs) {
+      drawChart([], [], null);
+      subEl.innerHTML = '&nbsp;';
+      setEmpty(true, 'No readings for this day',
+        selDate > meta.last_date
+          ? 'That day has not happened yet.'
+          : 'The RSF was closed all day, or the scraper did not run.');
+      return;
+    }
+
+    setEmpty(false);
+    drawChart(toPoints(pairs), [], null);
+    subEl.innerHTML = summaryHtml(pairs,
+      `${entry.n} readings` + (selDate === meta.today ? ' · still recording' : ''));
+    return;
+  }
+
+  // ── Aggregate mode ──
+  titleEl.textContent = `${DAYS[selDow]}s in ${fmtMonth(selMonth)}`;
+  subEl.textContent   = 'Loading…';
+
+  let monthData;
+  try {
+    monthData = await loadMonth(selMonth);
+  } catch (e) { return showLoadError(e); }
+  if (mode !== 'agg') return;
+
+  const { dates, pairs, spread } = aggregate(monthData, selDow);
+
+  if (!dates.length) {
+    drawChart([], [], null);
+    subEl.innerHTML = '&nbsp;';
+    setEmpty(true, `No ${DAYS[selDow]}s recorded in ${fmtMonth(selMonth)}`,
+      'Either the month is outside the recorded range, or the scraper was down for all of them.');
+    return;
+  }
+
+  setEmpty(false);
+  const ghostSeries = showGhosts
+    ? dates.map(ds => ({ label: fmtDateShort(ds), points: toPoints(monthData.days[ds].pts) }))
+    : [];
+  drawChart(toPoints(pairs), ghostSeries, spread);
+
+  const listed = dates.map(ds => dateObj(ds).getDate()).join(', ');
+  subEl.innerHTML = summaryHtml(pairs,
+    `${dates.length} ${DAYS[selDow]}${dates.length === 1 ? '' : 's'} ` +
+    `<span class="dates">(${MONTHS_ABBR[dateObj(dates[0]).getMonth()]} ${listed})</span>`);
+}
+
+function showLoadError(err) {
+  console.error('history load failed:', err);
+  const unauthorized = String(err && err.message) === 'unauthorized';
+  const el = document.getElementById('data-warning');
+  el.textContent = unauthorized
+    ? 'Access key missing or wrong - open this page with ?k=<your key>'
+    : 'Could not load history data - try reloading.';
+  el.style.display = 'block';
+  document.getElementById('chart-sub').innerHTML = '&nbsp;';
+  drawChart([], [], null);
+  setEmpty(true,
+    unauthorized ? 'Access key required' : 'Could not load this data',
+    unauthorized
+      ? 'This page is gated by HISTORY_KEY. Append ?k=<your key> to the URL.'
+      : 'The history service did not respond. Try again in a moment.');
+}
+
+// ── Controls ──────────────────────────────────────────────────────────
+function updateControls() {
+  document.querySelectorAll('#mode-pills .pill').forEach(el => {
+    el.classList.toggle('active', el.dataset.mode === mode);
+  });
+  document.getElementById('controls-day').classList.toggle('hidden', mode !== 'day');
+  document.getElementById('controls-agg').classList.toggle('hidden', mode !== 'agg');
+
+  if (mode === 'day') {
+    document.getElementById('day-label').textContent = fmtDateShort(selDate);
+    document.getElementById('day-prev').disabled = selDate <= meta.first_date;
+    document.getElementById('day-next').disabled = selDate >= meta.last_date;
+    document.getElementById('day-latest').classList.toggle('active', selDate === meta.last_date);
+  } else {
+    document.getElementById('mon-label').textContent = fmtMonth(selMonth);
+    document.getElementById('mon-prev').disabled = selMonth <= monthOf(meta.first_date);
+    document.getElementById('mon-next').disabled = selMonth >= monthOf(meta.last_date);
+    document.querySelectorAll('#dow-pills .pill').forEach(el => {
+      el.classList.toggle('active', Number(el.dataset.dow) === selDow);
+    });
+  }
+}
+
+// Step to the nearest neighbouring date that actually has readings, so the
+// arrows never strand you on an empty chart you have to click past. Each
+// candidate's month has to be loaded to know whether it has data, hence the
+// awaits; the 45-step bound stops a long scraper outage turning one arrow
+// press into an unbounded crawl through history.
+let stepping = false;
+async function stepDay(delta) {
+  if (stepping || !meta) return;
+  stepping = true;
+  try {
+    let ds = selDate;
+    for (let i = 0; i < 45; i++) {
+      ds = shiftDate(ds, delta);
+      if (ds < meta.first_date || ds > meta.last_date) return;
+      try { await loadMonth(monthOf(ds)); } catch { return; }
+      if (hasData(ds)) { selDate = ds; render(); return; }
+    }
+    // Nothing with data within the bound - move one day anyway so the arrow is
+    // never a silent no-op, and let render() show its empty state.
+    const fallback = shiftDate(selDate, delta);
+    if (fallback >= meta.first_date && fallback <= meta.last_date) {
+      selDate = fallback;
+      render();
+    }
+  } finally {
+    stepping = false;
+  }
+}
+
+function stepMonth(delta) {
+  const next = shiftMonth(selMonth, delta);
+  if (next < monthOf(meta.first_date) || next > monthOf(meta.last_date)) return;
+  selMonth = next;
+  render();
+}
+
+function buildDowPills() {
+  const box = document.getElementById('dow-pills');
+  box.innerHTML = '';
+  DAYS_SHORT.forEach((label, i) => {
+    const b = document.createElement('button');
+    b.className = `pill pill-dow${i === selDow ? ' active' : ''}`;
+    b.textContent = label;
+    b.dataset.dow = i;
+    b.addEventListener('click', () => { selDow = i; render(); });
+    box.appendChild(b);
+  });
+}
+
+// ── Calendar popup ────────────────────────────────────────────────────
+const calPopup = document.getElementById('cal-popup');
+let calYear, calMonth;
+
+function renderCalendar() {
+  const ms = `${calYear}-${String(calMonth + 1).padStart(2,'0')}`;
+  const firstDay    = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const prevOk = ms > monthOf(meta.first_date);
+  const nextOk = ms < monthOf(meta.last_date);
+
+  // Availability comes from the month payload. Until it lands every in-range
+  // day is provisionally enabled rather than greyed out, so a slow fetch reads
+  // as "loading", not as "this month has no data".
+  const loaded = cachedMonth(ms);
+
+  let html = `<div class="cal-header">
+    <button class="cal-nav-btn" id="cal-prev-month" ${prevOk ? '' : 'disabled'}>←</button>
+    <span class="cal-month-label">${MONTHS[calMonth]} ${calYear}</span>
+    <button class="cal-nav-btn" id="cal-next-month" ${nextOk ? '' : 'disabled'}>→</button>
+  </div>
+  <div class="cal-grid">`;
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => html += `<div class="cal-dow">${d}</div>`);
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day cal-day-empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${ms}-${String(d).padStart(2,'0')}`;
+    const inRange = ds >= meta.first_date && ds <= meta.last_date;
+    const entry   = loaded ? loaded.days[ds] : null;
+    const ok      = inRange && (!loaded || (entry && entry.n >= MIN_READINGS));
+    const cls = ['cal-day',
+      ok ? '' : 'cal-day-disabled',
+      ds === selDate     ? 'cal-day-selected' : '',
+      ds === meta.today  ? 'cal-day-today'    : ''].filter(Boolean).join(' ');
+    html += `<div class="${cls}" data-date="${ds}">${d}</div>`;
+  }
+  html += '</div>';
+  calPopup.innerHTML = html;
+
+  document.getElementById('cal-prev-month').addEventListener('click', () => {
+    calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  document.getElementById('cal-next-month').addEventListener('click', () => {
+    calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  });
+  calPopup.querySelectorAll('.cal-day:not(.cal-day-disabled):not(.cal-day-empty)').forEach(el => {
+    el.addEventListener('click', () => {
+      selDate = el.dataset.date;
+      calPopup.style.display = 'none';
+      render();
+    });
+  });
+
+  // Fetch the month behind the grid, then repaint with real availability.
+  if (!loaded) {
+    loadMonth(ms).then(() => {
+      const stillOpen = calPopup.style.display !== 'none';
+      const stillHere = `${calYear}-${String(calMonth + 1).padStart(2,'0')}` === ms;
+      if (stillOpen && stillHere) renderCalendar();
+    }).catch(() => {});
+  }
+}
+
+function openCalendar() {
+  const d = dateObj(selDate);
+  calYear  = d.getFullYear();
+  calMonth = d.getMonth();
+  renderCalendar();
+  const anchor = document.getElementById('controls-day').getBoundingClientRect();
+  const sect   = document.getElementById('section-history').getBoundingClientRect();
+  calPopup.style.top   = (anchor.bottom - sect.top + 8) + 'px';
+  calPopup.style.left  = (anchor.left - sect.left) + 'px';
+  calPopup.style.right = 'auto';
+  calPopup.style.display = 'block';
+}
+
+// ── Live refresh ──────────────────────────────────────────────────────
+// The current month is the only thing that changes under this page: the
+// scraper appends a reading every 15 minutes, and at midnight PT a new date
+// appears. Re-pulling meta plus the in-progress month keeps the page current
+// without a reload or a redeploy.
+let refreshing = false;
+async function refreshLive() {
+  if (refreshing || !meta) return;
+  refreshing = true;
+  try {
+    const prevLast = meta.last_date;
+    const fresh = await fetch(api('meta=1')).then(r => r.json());
+    if (fresh && fresh.last_date) meta = fresh;
+
+    const current = monthOf(meta.last_date);
+    // force: the endpoint CDN-caches the in-progress month for 5 minutes, but
+    // this page's own Map would otherwise hold the boot copy forever.
+    await loadMonth(current, { force: true });
+
+    const touchesCurrent =
+      (mode === 'day' && monthOf(selDate) === current) ||
+      (mode === 'agg' && selMonth === current);
+
+    // The date rolled over while the tab sat open and you were pinned to what
+    // was then the latest day: follow the data forward rather than stranding
+    // you on a day that is no longer the newest.
+    if (mode === 'day' && selDate === prevLast && meta.last_date !== prevLast) {
+      selDate = meta.last_date;
+      render();
+    } else if (touchesCurrent) {
+      render();
+    } else {
+      updateControls();
+    }
+  } catch (e) {
+    console.warn('history refresh failed:', e);
+  } finally {
+    refreshing = false;
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+async function init() {
+  Chart.register(capacityGradientPlugin, scrubLinePlugin);
+
+  try {
+    meta = await fetch(api('meta=1')).then(r => {
+      if (r.status === 401) throw new Error('unauthorized');
+      if (!r.ok) throw new Error(`meta ${r.status}`);
+      return r.json();
+    });
+  } catch (e) {
+    document.body.classList.remove('loading');
+    return showLoadError(e);
+  }
+
+  if (!meta.first_date) {
+    document.body.classList.remove('loading');
+    return showLoadError(new Error('no rows in capacity_log'));
+  }
+
+  selDate  = meta.last_date;
+  selMonth = monthOf(meta.last_date);
+  selDow   = dateObj(meta.last_date).getDay();
+
+  buildDowPills();
+
+  document.getElementById('mode-pills').addEventListener('click', (e) => {
+    const btn = e.target.closest('.pill');
+    if (!btn || btn.dataset.mode === mode) return;
+    mode = btn.dataset.mode;
+    calPopup.style.display = 'none';
+    render();
+  });
+
+  document.getElementById('day-prev').addEventListener('click', () => stepDay(-1));
+  document.getElementById('day-next').addEventListener('click', () => stepDay(1));
+  document.getElementById('day-latest').addEventListener('click', () => {
+    selDate = meta.last_date;
+    render();
+  });
+  document.getElementById('mon-prev').addEventListener('click', () => stepMonth(-1));
+  document.getElementById('mon-next').addEventListener('click', () => stepMonth(1));
+  document.getElementById('ghost-check').addEventListener('change', (e) => {
+    showGhosts = e.target.checked;
+    render();
+  });
+
+  // Same pointerdown/click pairing as index.html's calendar: without the
+  // stopPropagation the trigger's own tap bubbles to the document dismisser,
+  // and the click handler then immediately reopens the popup.
+  const dayLabel = document.getElementById('day-label');
+  dayLabel.addEventListener('pointerdown', e => e.stopPropagation());
+  dayLabel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (calPopup.style.display !== 'none') { calPopup.style.display = 'none'; return; }
+    openCalendar();
+  });
+  // pointerdown, not click: iOS Safari doesn't deliver click from taps on
+  // non-interactive elements, so a background tap could never dismiss it.
+  document.addEventListener('pointerdown', () => { calPopup.style.display = 'none'; });
+  calPopup.addEventListener('pointerdown', e => e.stopPropagation());
+  calPopup.addEventListener('click', e => e.stopPropagation());
+
+  // Arrow keys are the fastest way to flip through days, which is most of what
+  // this page is for. Ignored while a field has focus so they never fight text
+  // entry, and while the calendar is open so it can be dismissed first.
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); mode === 'day' ? stepDay(-1) : stepMonth(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); mode === 'day' ? stepDay(1)  : stepMonth(1); }
+    if (e.key === 'd' || e.key === 'D') { if (mode !== 'day') { mode = 'day'; render(); } }
+    if (e.key === 'w' || e.key === 'W') { if (mode !== 'agg') { mode = 'agg'; render(); } }
+  });
+
+  await render();
+  document.body.classList.remove('loading');
+
+  // A tab left in the foreground never fires visibilitychange, and a
+  // backgrounded one has its timers throttled hard - neither covers the other.
+  setInterval(refreshLive, 5 * 60 * 1000);
+  let lastWake = Date.now();
+  const wake = () => {
+    if (document.visibilityState === 'hidden') return;
+    if (Date.now() - lastWake < 60000) return;
+    lastWake = Date.now();
+    refreshLive();
+  };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('focus', wake);
+  window.addEventListener('pageshow', wake);
+}
+
+// chart.js loads with `defer`, so it runs before DOMContentLoaded but after
+// this inline script parses - gate on DOMContentLoaded so `Chart` exists.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
