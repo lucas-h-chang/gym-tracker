@@ -1087,6 +1087,56 @@ const capacityGradientPlugin = {
   }
 };
 
+// Closed-hours shading. The x-axis is pinned 7 AM to 11 PM on every day so that
+// any two days can be read against one scale, which leaves dead space whenever
+// the RSF opens late or shuts early (a Saturday closes at 6 PM, a summer weekday
+// at 8). Left bare, that stretch reads as "the gym was empty" rather than "the
+// gym was shut". Mirrored on iOS by GymChart's closed-hours Canvas pass.
+const closedHoursPlugin = {
+  id: 'closedHours',
+  // Under the datasets, never over them: the curve, its fill and the pulse dot
+  // must not be dimmed by the wash.
+  beforeDatasetsDraw(chart) {
+    const opts = chart.options.plugins?.closedHours;
+    if (!opts?.show) return;
+    const { ctx, chartArea: area, scales } = chart;
+    if (!scales?.x) return;
+
+    const clamp  = (px) => Math.min(Math.max(px, area.left), area.right);
+    const openX  = clamp(scales.x.getPixelForValue(opts.open));
+    const closeX = clamp(scales.x.getPixelForValue(opts.close));
+
+    // [start, end, boundary]: boundary is the edge that touches open hours, and
+    // is skipped when it lands on a plot edge (there is nothing to divide there).
+    // A closure day arrives as the empty interval [0, 0), so both pixels clamp to
+    // area.left and the second band washes the entire plot, which is right: the
+    // building is shut all day, and .chart-closed says so on top of it.
+    const bands = [
+      [area.left, openX,      openX ],
+      [closeX,    area.right, closeX],
+    ];
+
+    ctx.save();
+    ctx.fillStyle   = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.lineWidth   = 1;
+    for (const [x0, x1, edge] of bands) {
+      if (x1 - x0 < 0.5) continue;
+      ctx.fillRect(x0, area.top, x1 - x0, area.bottom - area.top);
+      if (edge > area.left + 0.5 && edge < area.right - 0.5) {
+        // Half-pixel offset so the 1px divider lands on one device pixel
+        // instead of straddling two and rendering as a 2px smudge.
+        const x = Math.round(edge) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, area.top);
+        ctx.lineTo(x, area.bottom);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+};
+
 // NOW indicator: pulsing dot at the live point (positioned via CSS element).
 // The live point itself — same x/y the actual line is extended to and the
 // predicted line bridges from in updatePredChart() — is what's rendered
@@ -1389,6 +1439,8 @@ function updatePredChart(data) {
     predChart.data.datasets[1].data = predPoints;
     predChart.options.plugins.nowLine.show  = showNow;
     predChart.options.plugins.nowLine.value = nowVal;
+    predChart.options.plugins.closedHours.open  = openH;
+    predChart.options.plugins.closedHours.close = closeH;
     predChart.options.scales.x.min          = xMin;
     predChart.options.scales.x.max          = xMax;
     predChart.update();
@@ -1487,6 +1539,7 @@ function updatePredChart(data) {
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         capacityGradient: { enabled: true },
+        closedHours: { show: true, open: openH, close: closeH },
         nowLine: { show: showNow, value: nowVal },
         legend:  { display: false },
         tooltip: {
@@ -1515,7 +1568,15 @@ function updatePredChart(data) {
           grid: { display: false },
           border: { display: false },
           ticks: {
-            color: '#5a5550',
+            // Scriptable so a tick sitting in a closed band reads as dimmed as
+            // the band itself. The opening and closing hours stay at full
+            // strength: they label the boundary, not the dead time.
+            color: (c) => {
+              const o = c.chart.options.plugins?.closedHours;
+              const v = c.tick?.value;
+              return (o?.show && v != null && (v < o.open || v > o.close))
+                ? '#3a3733' : '#5a5550';
+            },
             font: { size: 11, family: "'Inter', sans-serif", weight: '500' },
             stepSize: 2,
             padding: 8,
@@ -1864,7 +1925,7 @@ function renderInsightCards(data) {
 async function init() {
   // chart.js loads with `defer`, so it isn't available until DOMContentLoaded
   // (which gates this init call). Register plugins here, not at parse time.
-  Chart.register(capacityGradientPlugin, nowLinePlugin, scrubLinePlugin);
+  Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin);
   updateStatusBar();
   // Live capacity is server-cached for 30s (see api/live-capacity.js), so
   // polling any faster than that just re-fetches the same cached value.
