@@ -521,9 +521,12 @@
 
       /* Single-line, as in iOS CardLabel: these two cards sit side by side, and
          a label that wraps in one but not the other pushes its value down and
-         breaks the shared baseline. "VS USUAL WEDNESDAYS" is the longest string
-         and fits at 10px on a 390px phone; the ellipsis only ever engages on
-         something as narrow as an SE. */
+         breaks the shared baseline. "VS SEMESTER WEDNESDAYS" is now the longest
+         string (the header names the comparison period since it picks an
+         all_semesters / all_summers / all_breaks baseline); it fits at 10px on a
+         390px phone, and the ellipsis only engages on something as narrow as an
+         SE. iOS gets the same string but scales it via minimumScaleFactor(0.75)
+         instead of clipping. */
       #insight-trend .card-label,
       #insight-comparison .card-label {
         font-size: 10px;
@@ -648,7 +651,7 @@
         <div class="skel skel-val" style="width:55%;animation-delay:.1s"></div>
         <div class="skel" style="width:45%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="card-label" id="insight-comp-header">VS USUAL &mdash;</span>
+      <span class="card-label" id="insight-comp-header">VS &mdash;</span>
       <span class="card-value" id="insight-comp-verdict">&mdash;</span>
       <span class="card-sub" id="insight-comp-delta"></span>
     </div>
@@ -760,42 +763,58 @@ function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
 
-// Manual JS mirror of academic_calendar.py's SUMMER_RANGES (Python consolidated
-// there 2026-07-21 — see CLAUDE.md). This frontend copy and RSFApp2.0's
-// TimeUtils.swift are NOT auto-generated from the Python source; keep all
-// three in sync by hand when adding a new year.
+// academic_calendar.py's SUMMER_RANGES. Generated from academic_calendar.py by gym-tracker/sync_calendar.py. Add a
+// year THERE and re-run it; a hand edit here is reverted by the next run and
+// fails test_calendar_mirrors.py in the meantime.
+// >>> GENERATED SUMMER_RANGES — from academic_calendar.py via sync_calendar.py; do not edit by hand
 const SUMMER_RANGES = [
-  ['2024-05-10','2024-08-24'], ['2025-05-16','2025-08-23'],
-  ['2026-05-15','2026-08-22'], ['2027-05-14','2027-08-21'],
+  ['2024-05-10', '2024-08-24'],
+  ['2025-05-16', '2025-08-23'],
+  ['2026-05-15', '2026-08-22'],
+  ['2027-05-14', '2027-08-21'],
 ];
+// <<< END GENERATED SUMMER_RANGES
 
 function isSummerHours(date) {
   const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
   return SUMMER_RANGES.some(([s, e]) => ds >= s && ds <= e);
 }
 
-// Manual JS mirror of academic_calendar.py's BREAK_RANGES (winter + spring +
-// summer break). Like SUMMER_RANGES above, NOT auto-generated — keep in sync
-// by hand when adding a year. Used only by periodTypeOf() to classify TODAY
+// academic_calendar.py's BREAK_RANGES (winter + spring + summer break).
+// Generated from academic_calendar.py by gym-tracker/sync_calendar.py. Used only by periodTypeOf() to classify TODAY
 // for the "compared to usual <Day>s" card, so it mirrors weekly_builder.py's
 // period_type() exactly (summer peeled off first via isSummerHours, then a
 // non-in-session day is a "break").
+// >>> GENERATED BREAK_RANGES — from academic_calendar.py via sync_calendar.py; do not edit by hand
 const BREAK_RANGES = [
   // winter
-  ['2020-12-18','2021-01-18'], ['2021-12-17','2022-01-17'], ['2022-12-16','2023-01-16'],
-  ['2023-12-15','2024-01-15'], ['2024-12-20','2025-01-20'], ['2025-12-19','2026-01-19'],
-  ['2026-12-18','2027-01-18'], ['2027-12-17','2028-01-17'],
+  ['2020-12-18', '2021-01-18'],
+  ['2021-12-17', '2022-01-17'],
+  ['2022-12-16', '2023-01-16'],
+  ['2023-12-15', '2024-01-15'],
+  ['2024-12-20', '2025-01-20'],
+  ['2025-12-19', '2026-01-19'],
+  ['2026-12-18', '2027-01-18'],
+  ['2027-12-17', '2028-01-17'],
   // spring
-  ['2021-03-20','2021-03-28'], ['2022-03-19','2022-03-27'], ['2023-03-25','2023-04-02'],
-  ['2024-03-23','2024-03-31'], ['2025-03-22','2025-03-30'], ['2026-03-21','2026-03-29'],
-  ['2027-03-20','2027-03-28'], ['2028-03-25','2028-04-02'],
-  // summer break (is_semester_day is false across these; summer session is
-  // peeled off first by isSummerHours, so these only catch the ~3-day tail
-  // between summer session end and the fall academic-hours flip)
-  ['2021-05-14','2021-08-24'], ['2022-05-13','2022-08-23'], ['2023-05-12','2023-08-22'],
-  ['2024-05-10','2024-08-27'], ['2025-05-16','2025-08-26'], ['2026-05-15','2026-08-25'],
-  ['2027-05-14','2027-08-24'],
+  ['2021-03-20', '2021-03-28'],
+  ['2022-03-19', '2022-03-27'],
+  ['2023-03-25', '2023-04-02'],
+  ['2024-03-23', '2024-03-31'],
+  ['2025-03-22', '2025-03-30'],
+  ['2026-03-21', '2026-03-29'],
+  ['2027-03-20', '2027-03-28'],
+  ['2028-03-25', '2028-04-02'],
+  // summer
+  ['2021-05-14', '2021-08-24'],
+  ['2022-05-13', '2022-08-23'],
+  ['2023-05-12', '2023-08-22'],
+  ['2024-05-10', '2024-08-27'],
+  ['2025-05-16', '2025-08-26'],
+  ['2026-05-15', '2026-08-25'],
+  ['2027-05-14', '2027-08-24'],
 ];
+// <<< END GENERATED BREAK_RANGES
 
 function isSemesterDay(date) {
   const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
@@ -814,10 +833,15 @@ const PERIOD_RANGE_TYPE = {
   summer: 'all_summers', semester: 'all_semesters', break: 'all_breaks',
 };
 
-// Manual JS mirror of academic_calendar.py's CLOSURES — days the RSF is shut
-// entirely. Caltopia takes over the building the Sunday and Monday before fall
-// instruction begins (Tuesday too in 2026). Like SUMMER_RANGES above, NOT
-// auto-generated: keep in sync by hand when adding a year.
+// The word the comparison card uses to name which baseline it picked, so the
+// header says WHAT it is comparing against instead of a flat "usual".
+// Mirrors RSFApp2.0 TimeUtils.swift periodLabel().
+const PERIOD_LABEL = { summer: 'SUMMER', semester: 'SEMESTER', break: 'BREAK' };
+
+// academic_calendar.py's CLOSURES — days the RSF is shut entirely. Caltopia
+// takes over the building the Sunday and Monday before fall instruction begins
+// (Tuesday too in 2026). Generated from academic_calendar.py by gym-tracker/sync_calendar.py.
+// >>> GENERATED CLOSURES — from academic_calendar.py via sync_calendar.py; do not edit by hand
 const CLOSURES = [
   ['2021-08-22', '2021-08-23', 'Caltopia'],
   ['2022-08-21', '2022-08-22', 'Caltopia'],
@@ -827,6 +851,7 @@ const CLOSURES = [
   ['2026-08-23', '2026-08-25', 'Caltopia'],
   ['2027-08-22', '2027-08-23', 'Caltopia'],
 ];
+// <<< END GENERATED CLOSURES
 
 function closureReason(date) {
   const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
@@ -1872,12 +1897,15 @@ function renderInsightCards(data) {
   const compVerdictEl = document.getElementById('insight-comp-verdict');
   const compDeltaEl   = document.getElementById('insight-comp-delta');
 
-  compHeaderEl.textContent = `VS USUAL ${dayName.toUpperCase()}S`;
-
   const cmpH = isToday
     ? Math.round((pt.getHours() + pt.getMinutes() / 60) * 4) / 4
     : 12;
   const cmp = computeDayComparisonAt(dayName, cmpH, data, new Date(predDate + 'T12:00:00'));
+
+  // Header names the baseline the comparison actually used (summer / semester /
+  // break Mondays), not a flat "usual" that hides which set of days it means.
+  // Set AFTER cmp so the two can never describe different periods.
+  compHeaderEl.textContent = `VS ${PERIOD_LABEL[cmp.period] || 'USUAL'} ${dayName.toUpperCase()}S`;
   const refPct = isToday ? livePct : null;
   const baseline = cmp.baseline;
   const avgDelta = (baseline != null && refPct != null) ? Math.round(refPct - baseline) : null;

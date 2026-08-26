@@ -54,18 +54,23 @@ jobs:
           PT        = ZoneInfo("America/Los_Angeles")
           THRESHOLD = int(os.environ.get("THRESHOLD_MINUTES") or "45")
 
-          # --- Open-hours gate (kept in sync with scraper.py) ---------------------
+          # --- Open-hours gate -------------------------------------------------
+          # The two date lists below are written by gym-tracker/sync_calendar.py
+          # from academic_calendar.py; the logic around them is a hand port.
+          # >>> GENERATED SUMMER_RANGES — from academic_calendar.py via sync_calendar.py; do not edit by hand
           SUMMER_RANGES = [
               (date(2024, 5, 10), date(2024, 8, 24)),
               (date(2025, 5, 16), date(2025, 8, 23)),
               (date(2026, 5, 15), date(2026, 8, 22)),
               (date(2027, 5, 14), date(2027, 8, 21)),
           ]
-          # Mirror of academic_calendar.py CLOSURES — days the RSF is shut entirely
+          # <<< END GENERATED SUMMER_RANGES
+          # academic_calendar.py CLOSURES — days the RSF is shut entirely
           # (Caltopia takes the building the Sunday/Monday before fall instruction;
           # Tuesday too in 2026). Density still answers 0-2 people on those days, so
           # without this both the freshness check and the plausibility check below
           # would fire on a perfectly healthy closed gym.
+          # >>> GENERATED CLOSURES — from academic_calendar.py via sync_calendar.py; do not edit by hand
           CLOSURES = [
               (date(2021, 8, 22), date(2021, 8, 23)),
               (date(2022, 8, 21), date(2022, 8, 22)),
@@ -75,6 +80,7 @@ jobs:
               (date(2026, 8, 23), date(2026, 8, 25)),
               (date(2027, 8, 22), date(2027, 8, 23)),
           ]
+          # <<< END GENERATED CLOSURES
           def is_closed_day(d):
               return any(s <= d <= e for s, e in CLOSURES)
           def is_summer_day(d):

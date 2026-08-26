@@ -1,0 +1,40 @@
+# Fast, secret-free test run on every push. The scheduled builds (build_curves,
+# daily) only run weekly/nightly, so before this existed a calendar mirror could
+# drift for days before anything noticed — which is exactly what happened when
+# the 2026-08 closure work reached four of the five mirrors and missed
+# TimeUtils.swift.
+#
+# Nothing here touches Supabase, so no secrets and no risk of a test run
+# mutating production data.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # test_calendar_mirrors skips its Swift assertions here: RSFApp2.0/ lives
+      # outside this repo, so TimeUtils.swift is not in the checkout. The JS and
+      # workflow mirrors are fully covered.
+      - name: Run tests
+        run: |
+          python -m pytest -q \
+            test_calendar_mirrors.py \
+            test_curve_sanity.py \
+            test_features.py \
+            test_model_sanity.py

@@ -31,7 +31,7 @@ jobs:
         run: python build_curves.py
 
       - name: Sanity-check the built curves
-        run: python -m pytest test_curve_sanity.py -v
+        run: python -m pytest test_curve_sanity.py test_calendar_mirrors.py -v
 
       - name: Commit and push
         run: |

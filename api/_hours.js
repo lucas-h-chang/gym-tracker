@@ -1,16 +1,16 @@
 // _hours.js — RSF open-hours gate for the Vercel serverless functions.
 //
-// This is a MANUAL MIRROR of academic_calendar.py's SUMMER_RANGES /
-// is_summer_day / get_open_hours. That file is the Python source of truth;
-// when you add a year there, add it here too.
+// academic_calendar.py is the source of truth for the date lists below; the
+// logic (is_summer_day / get_open_hours) is a hand port of it. The date blocks
+// are marked GENERATED and are written by gym-tracker/sync_calendar.py — add a
+// year in the Python and re-run it, never edit them here.
 //
-// Other mirrors of the same calendar (see CLAUDE.md):
-//   gym-tracker/academic_calendar.py            <- source of truth
-//   gym-tracker/docs/index.html                 (SUMMER_RANGES + BREAK_RANGES)
-//   gym-tracker/migrations/001_is_semester_day.sql
-//   gym-tracker/migrations/009_caltopia_closures.sql (CLOSURES, as SQL)
-//   gym-tracker/.github/workflows/freshness.yml (inlined copy)
-//   RSFApp2.0/.../TimeUtils.swift
+// Same generator feeds the other consumers that cannot import Python:
+//   gym-tracker/docs/index.html                 (SUMMER_RANGES, BREAK_RANGES, CLOSURES)
+//   gym-tracker/.github/workflows/freshness.yml (SUMMER_RANGES, CLOSURES)
+//   RSFApp2.0/.../TimeUtils.swift               (summerRanges, semesterBreakRanges, closureRanges)
+// SQL is separate: migrations/001 and 009 are applied history and are not
+// regenerated.
 //
 // Hours (per CLAUDE.md):
 //   Academic year — Mon-Fri 7-23, Sat 8-18, Sun 8-23
@@ -19,12 +19,14 @@
 // Derived from academic_calendar.py's SUMMER_BREAK_RANGES with the end date
 // shifted -3 days (the RSF flips back to academic-year hours ~3 days before
 // classes resume). ISO date strings so plain string comparison works.
+// >>> GENERATED SUMMER_RANGES — from academic_calendar.py via sync_calendar.py; do not edit by hand
 const SUMMER_RANGES = [
   ['2024-05-10', '2024-08-24'],
   ['2025-05-16', '2025-08-23'],
   ['2026-05-15', '2026-08-22'],
   ['2027-05-14', '2027-08-21'],
 ];
+// <<< END GENERATED SUMMER_RANGES
 
 /**
  * Current Pacific wall-clock, independent of the server's own timezone.
@@ -49,12 +51,13 @@ function ptNow() {
   };
 }
 
-// Manual mirror of academic_calendar.py's CLOSURES. Days the RSF is shut
+// academic_calendar.py's CLOSURES. Days the RSF is shut
 // entirely — Caltopia takes over the building the Sunday and Monday before
 // fall instruction begins (Tuesday too in 2026). Density keeps answering on
 // those days, with 0-2 people, so without this the scraper logs a full day of
 // near-zero readings into the baselines and api/_sensor.js reads the flat run
 // as a dead sensor.
+// >>> GENERATED CLOSURES — from academic_calendar.py via sync_calendar.py; do not edit by hand
 const CLOSURES = [
   ['2021-08-22', '2021-08-23', 'Caltopia'],
   ['2022-08-21', '2022-08-22', 'Caltopia'],
@@ -64,6 +67,7 @@ const CLOSURES = [
   ['2026-08-23', '2026-08-25', 'Caltopia'],
   ['2027-08-22', '2027-08-23', 'Caltopia'],
 ];
+// <<< END GENERATED CLOSURES
 
 /** dateStr: 'YYYY-MM-DD' in PT. Returns the closure reason, or null. */
 function closureReason(dateStr) {
