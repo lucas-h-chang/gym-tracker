@@ -16,7 +16,13 @@ from datetime import date, timedelta
 import pytest
 
 import curve_model as cm
-from academic_calendar import SEM_STARTS, is_summer_day as _is_summer_day, get_open_hours as _get_open_hours
+from academic_calendar import (
+    SEM_STARTS,
+    classify_date,
+    days_to_sem_start,
+    is_summer_day as _is_summer_day,
+    get_open_hours as _get_open_hours,
+)
 
 DOW_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
@@ -147,40 +153,86 @@ def pytest_generate_tests(metafunc):
 
 
 # ==============================================================================
-# 4. Pre-semester ramp monotonicity
+# 4. Pre-semester ramp
 # ==============================================================================
 
-def test_ramp_monotonic_before_fall_start(table):
-    """
-    5 PM prediction should be non-decreasing across the blend window before
-    fall instruction begins — campus fills up as the semester approaches.
+BLEND_PROBE_HOUR = 17  # 5 PM, the daily peak: the largest, least noisy signal
 
-    Only asserted within the table's actual blend_window_days: outside that
-    window phase_weights() returns pure "break" (SPEC_CURVE_MODEL.md §4),
-    and consecutive calendar days there differ mainly by day-of-week (a
-    break Monday and Tuesday have genuinely different baseline occupancy),
-    not a semester-approach ramp — asserting monotonicity there would be
-    asserting away real, expected day-of-week variation, not testing the
-    ramp mechanism.
-    """
+
+def _fall_start():
     fall_starts = sorted(d for d in SEM_STARTS if d.month == 8)
-    start = next(d for d in fall_starts if d >= date(2026, 1, 1))
-    W = table["params"]["blend_window_days"]
+    return next(d for d in fall_starts if d >= date(2026, 1, 1))
 
-    values = [pred(table, start - timedelta(days=n), 17) for n in range(W, 0, -1)]
-    assert all(v is not None for v in values)
-    # Noise tolerance: the blend combines two independently-estimated curves,
-    # each with its own real day-of-week wiggle, so a small dip is
-    # estimation noise, not a broken ramp — the within-cell std floor
-    # elsewhere in this codebase runs ~15pp, so 5pp is still a tight
-    # allowance. Widened from 1pp after splitting summer_break by month
-    # (SPEC_CURVE_MODEL.md follow-up, 2026-07-20): the late-August blend
-    # partner (summer_break_8) is a thinner cell than the old pooled
-    # summer_break was, so it carries more day-to-day noise.
-    NOISE_TOLERANCE = 5.0
-    for i in range(1, len(values)):
-        assert values[i] >= values[i - 1] - NOISE_TOLERANCE, (
-            f"Ramp not monotonic at day -{W - i}: {values[i-1]:.1f} -> {values[i]:.1f}"
+
+def test_blend_weight_ramps_toward_first_week(table):
+    """
+    The blend weight on "first_week" rises strictly, day by day, across the
+    window before fall instruction begins. This is the ramp *mechanism* on its
+    own, with no curve values involved, so it cannot be knocked over by a
+    retrain.
+    """
+    start, W = _fall_start(), table["params"]["blend_window_days"]
+
+    alphas = []
+    for n in range(W, 0, -1):
+        weights = dict(cm.phase_weights(start - timedelta(days=n), W))
+        assert "first_week" in weights, (
+            f"{start - timedelta(days=n)} is inside the {W}-day blend window "
+            f"but carries no first_week weight: {weights}"
+        )
+        alphas.append(weights["first_week"])
+
+    for i in range(1, len(alphas)):
+        assert alphas[i] > alphas[i - 1], (
+            f"first_week weight not increasing at day -{W - i}: "
+            f"{alphas[i-1]:.3f} -> {alphas[i]:.3f}"
+        )
+
+
+def test_each_weekday_busier_as_fall_start_approaches(table):
+    """
+    Every day in the pre-fall blend window is busier at 5 PM than the SAME
+    weekday one week earlier, because campus fills up as the semester approaches.
+
+    The day-of-week match is the whole point. The earlier version of this test
+    walked consecutive calendar days (start-5, start-4, ... start-1) and
+    asserted the prediction never dropped. Those five days are Fri/Sat/Sun/Mon/
+    Tue (every fall start in SEM_STARTS is a Wednesday), and the weekday
+    baselines genuinely differ by far more than one day of ramp is worth: at
+    5 PM the summer_break_8 Sunday curve sits ~14pp under the Saturday curve,
+    while one day of ramp moves the blend by only 1/(W+1). So the Sat->Sun step
+    measured "Sunday is quieter than Saturday", which is true, expected, and
+    nothing to do with the ramp. It only passed at all because of a 5pp fudge
+    factor it kept outgrowing (it failed the 2026-08-23 and 2026-08-24 rebuilds at
+    69.5 -> 64.4). Comparing like weekday to like weekday removes the confound
+    instead of budgeting for it.
+
+    The baseline sits 7 days back, which is outside the blend window (asserted
+    below) and therefore pure break phase, so the difference isolates exactly
+    the semester-approach lift.
+    """
+    start, W = _fall_start(), table["params"]["blend_window_days"]
+
+    for n in range(W, 0, -1):
+        d = start - timedelta(days=n)
+        base = d - timedelta(days=7)
+
+        assert days_to_sem_start(base) > W, (
+            f"blend_window_days={W} now reaches back past the day-of-week "
+            f"baseline {base}; move the baseline a further multiple of 7 days back"
+        )
+        assert classify_date(base) == classify_date(d), (
+            f"baseline {base} ({classify_date(base)}) is a different phase from "
+            f"{d} ({classify_date(d)}), so the comparison is not like-for-like"
+        )
+
+        v = pred(table, d, BLEND_PROBE_HOUR)
+        b = pred(table, base, BLEND_PROBE_HOUR)
+        assert v is not None and b is not None
+        assert v > b, (
+            f"day -{n} ({d:%a %Y-%m-%d}) 5PM {v:.1f}% is not above the same "
+            f"weekday a week earlier ({base:%Y-%m-%d}) at {b:.1f}%; the "
+            f"semester-approach blend is not lifting this weekday"
         )
 
 

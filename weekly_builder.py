@@ -87,6 +87,15 @@ def _emit_day_records(filtered, range_type, semester_only, records):
     """Bucket `filtered` rows into per-day, per-15-min-slot averages (plus the
     synthetic closing-zero row) and append them to `records`. Shared by both
     the windowed range_types and the period-typed comparison slices."""
+    # A slice with no rows publishes nothing. Falling through would still emit
+    # one synthetic 0%-at-close point per weekday, i.e. a fabricated flat
+    # baseline that reads on the chart as "the gym is always empty", which is
+    # worse than the frontend's own no-data state for that range.
+    if filtered.empty:
+        print(f"  no rows for range_type={range_type}, semester_only={semester_only}"
+              ", publishing no baseline for it")
+        return
+
     # Per-row open/close bounds based on each row's date — summer dates close
     # earlier than academic-year dates, so filter row-by-row.
     row_dates  = filtered['timestamp'].dt.date
@@ -171,7 +180,15 @@ def compute_weekly_averages(df):
                 # distinct date once, then map back onto the rows.
                 date_only   = range_df['timestamp'].dt.date
                 sem_by_date = {dd: is_semester_day(dd) for dd in date_only.unique()}
-                filtered    = range_df[date_only.map(sem_by_date)]
+                # .astype(bool) is load-bearing, not defensive tidying: on an
+                # EMPTY range_df, .map() returns an empty float64 Series, which
+                # pandas reads as a COLUMN selector rather than a row mask and
+                # hands back a zero-column frame, so the failure surfaces
+                # later, inside _emit_day_records, pointing at the wrong line.
+                # This fired for real on 2026-08-24/25, when the whole
+                # this_semester window was Caltopia closure days and main() had
+                # already dropped every row in it.
+                filtered    = range_df[date_only.map(sem_by_date).astype(bool)]
             else:
                 filtered = range_df
 
@@ -226,7 +243,8 @@ def main():
     # timestamp parse above, so the 300k ISO strings are only parsed once.
     ts_dates       = df['timestamp'].dt.date
     closed_by_date = {d: is_closed_day(d) for d in ts_dates.unique()}
-    closed_mask    = ts_dates.map(closed_by_date)
+    # .astype(bool) for the same reason as in compute_weekly_averages below.
+    closed_mask    = ts_dates.map(closed_by_date).astype(bool)
     if closed_mask.any():
         print(f"  dropped {int(closed_mask.sum()):,} rows on RSF closure days")
         df = df[~closed_mask]
