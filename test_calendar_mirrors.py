@@ -118,20 +118,37 @@ def test_freshness_dates_match_source(name, ranges):
 def test_closure_reasons_match_source(path, name):
     # Trailing bracket differs by language: JS closes the range with `],`,
     # Swift with `),`.
-    reasons = re.findall(r"['\"]([A-Za-z][A-Za-z ]*)['\"]\s*[\])]?,\s*$",
+    # The class must admit apostrophes: "New Year's Day" would otherwise be
+    # parsed as `s Day`, treating its own apostrophe as the opening quote.
+    reasons = re.findall(r"['\"]([A-Za-z][A-Za-z' ]*)['\"]\s*[\])]?,\s*$",
                          block(path, name), re.MULTILINE)
     assert reasons == [why for _, _, why in cal.CLOSURES]
 
 
 # ── 4. The one mirror the generator does NOT cover is still correct ─────────
 def test_sql_closure_migration_covers_every_closure():
-    """migrations/009 is applied history, so it is not regenerated. It still has
-    to list every closure, or the day_profiles view silently keeps closure-day
-    readings the rest of the stack drops."""
-    sql = (ROOT / "migrations" / "009_caltopia_closures.sql").read_text()
+    """
+    The migration that currently DEFINES is_rsf_closed_day() has to list every
+    closure, or the day_profiles view silently keeps closure-day readings that
+    the rest of the stack drops.
+
+    Migrations are applied history and are never regenerated, so a new closure
+    year arrives as a NEW file that redefines the function (010 added the
+    holiday closures on top of 009's Caltopia-only list). What has to be
+    complete is therefore the highest-numbered definition, not 009 forever.
+    SQL is the one mirror sync_calendar.py does not write, which is exactly
+    why this check exists.
+    """
+    defs = sorted(
+        p for p in (ROOT / "migrations").glob("*.sql")
+        if "create or replace function is_rsf_closed_day" in p.read_text().lower()
+    )
+    assert defs, "no migration defines is_rsf_closed_day()"
+    latest = defs[-1]
+    sql = latest.read_text()
     for s, e, _ in cal.CLOSURES:
-        assert f"{s:%Y-%m-%d}" in sql, f"009_caltopia_closures.sql is missing {s}"
-        assert f"{e:%Y-%m-%d}" in sql, f"009_caltopia_closures.sql is missing {e}"
+        assert f"{s:%Y-%m-%d}" in sql, f"{latest.name} is missing {s}"
+        assert f"{e:%Y-%m-%d}" in sql, f"{latest.name} is missing {e}"
 
 
 # ── 5. No stray second copy of the calendar outside the generated blocks ────

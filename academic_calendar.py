@@ -292,6 +292,7 @@ SUMMER_RANGES = [
 # as a dead occupancy sensor. The 2026-08-23 closure produced exactly that
 # false alarm.
 CLOSURES = [
+    # ── Caltopia ───────────────────────────────────────────────────────────
     (date(2021, 8, 22), date(2021, 8, 23), "Caltopia"),
     (date(2022, 8, 21), date(2022, 8, 22), "Caltopia"),
     (date(2023, 8, 20), date(2023, 8, 21), "Caltopia"),
@@ -299,6 +300,36 @@ CLOSURES = [
     (date(2025, 8, 24), date(2025, 8, 25), "Caltopia"),
     (date(2026, 8, 23), date(2026, 8, 25), "Caltopia"),  # Tuesday closed too
     (date(2027, 8, 22), date(2027, 8, 23), "Caltopia"),
+
+    # ── Holiday closures ───────────────────────────────────────────────────
+    # Each past date below was verified against capacity_log: the day's PEAK
+    # occupancy stayed at the floor (<= 5 people) across all 96 readings, which
+    # only happens when the building is shut.
+    #
+    # ENUMERATED, NOT DERIVED — the policy widened over time, and a "these
+    # holidays are always closed" rule would wrongly delete five real days of
+    # training data:
+    #     Christmas Eve   OPEN 2022 (peak 25.5%) and 2023 (31%); closed from 2024
+    #     New Year's Day  OPEN 2022 (20.5%), 2023 (14%), 2024 (38%); closed from 2025
+    # Thanksgiving and Christmas Day are the only two closed in every year on
+    # record. Dates from Nov 2026 onward project the current (2025-26) policy
+    # forward and should be re-checked against reality each year.
+    (date(2022, 11, 24), date(2022, 11, 24), "Thanksgiving"),
+    (date(2022, 12, 25), date(2022, 12, 25), "Christmas"),
+    (date(2023, 11, 23), date(2023, 11, 23), "Thanksgiving"),
+    (date(2023, 12, 25), date(2023, 12, 25), "Christmas"),
+    (date(2024, 11, 28), date(2024, 11, 28), "Thanksgiving"),
+    (date(2024, 12, 24), date(2024, 12, 25), "Christmas"),
+    (date(2025, 1,   1), date(2025, 1,   1), "New Year's Day"),
+    (date(2025, 11, 27), date(2025, 11, 27), "Thanksgiving"),
+    (date(2025, 12, 24), date(2025, 12, 25), "Christmas"),
+    (date(2026, 1,   1), date(2026, 1,   1), "New Year's Day"),
+    (date(2026, 11, 26), date(2026, 11, 26), "Thanksgiving"),
+    (date(2026, 12, 24), date(2026, 12, 25), "Christmas"),
+    (date(2027, 1,   1), date(2027, 1,   1), "New Year's Day"),
+    (date(2027, 11, 25), date(2027, 11, 25), "Thanksgiving"),
+    (date(2027, 12, 24), date(2027, 12, 25), "Christmas"),
+    (date(2028, 1,   1), date(2028, 1,   1), "New Year's Day"),
 ]
 
 

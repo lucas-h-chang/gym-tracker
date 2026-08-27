@@ -31,6 +31,7 @@ hand-written and language-specific, and is left alone.
 """
 import argparse
 import sys
+import json
 from pathlib import Path
 
 import academic_calendar as cal
@@ -48,8 +49,13 @@ def _js_pairs(ranges, indent="  "):
 
 
 def _js_closures(indent="  "):
+    # json.dumps for the reason, not an f-string in single quotes: a label
+    # containing an apostrophe ("New Year's Day") would otherwise emit invalid
+    # JS and take down index.html AND api/_hours.js — i.e. the website and the
+    # scraper's open-hours gate — the next time this file is synced.
     return "\n".join(
-        f"{indent}['{s:%Y-%m-%d}', '{e:%Y-%m-%d}', '{why}']," for s, e, why in cal.CLOSURES
+        f'{indent}["{s:%Y-%m-%d}", "{e:%Y-%m-%d}", {json.dumps(why)}],'
+        for s, e, why in cal.CLOSURES
     )
 
 
@@ -110,7 +116,7 @@ def blocks():
          lambda: "private let semesterBreakRanges: [(String, String)] = [\n" + _breaks_swift() + "\n]"),
         (IOS, "//", "closureRanges",
          lambda: "private let closureRanges: [(String, String, String)] = [\n"
-                 + "\n".join(f'    ("{s:%Y-%m-%d}", "{e:%Y-%m-%d}", "{why}"),' for s, e, why in cal.CLOSURES)
+                 + "\n".join(f'    ("{s:%Y-%m-%d}", "{e:%Y-%m-%d}", {json.dumps(why)}),' for s, e, why in cal.CLOSURES)
                  + "\n]"),
     ]
 
