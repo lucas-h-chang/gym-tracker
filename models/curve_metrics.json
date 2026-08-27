@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-08-26T04:40:45.196533",
+  "built_at": "2026-08-27T18:16:01.623708",
   "params": {
     "halflife_days": 365,
     "shrink_k": 3,
@@ -9,64 +9,64 @@
     "week_cap": 9,
     "week_smooth_window": 3
   },
-  "distinct_days": 1932,
-  "date_range": "2021-01-05 -> 2026-08-22",
+  "distinct_days": 2094,
+  "date_range": "2020-11-08 -> 2026-08-27",
   "n_curves": 71,
   "coverage_by_phase": {
     "dead_week": {
-      "cells": 320,
-      "min_n_eff": 1.94,
-      "median_n_eff": 2.77
+      "cells": 340,
+      "min_n_eff": 0.8,
+      "median_n_eff": 2.78
     },
     "finals": {
-      "cells": 320,
-      "min_n_eff": 1.66,
-      "median_n_eff": 2.79
+      "cells": 340,
+      "min_n_eff": 0.81,
+      "median_n_eff": 2.82
     },
     "first_week": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 2.24
+      "median_n_eff": 2.28
     },
     "holiday": {
       "cells": 320,
-      "min_n_eff": 0.04,
-      "median_n_eff": 0.58
+      "min_n_eff": 0.09,
+      "median_n_eff": 1.18
     },
     "regular": {
-      "cells": 447,
+      "cells": 472,
       "min_n_eff": 0.0,
-      "median_n_eff": 32.13
+      "median_n_eff": 32.4
     },
     "spring_break": {
-      "cells": 440,
+      "cells": 468,
       "min_n_eff": 0.0,
-      "median_n_eff": 1.46
+      "median_n_eff": 1.47
     },
     "summer_break_5": {
-      "cells": 440,
+      "cells": 448,
       "min_n_eff": 0.0,
-      "median_n_eff": 3.57
+      "median_n_eff": 3.59
     },
     "summer_break_6": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 7.03
+      "median_n_eff": 7.01
     },
     "summer_break_7": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 7.62
+      "median_n_eff": 7.61
     },
     "summer_break_8": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 5.76
+      "median_n_eff": 5.73
     },
     "winter_break": {
       "cells": 440,
       "min_n_eff": 0.0,
-      "median_n_eff": 3.06
+      "median_n_eff": 5.04
     }
   }
 }
