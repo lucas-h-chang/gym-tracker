@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from supabase import create_client
 
 import curve_model as cm
-from academic_calendar import classify_date, is_summer_day, get_open_hours
+from academic_calendar import classify_date, is_summer_day, get_open_hours, slot_of
 from supabase_io import parse_supabase_timestamps, paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
@@ -115,9 +115,14 @@ def build_evening_correction(table):
 
     df['date']   = df['timestamp'].dt.date
     df['dow']    = df['timestamp'].dt.dayofweek
-    df['hour']   = df['timestamp'].dt.hour
-    df['minute'] = (df['timestamp'].dt.minute // 15) * 15  # round to 0/15/30/45
-    df['slot']   = df['hour'] * 4 + df['minute'] // 15
+    # Nearest-boundary slot (academic_calendar.slot_of), matching
+    # curve_model.prepare_slots. hour/minute are derived FROM the slot rather
+    # than read off the raw timestamp: a 09:54 scrape must key its correction
+    # cell as (10, 00), the pair compute_predictions actually generates, not
+    # (9, 00), which it never does.
+    df['slot']   = slot_of(df['timestamp'])
+    df['hour']   = df['slot'] // 4
+    df['minute'] = (df['slot'] % 4) * 15
     df['segment'] = df['date'].map(classify_date).map(_correction_segment)
     df['regime'] = df['date'].map(is_summer_day)
 

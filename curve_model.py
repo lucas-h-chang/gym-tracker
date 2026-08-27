@@ -13,7 +13,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, is_closed_day, SEM_STARTS
+from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, is_closed_day, slot_of, SEM_STARTS
 
 MAX_CAPACITY = 150
 
@@ -130,7 +130,21 @@ def prepare_slots(df, week_cap=WEEK_CAP):
     df = df[~df['timestamp'].dt.date.map(is_closed_day)]
     df['percent_full'] = df['people_count'].astype(float) / MAX_CAPACITY * 100
     df['date'] = df['timestamp'].dt.normalize()
-    df['slot'] = df['timestamp'].dt.hour * 4 + df['timestamp'].dt.minute // 15
+    # NEAREST, not floor (academic_calendar.slot_of). Flooring put every
+    # 7:10 reading from the 10-minute-scrape era (2022-2025, n=96/day) into
+    # the 7:00 slot, averaging the empty opening reading together with one
+    # already part-way up the ramp: slot 28 came out at 18.1% against a true
+    # ~2%. Nearest files 7:10 at 7:15 where it belongs.
+    #
+    # This rounding was tried before and reverted (8ea94bb / 0b05bab,
+    # 2026-08-07) because it "starved" the opening slot. That was a
+    # consequence of the `people_count > 5` filter above: under nearest,
+    # slot 28 keeps only the 7:00 reading, which the filter then deleted,
+    # leaving the cell empty. With the filter gone the starvation cause is
+    # gone too, and nearest also matches what every DISPLAY consumer already
+    # does -- day_profiles SQL, weekly_builder, api/history.js and the
+    # frontend chart all round.
+    df['slot'] = slot_of(df['timestamp'])
 
     collapsed = df.groupby(['date', 'slot'], as_index=False)['percent_full'].mean()
     collapsed['dow'] = collapsed['date'].dt.dayofweek
