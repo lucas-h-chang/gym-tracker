@@ -57,7 +57,7 @@ def fetch_capacity_log():
     while True:
         batch = (
             sb.table("capacity_log")
-            .select("timestamp,people_count")
+            .select("timestamp,people_count,sensor_ok")
             .range(offset, offset + BATCH - 1)
             .order("timestamp")
             .execute()
@@ -70,6 +70,11 @@ def fetch_capacity_log():
         print(f"  Fetched {len(rows):,} rows...")
 
     df = pd.DataFrame(rows)
+    # Mirror build_curves.py: exclude readings taken while the counter was dead,
+    # so eval and production prep off the same rows. See build_curves.py for why
+    # this replaced the old people_count > 5 heuristic.
+    if 'sensor_ok' in df.columns:
+        df = df[df['sensor_ok'] != False].drop(columns=['sensor_ok'])
     df['timestamp'] = parse_supabase_timestamps(df['timestamp'])
     df['people_count'] = df['people_count'].astype(float)
     return df

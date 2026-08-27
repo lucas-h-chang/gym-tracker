@@ -22,12 +22,32 @@ def fetch_capacity_log():
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
     print("Loading data from Supabase capacity_log...")
-    rows = paginated_fetch(sb, "capacity_log", "timestamp,people_count", order="timestamp")
+    rows = paginated_fetch(sb, "capacity_log", "timestamp,people_count,sensor_ok", order="timestamp")
 
     df = pd.DataFrame(rows)
     df['timestamp'] = parse_supabase_timestamps(df['timestamp'])
     df['people_count'] = df['people_count'].astype(float)
-    return df
+
+    # Drop readings the RSF's counter produced while it was dead. This is the
+    # replacement for prepare_slots' old `people_count > 5` rule, which tried to
+    # infer a dead sensor from a low headcount and in doing so deleted the
+    # genuinely-quiet opening slot (see curve_model.prepare_slots).
+    #
+    # sensor_ok is strictly better at the job: it is written by api/_sensor.js
+    # from a RUN of floor readings plus the closure calendar, so it also catches
+    # a sensor stuck on a plausible-but-wrong number, which a headcount
+    # threshold never could.
+    #
+    # Migration 008 defaults the column to true, so this only has teeth for
+    # rows written from 2026-08 on. Earlier outages (a few days in 2022-04,
+    # 2024-10 and 2025-11) are still in the training set; they are ~0.4% of the
+    # record and are left rather than guessed at retroactively.
+    if 'sensor_ok' in df.columns:
+        bad = (df['sensor_ok'] == False).sum()
+        if bad:
+            print(f"  Dropping {bad:,} rows flagged sensor_ok=false")
+        df = df[df['sensor_ok'] != False]
+    return df.drop(columns=['sensor_ok'], errors='ignore')
 
 
 def main():
