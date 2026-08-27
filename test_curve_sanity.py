@@ -65,9 +65,23 @@ def test_monday_9pm_busier_than_friday_9pm(table):
 # ==============================================================================
 
 def test_regular_weekday_7am_in_range(table):
+    """
+    The opening slot is at the floor, not part-way up the ramp.
+
+    This bound used to be [20, 45], which enshrined a bug rather than the
+    facts: prepare_slots' old `people_count > 5` filter deleted almost every
+    real 7:00 reading (the RSF genuinely holds 0-6 people at open), and the
+    near-empty cell that remained was backfilled by shrinkage from much busier
+    parents. Measured against 2025+ actuals, regular weekdays average 1.6% at
+    7:00 and 38.5% at 7:15 -- the building fills within one slot of opening.
+    A model returning 20-45% at 7:00 was wrong by ~36pp and passed anyway.
+
+    Upper bound 10 rather than ~5 leaves room for genuinely busy first-days
+    without re-admitting the old failure.
+    """
     v = pred(table, date(2026, 2, 10), 7)  # regular Tuesday, open
     assert v is not None
-    assert 20 <= v <= 45, f"7AM prediction {v:.1f}% outside expected [20, 45] range"
+    assert 0 <= v <= 10, f"7AM prediction {v:.1f}% outside expected [0, 10] range"
 
 
 def test_regular_weekday_7am_ramps_up(table):

@@ -13,7 +13,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, SEM_STARTS
+from academic_calendar import classify_date, days_to_sem_start, days_to_sem_end, is_closed_day, SEM_STARTS
 
 MAX_CAPACITY = 150
 
@@ -96,12 +96,38 @@ def prepare_slots(df, week_cap=WEEK_CAP):
     df: raw capacity_log rows with 'timestamp' (naive PT, tz already stripped —
     see train.py::parse_supabase_timestamps) and 'people_count'.
 
-    Cleans (people_count > 5, dropna) and collapses to one row per (date, slot)
-    via mean, per SPEC_CURVE_MODEL.md §3. Shared by build_curves.py and
-    backtest.py so both eval and production build off identical prep.
+    Cleans (dropna, drops full-facility closure days) and collapses to one row
+    per (date, slot) via mean, per SPEC_CURVE_MODEL.md §3. Shared by
+    build_curves.py and backtest.py so both eval and production build off
+    identical prep.
+
+    WHY THE `people_count > 5` FILTER IS GONE (2026-08-25)
+    It was a proxy for "the building was shut or the sensor died", on the
+    reasoning that the <=5 band is flat across hours while 6+ follows the real
+    daily curve. But <=5 people is also the TRUTH for large, genuine stretches
+    of the week, and dropping those rows deleted the evidence rather than the
+    noise. Two measured consequences, both against 2025+ actuals:
+
+        7:00 opening slot   actual  1.6%   curve said 37.8%   (+36pp)
+        winter-break 22:00  actual  0.6%   curve said 44.5%   (+44pp)
+
+    In both cases nearly every real observation was filtered out, leaving a
+    near-empty cell that shrinkage then backfilled from much busier parents.
+    Checked across all 1,696 days of history: of the floor-runs >= 3 readings,
+    402 are break evenings and 121 are opening slots -- real, quiet, and
+    previously discarded -- against ~7 days of genuine sensor outage.
+
+    Replaced by exactly what the two cases actually are:
+      - building shut  -> is_closed_day(), the calendar (see academic_calendar
+                          CLOSURES: Caltopia, Thanksgiving, Christmas, New Year)
+      - hardware dead  -> capacity_log.sensor_ok, written since migration 008
+    sensor_ok defaults to true for pre-008 rows, so it carries no signal for
+    the historical span; the ~7 legacy outage days are 0.4% of the record and
+    are left in rather than guessed at. Callers that have the column should
+    filter on it before calling this.
     """
-    df = df[['timestamp', 'people_count']].dropna()
-    df = df[df['people_count'] > 5].copy()
+    df = df[['timestamp', 'people_count']].dropna().copy()
+    df = df[~df['timestamp'].dt.date.map(is_closed_day)]
     df['percent_full'] = df['people_count'].astype(float) / MAX_CAPACITY * 100
     df['date'] = df['timestamp'].dt.normalize()
     df['slot'] = df['timestamp'].dt.hour * 4 + df['timestamp'].dt.minute // 15
@@ -228,7 +254,7 @@ def build_table(df, params=None, build_date=None, built_at=None):
     curves = {}
     for (phase, dow), grp in l3_full.sort_values('slot').groupby(['phase', 'dow']):
         grp = grp.sort_values('slot')
-        smoothed = grp['m_hat'].rolling(window=window, center=True, min_periods=1).mean() if window > 1 else grp['m_hat']
+        smoothed = _smooth_slots(grp['m_hat'], window)
         curves[f"{phase}|{dow}"] = {
             "slot_index": grp['slot'].astype(int).tolist(),
             "mean":       smoothed.round(3).tolist(),
@@ -286,8 +312,7 @@ def build_table(df, params=None, build_date=None, built_at=None):
         slot_smoothed_parts = []
         for _, grp in l4.groupby(['phase', 'dow', week_col]):
             grp = grp.sort_values('slot')
-            sm = (grp['m_smoothed'].rolling(window=window, center=True, min_periods=1).mean()
-                  if window > 1 else grp['m_smoothed'])
+            sm = _smooth_slots(grp['m_smoothed'], window)
             slot_smoothed_parts.append(grp.assign(m_smoothed=sm))
         l4 = pd.concat(slot_smoothed_parts, ignore_index=True) if slot_smoothed_parts else l4
 
@@ -365,6 +390,32 @@ def phase_weights(d, blend_window_days=None):
             return [("finals", alpha), (phase, 1 - alpha)]
 
     return [(phase, 1.0)]
+
+
+def _smooth_slots(series, window):
+    """
+    Centered rolling mean over the SLOT axis, leaving the first/last slot of
+    the day untouched.
+
+    A centered average is only unbiased when it is symmetric. pandas' default
+    `min_periods=1` silently lets the window go one-sided at the array edges,
+    and the day's edges are exactly where occupancy is furthest from its
+    neighbours: the RSF goes from ~2% at 7:00 to ~47% at 7:15, so a one-sided
+    mean at the opening slot is (7:00 + 7:15) / 2 and reports ~25-40% for a
+    slot that is genuinely almost empty. Measured against 2025+ actuals the
+    opening slot ran +36pp and the post-close slot +33pp, while every interior
+    slot sat within ~5pp.
+
+    Turning smoothing off outright is worse: it triples the count of >8pp
+    slot-to-slot jumps in the interior (28 -> 98 on the full table) and trips
+    test_curve_sanity.py::test_no_jagged_jumps. So keep the interior smoothing
+    that the backtest tuning bought, and only decline to smooth where the
+    window cannot be symmetric.
+    """
+    if window <= 1:
+        return series
+    sm = series.rolling(window=window, center=True, min_periods=window).mean()
+    return sm.fillna(series)
 
 
 def _lookup_slot(curve, slot):
