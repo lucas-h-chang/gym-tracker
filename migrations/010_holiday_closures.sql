@@ -31,28 +31,28 @@ as $$
   select exists (
     select 1
     from (values
-      (date '2021-08-22', date '2021-08-23')   -- Caltopia,
-      (date '2022-08-21', date '2022-08-22')   -- Caltopia,
-      (date '2023-08-20', date '2023-08-21')   -- Caltopia,
-      (date '2024-08-25', date '2024-08-26')   -- Caltopia,
-      (date '2025-08-24', date '2025-08-25')   -- Caltopia,
-      (date '2026-08-23', date '2026-08-25')   -- Caltopia,
-      (date '2027-08-22', date '2027-08-23')   -- Caltopia,
-      (date '2022-11-24', date '2022-11-24')   -- Thanksgiving,
-      (date '2022-12-25', date '2022-12-25')   -- Christmas,
-      (date '2023-11-23', date '2023-11-23')   -- Thanksgiving,
-      (date '2023-12-25', date '2023-12-25')   -- Christmas,
-      (date '2024-11-28', date '2024-11-28')   -- Thanksgiving,
-      (date '2024-12-24', date '2024-12-25')   -- Christmas,
-      (date '2025-01-01', date '2025-01-01')   -- New Year's Day,
-      (date '2025-11-27', date '2025-11-27')   -- Thanksgiving,
-      (date '2025-12-24', date '2025-12-25')   -- Christmas,
-      (date '2026-01-01', date '2026-01-01')   -- New Year's Day,
-      (date '2026-11-26', date '2026-11-26')   -- Thanksgiving,
-      (date '2026-12-24', date '2026-12-25')   -- Christmas,
-      (date '2027-01-01', date '2027-01-01')   -- New Year's Day,
-      (date '2027-11-25', date '2027-11-25')   -- Thanksgiving,
-      (date '2027-12-24', date '2027-12-25')   -- Christmas,
+      (date '2021-08-22', date '2021-08-23'),  -- Caltopia
+      (date '2022-08-21', date '2022-08-22'),  -- Caltopia
+      (date '2023-08-20', date '2023-08-21'),  -- Caltopia
+      (date '2024-08-25', date '2024-08-26'),  -- Caltopia
+      (date '2025-08-24', date '2025-08-25'),  -- Caltopia
+      (date '2026-08-23', date '2026-08-25'),  -- Caltopia
+      (date '2027-08-22', date '2027-08-23'),  -- Caltopia
+      (date '2022-11-24', date '2022-11-24'),  -- Thanksgiving
+      (date '2022-12-25', date '2022-12-25'),  -- Christmas
+      (date '2023-11-23', date '2023-11-23'),  -- Thanksgiving
+      (date '2023-12-25', date '2023-12-25'),  -- Christmas
+      (date '2024-11-28', date '2024-11-28'),  -- Thanksgiving
+      (date '2024-12-24', date '2024-12-25'),  -- Christmas
+      (date '2025-01-01', date '2025-01-01'),  -- New Year's Day
+      (date '2025-11-27', date '2025-11-27'),  -- Thanksgiving
+      (date '2025-12-24', date '2025-12-25'),  -- Christmas
+      (date '2026-01-01', date '2026-01-01'),  -- New Year's Day
+      (date '2026-11-26', date '2026-11-26'),  -- Thanksgiving
+      (date '2026-12-24', date '2026-12-25'),  -- Christmas
+      (date '2027-01-01', date '2027-01-01'),  -- New Year's Day
+      (date '2027-11-25', date '2027-11-25'),  -- Thanksgiving
+      (date '2027-12-24', date '2027-12-25'),  -- Christmas
       (date '2028-01-01', date '2028-01-01')   -- New Year's Day
     ) as r(start_date, end_date)
     where d between r.start_date and r.end_date
@@ -64,10 +64,3 @@ comment on function is_rsf_closed_day(date) is
   'entirely: Caltopia, Thanksgiving, Christmas Eve + Day, New Year''s Day. '
   'Density still reports 0-2 people on these days, so they must be excluded '
   'from any occupancy average.';
-
--- Sanity checks (should all return the commented value):
---   select is_rsf_closed_day(date '2026-11-26');  -- true  (Thanksgiving)
---   select is_rsf_closed_day(date '2026-12-25');  -- true  (Christmas)
---   select is_rsf_closed_day(date '2027-01-01');  -- true  (New Year's Day)
---   select is_rsf_closed_day(date '2022-12-24');  -- FALSE (open that year)
---   select is_rsf_closed_day(date '2024-01-01');  -- FALSE (open that year)
