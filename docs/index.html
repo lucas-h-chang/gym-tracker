@@ -1446,6 +1446,8 @@ function updatePredChart(data) {
     }
     if (!predPoints.length || predPoints[0].x > liveX) {
       predPoints = [livePoint, ...predPoints];
+    } else if (predPoints[0].x === liveX) {
+      predPoints[0] = livePoint;
     }
   } else if (isToday && actualPoints.length && nowVal >= closeH) {
     // Day is over. There's no live point to extend to, and the predicted
