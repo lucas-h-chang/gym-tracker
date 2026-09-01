@@ -36,5 +36,6 @@ jobs:
           python -m pytest -q \
             test_calendar_mirrors.py \
             test_curve_sanity.py \
+            test_carry.py \
             test_features.py \
             test_model_sanity.py

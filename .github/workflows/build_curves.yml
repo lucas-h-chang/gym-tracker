@@ -30,14 +30,24 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python build_curves.py
 
+      # Fits the within-day level correction against the SAME curve table just
+      # built, plus predictions_builder's 28-day trailing layer. Must run after
+      # build_curves.py: it is fitted against the baseline production serves,
+      # and fitting it against a stale curve would mis-size the coefficients.
+      - name: Build carry table
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python build_carry.py
+
       - name: Sanity-check the built curves
-        run: python -m pytest test_curve_sanity.py test_calendar_mirrors.py -v
+        run: python -m pytest test_curve_sanity.py test_calendar_mirrors.py test_carry.py -v
 
       - name: Commit and push
         run: |
           git config user.name "Automated Robot"
           git config user.email "actions@users.noreply.github.com"
-          git add models/curves.json models/curve_metrics.json
+          git add models/curves.json models/curve_metrics.json models/carry.json
           git commit -m "Rebuilt curve model" || exit 0
           git push
 
