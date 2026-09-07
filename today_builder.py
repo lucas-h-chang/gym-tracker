@@ -39,6 +39,15 @@ per-point w, so a push and the website disagreed about the same hour.
 An empty list is a valid output: below carry_model.MIN_OBSERVED readings there
 is not enough evidence to correct anything, and every client then falls back to
 the bare base curve, which is the right answer rather than a guess.
+
+THE AUDIT TRAIL
+---------------
+`today_summary` is one row that this job overwrites every 15 minutes, holding
+only the slots still ahead, so by evening there is no record of what the site
+said that morning. Each run therefore also appends what it published to
+`prediction_snapshots` (see snapshots.py and migration 012). That write happens
+AFTER the today_summary upsert and swallows its own errors: it is an audit
+trail, and the forecast must never fail because the audit table is missing.
 """
 import os
 import json
@@ -49,6 +58,7 @@ import pandas as pd
 from supabase import create_client
 
 import carry_model as km
+import snapshots
 from academic_calendar import get_open_hours
 
 PT  = ZoneInfo("America/Los_Angeles")
@@ -63,11 +73,6 @@ CARRY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 def _pt_iso(d, t):
     """ISO8601 for a PT wall-clock (date, time)."""
     return datetime.combine(d, t, tzinfo=PT).isoformat()
-
-
-def _slot_label(slot):
-    h, m = slot // 4, (slot % 4) * 15
-    return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
 
 
 def load_carry():
@@ -132,23 +137,26 @@ def actuals_by_slot(today_rows):
 def compute_level_correction(actuals, base, carry):
     """Base curve plus a fitted level correction, for every remaining slot.
 
-    Returns [{x, y, w, label}] with w = 1.0, or [] when there is not yet enough
-    evidence to say anything (see carry_model.MIN_OBSERVED).
+    Returns (preds, meta). `preds` is [{x, y, w, label}] with w = 1.0, or []
+    when there is not yet enough evidence to say anything (see
+    carry_model.MIN_OBSERVED). `meta` carries the cut slot, the observation
+    count and the three gaps, which prediction_snapshots records so a bad
+    forecast can be explained later without re-deriving it — see snapshots.py.
     """
     if not carry or not base or not actuals:
-        return []
+        return [], {}
 
     open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
     lo, hi = open_h * 4, close_h * 4
     obs = sorted(s for s in actuals if lo <= s < hi and s in base)
     if not obs:
-        return []
+        return [], {}
 
     gaps = km.compute_gaps(obs, [actuals[s] for s in obs], [base[s] for s in obs])
     if gaps is None:
         print(f"  only {len(obs)} usable readings (need {km.MIN_OBSERVED}) — "
               "serving the base curve uncorrected")
-        return []
+        return [], {"cut_slot": max(obs), "n_obs": len(obs)}
     gap_day, gap_recent, gap_last, last_slot, n_obs = gaps
     print(f"  {n_obs} readings; gaps  day {gap_day:+.1f} / hour {gap_recent:+.1f} "
           f"/ last {gap_last:+.1f}")
@@ -157,13 +165,18 @@ def compute_level_correction(actuals, base, carry):
                                 (gap_day, gap_recent, gap_last), base, lo, hi,
                                 n_obs=n_obs)
     preds = [
-        {'x': s / 4, 'y': round(v, 1), 'w': 1.0, 'label': _slot_label(s)}
+        {'x': s / 4, 'y': round(v, 1), 'w': 1.0, 'label': snapshots.slot_label(s)}
         for s, v in sorted(corrected.items())
     ]
     # Closing zero, so the chart drops to 0 at close like every finished day.
     ch_label = f"{close_h % 12 or 12}:00 {'AM' if close_h < 12 else 'PM'}"
     preds.append({'x': float(close_h), 'y': 0.0, 'w': 1.0, 'label': ch_label})
-    return preds
+    return preds, {
+        "cut_slot":  max(obs),
+        "last_slot": last_slot,
+        "n_obs":     n_obs,
+        "gaps":      (gap_day, gap_recent, gap_last),
+    }
 
 
 def main():
@@ -176,8 +189,9 @@ def main():
         return
 
     print("Computing today's level correction...")
-    preds = compute_level_correction(
-        actuals_by_slot(fetch_today_rows()), fetch_today_predictions(), load_carry())
+    base = fetch_today_predictions()
+    preds, meta = compute_level_correction(
+        actuals_by_slot(fetch_today_rows()), base, load_carry())
 
     sb.table("today_summary").upsert({
         "date":             now.strftime('%Y-%m-%d'),
@@ -190,6 +204,38 @@ def main():
     }).execute()
 
     print(f"[{now.isoformat()}] today_summary updated: {len(preds)} slots")
+
+    record_snapshot(preds, base, meta)
+
+
+def record_snapshot(preds, base, meta):
+    """Append what we just published to prediction_snapshots.
+
+    Deliberately AFTER the today_summary upsert and wrapped in its own guard:
+    this is an audit trail, and the site must never lose a forecast because an
+    audit table is missing, unmigrated or briefly unreachable. A failure here
+    prints and returns; the forecast is already live.
+    """
+    row = snapshots.build_row(
+        now.strftime('%Y-%m-%d'), now.isoformat(), preds, base,
+        source=snapshots.SOURCE_LIVE,
+        cut_slot=meta.get("cut_slot"),
+        last_slot=meta.get("last_slot"),
+        n_obs=meta.get("n_obs"),
+        gaps=meta.get("gaps"),
+    )
+    try:
+        # on_conflict names the natural key so the upsert has one to match on.
+        # In practice it never fires here: computed_at carries microseconds, so
+        # every live run is a fresh row. That is intended — this table records
+        # forecasts published, and a genuine double-fire really did publish
+        # twice. The constraint earns its keep on backfill_snapshots.py, whose
+        # computed_at is deterministic.
+        sb.table("prediction_snapshots").upsert(
+            row, on_conflict="source,computed_at").execute()
+        print(f"  snapshot recorded ({len(preds)} slots)")
+    except Exception as e:
+        print(f"WARNING: prediction_snapshots write failed, forecast unaffected: {e}")
 
 
 if __name__ == "__main__":

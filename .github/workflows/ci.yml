@@ -37,5 +37,6 @@ jobs:
             test_calendar_mirrors.py \
             test_curve_sanity.py \
             test_carry.py \
+            test_snapshots.py \
             test_features.py \
             test_model_sanity.py
