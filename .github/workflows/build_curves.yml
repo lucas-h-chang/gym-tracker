@@ -15,6 +15,10 @@ jobs:
     steps:
       - name: Check out this repo
         uses: actions/checkout@v3
+        with:
+          # Full history: the push step below rebases onto origin/main when a
+          # concurrent push beats it, and rebase on a shallow clone is fragile.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -49,7 +53,29 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add models/curves.json models/curve_metrics.json models/carry.json
           git commit -m "Rebuilt curve model" || exit 0
-          git push
+
+          # Retry onto a moving main. This job takes minutes, and anything that
+          # lands on main meanwhile turns a bare `git push` into "! [rejected]
+          # (fetch first)". The runner is ephemeral, so a failed push does not
+          # just fail the step, it DISCARDS the rebuilt curves.json and
+          # carry.json entirely and the model silently stays stale until
+          # somebody notices. That happened on 2026-09-08.
+          #
+          # models/*.json are wholly generated and nothing else writes them, so
+          # rebasing our artifact commit onto the newer main is safe. A genuine
+          # conflict means someone hand-edited a built artifact, which should
+          # stop the job loudly rather than be auto-resolved.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected on attempt $attempt, rebasing onto origin/main"
+            git fetch origin main || exit 1
+            git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          echo "still could not push after 5 attempts"
+          exit 1
 
       - name: Alert on failure
         if: failure()
