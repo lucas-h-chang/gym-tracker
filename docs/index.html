@@ -537,7 +537,13 @@
       header         { padding: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       .divider       { margin: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
       /* Title and pills stay on the 20px gutter with the cards above them. */
-      .chart-section { padding: 16px calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      /* The chart section is the last thing on the page, and viewport-fit=cover
+         means the page paints under the home indicator, where iOS Safari floats
+         its toolbar. With no bottom padding the x-axis hour labels ended flush
+         against that, so the chrome read as a black bar laid over the chart.
+         The inset is 0 in a browser without one, so desktop and Android are
+         unaffected. */
+      .chart-section { padding: 20px calc(20px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
 
       /* Stacking all three cards pushed the chart ~450px down, below the fold
          on every phone. This is the iOS VStack(spacing: 22) wrapping an
@@ -553,12 +559,13 @@
         column-gap: 16px;
         /* Wider than iOS's 22 because the capacity card ends on a small grey
            sub-line; at 22 the two cards read as attached to it. */
-        row-gap: 28px;
+        row-gap: 32px;
         align-items: start;
-        /* Asymmetric on purpose: the bottom is tight because .card-sub already
-           reserves a line under each value, so the visual gap to the divider is
-           bigger than the number suggests. */
-        padding: 20px calc(20px + env(safe-area-inset-right)) 14px calc(20px + env(safe-area-inset-left));
+        /* Still asymmetric, since .card-sub reserves a line under each value and
+           makes the gap to the divider read larger than the number. Both ends
+           grew when the three card labels came out: the cards lost a line each
+           and started crowding the capacity bar above and the divider below. */
+        padding: 28px calc(20px + env(safe-area-inset-right)) 16px calc(20px + env(safe-area-inset-left));
       }
       /* The skeleton state forces display:flex !important to survive
          .insight-row.hidden; without a matching override the placeholder would
@@ -571,11 +578,11 @@
          two small cards and the divider. Height stability instead comes from
          .card-sub always occupying a line (below), which is how iOS does it:
          CardSub renders " " with .opacity(0) rather than collapsing. */
-      .insight-card   { min-height: 0; min-width: 0; gap: 8px; }
+      .insight-card   { min-height: 0; min-width: 0; gap: 11px; }
       .card-sub       { min-height: 1.25em; }
 
       /* .inter(34, .bold) and .inter(22, .bold) in TodayView. */
-      #insight-pct { font-size: 34px; }
+      #insight-pct { font-size: 37px; }
       /* min() is the CSS stand-in for iOS's .lineLimit(1).minimumScaleFactor():
          caps at the iOS size on a normal phone and scales down on narrow ones.
          "Holding steady", the longest value either card shows, needs it — at a
@@ -591,13 +598,19 @@
 
       .live-dot.on   { display: block; }
       .card-label    { letter-spacing: 1.2px; }  /* CardLabel .kerning(1.2) */
-      .card-sub      { font-size: 13px; }        /* CardSub .inter(13) */
+      .card-sub      { font-size: 14px; }
       .cap-bar-track { height: 6px; }            /* CapacityBar frame(height: 6) */
 
       .chart-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 14px;
+        /* 24px (the desktop value) on top of chartTopPad and the empty band the
+           110 ceiling leaves above the 100% tick put ~65px between the day pills
+           and the top gridline, which read as the chart having come unmoored
+           from its own header. The canvas supplies its own clearance; this only
+           needs to separate the pills from it. */
+        margin-bottom: 2px;
       }
       .day-pills {
         overflow-x: auto;
@@ -611,7 +624,14 @@
          the top padding on top of the plot area, so matching iOS's *plot* means
          a taller box here. */
       .chart-wrap {
-        height: 246px;
+        /* Was a flat 246px, i.e. the same box on an SE and a Pro Max, of which
+           roughly 40% went to axis furniture and headroom rather than curve.
+           Horizontal is already maxed (the negative margins below run the plot
+           edge to edge), so height is the only side of the height:width ratio
+           left to move, and that ratio is what makes a variation legible. On a
+           typical phone this lands near 350px, taking a 10pp wiggle from about
+           18px to about 29px. */
+        height: clamp(260px, 44vh, 430px);
         /* Bleed out of the section's gutter so the plot runs edge to edge.
            Nothing is lost on the left: Chart.js reserves that strip inside the
            canvas for the "100%"/"75%" labels, so those become the buffer
@@ -1088,9 +1108,19 @@ function formatHourTick(h) {
   return isPhone() ? formatHour(h).replace(' ', '') : formatHour(h);
 }
 
+// The y ceiling doubles as headroom above the 100% tick, so it is trimmed on
+// the phone alongside chartTopPad; see the y scale config for why not 100.
+function yCeiling() { return isPhone() ? 105 : 110; }
+
 // Top padding gives the pulse dot's halo room above a near-100% curve. 36px of
 // a 340px chart is fine; the same 36px eats an eighth of the phone's box.
-function chartTopPad() { return isPhone() ? 22 : 36; }
+//
+// The phone value is 12 rather than 22 because the clearance is paid for twice:
+// the y domain runs to 110 while ticks stop at 100, so there is already an empty
+// band above the curve worth ~29px at the taller phone height. The halo is 22px
+// (.pulse-dot 14px + ::before inset -4px) peaking at scale(2.2), so it needs
+// ~24px of radius, and 29 + 12 clears that with room to spare.
+function chartTopPad() { return isPhone() ? 6 : 36; }
 
 // Re-resolve the breakpoint-dependent options on rotation or a window drag.
 // Chart.js re-renders on resize via its own ResizeObserver, but the top padding
@@ -1105,6 +1135,7 @@ window.addEventListener('resize', () => {
   if (predChart.options.layout.padding.top === pad && phoneNow === _wasPhone) return;
   _wasPhone = phoneNow;
   predChart.options.layout.padding.top = pad;
+  predChart.options.scales.y.max = yCeiling();
   predChart.update('none');
 });
 
@@ -1190,7 +1221,11 @@ const capacityGradientPlugin = {
 // the actual series' to own. See the ghostTail block in updatePredChart().
 const ghostTailPlugin = {
   id: 'ghostTail',
-  afterDatasetsDraw(chart) {
+  afterDatasetDraw(chart, args) {
+    // Straight after the predicted dataset (index 1), not after all of them:
+    // afterDatasetsDraw would stroke this over the live dot, which is the whole
+    // thing the dot needs to sit on top of.
+    if (args.index !== 1) return;
     const seg = chart.options.plugins?.ghostTail?.seg;
     if (!seg || !(seg.x1 > seg.x0)) return;
     const { ctx, scales } = chart;
@@ -1268,7 +1303,9 @@ const closedHoursPlugin = {
 // here, so the dot always sits exactly where the two lines meet.
 const nowLinePlugin = {
   id: 'nowLine',
-  afterDatasetsDraw(chart) {
+  // afterDraw, not afterDatasetsDraw: this is the one mark that has to sit over
+  // everything else on the chart, including hover markers and the ghost tail.
+  afterDraw(chart) {
     const opts = chart.options.plugins.nowLine;
     const pulseDot = document.getElementById('pulse-dot');
 
@@ -1284,11 +1321,20 @@ const nowLinePlugin = {
       return;
     }
 
-    positionPulseDot(chart, lastPt);
+    // Read the ANIMATED element, not the data value. Chart.js tweens
+    // meta.data[i].x/.y across the 320ms update, so asking the scale for the
+    // data's pixel would pin the HALO to its final spot on the first frame
+    // while the native core it rings travels in with the line.
+    const meta = chart.getDatasetMeta(0);
+    const el   = meta && meta.data && meta.data[meta.data.length - 1];
+    const dotX = el ? el.x : chart.scales.x.getPixelForValue(lastPt.x);
+    const dotY = el ? el.y : chart.scales.y.getPixelForValue(lastPt.y);
+
+    positionPulseDot(chart, lastPt, dotX, dotY);
   }
 };
 
-function positionPulseDot(chart, lastPt) {
+function positionPulseDot(chart, lastPt, dotX, dotY) {
   const pulseDot = document.getElementById('pulse-dot');
   if (!pulseDot) return;
 
@@ -1300,10 +1346,6 @@ function positionPulseDot(chart, lastPt) {
     pulseDot.style.display = 'none';
     return;
   }
-
-  const { scales } = chart;
-  const dotX = scales.x.getPixelForValue(lastPt.x);
-  const dotY = scales.y.getPixelForValue(lastPt.y);
 
   pulseDot.style.display = 'block';
   pulseDot.style.left = (dotX - 7) + 'px';
@@ -1653,11 +1695,18 @@ function updatePredChart(data) {
           borderColor: '#6ee7b7',
           backgroundColor: 'transparent',
           borderWidth: 3.25,
-          // The live "now" dot is rendered as a native point on the last actual
-          // point (the live point built in updatePredChart), so it animates in
-          // with the line and stays glued to the live end of the actual line,
-          // with no DOM overlay drifting off the curve. Only shown
-          // while the gym is open (nowLine.show); the DOM .pulse-dot adds the halo.
+          // The live dot is a native point on the last actual point, so it
+          // animates in with the line and stays glued to it. Nothing paints over
+          // it, and that is arranged rather than hacked around:
+          //   - Actual has the LOWER `order`. Verified against chart.umd 4.4.3:
+          //     _sortedMetasets sorts ascending by order, then _drawDatasets
+          //     iterates it BACKWARDS, so the lowest order is painted last and
+          //     ends up on top. Raising this number sinks the dot under the
+          //     dashed line, which is exactly what happened when it was tried.
+          //   - drawActiveElementsOnTop is off below, so the white hover marker
+          //     on an earlier actual point cannot jump above the live point.
+          //   - ghostTailPlugin strokes on the predicted dataset's own pass
+          //     rather than after all of them, for the same reason.
           pointRadius: (c) => {
             const show = c.chart.options.plugins?.nowLine?.show;
             return (show && c.dataIndex === c.dataset.data.length - 1) ? 5 : 0;
@@ -1672,7 +1721,16 @@ function updatePredChart(data) {
           pointBorderWidth: 0,
           tension: 0.35,
           fill: true,
+          // Lower order = painted last = on top. See the pointRadius comment.
           order: 1,
+          // Chart.js collects hovered elements and redraws them in a SECOND pass
+          // after every other point in the same dataset (DatasetController.draw,
+          // gated on this flag, default true). That is what put the white marker
+          // on the last completed reading over the live dot a few pixels away.
+          // `order` cannot reach it, because both points live in this dataset.
+          // Off, so points paint in index order and the live point, being last,
+          // stays on top.
+          drawActiveElementsOnTop: false,
         },
         {
           label: 'Predicted',
@@ -1702,6 +1760,7 @@ function updatePredChart(data) {
           pointBorderColor: 'transparent',
           tension: 0.35,
           fill: true,
+          // Higher than Actual, so this is painted first and sits underneath it.
           order: 2,
           _predicted: true,
         }
@@ -1726,6 +1785,8 @@ function updatePredChart(data) {
           enabled: false,
           external: makeExternalTooltip('pred-tooltip'),
           displayColors: false,
+          // Decoupled from `order`, which now runs the other way for z-order.
+          itemSort: (a, b) => a.datasetIndex - b.datasetIndex,
           // Drop the synthetic point that starts the predicted dataset at "now"
           // (see _anchor in updatePredChart). It exists so the two fills tile
           // rather than overlap, and it is not a forecast for anything: real
@@ -1766,7 +1827,16 @@ function updatePredChart(data) {
           }
         },
         y: {
-          min: 0, max: 110,
+          min: 0,
+          // 110 on desktop, but on the phone that spare 10pp is ~29px of empty
+          // plot sitting between the day pills and the 100% gridline, on top of
+          // the header margin and chartTopPad. Three separate clearances stacked
+          // into one visible void. 105 keeps a band above the tick without the
+          // void, and still leaves room over 100% rather than clipping at it:
+          // capacity genuinely exceeds 100 (livePct is count/150, and
+          // apply_to_day clamps at 110), so a hard 100 ceiling would flatten a
+          // genuinely overfull gym against the top of the chart.
+          max: yCeiling(),
           grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
           border: { display: false },
           // The 110 ceiling is headroom for the curve, not a value worth
