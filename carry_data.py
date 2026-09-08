@@ -23,13 +23,13 @@ with the curve model that replaced it.
 import os
 import sys
 import pickle
-import warnings
 from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
 import curve_model as cm
+import nowcast as nw
 from academic_calendar import (
     classify_date, days_to_sem_start, days_to_sem_end, get_open_hours,
 )
@@ -44,9 +44,9 @@ PARAMS = {**cm.DEFAULT_PARAMS, "week_levels": True}
 ORIGINS = [d for d in (date(y, m, 1) for y in (2023, 2024, 2025, 2026) for m in range(1, 13))
            if date(2023, 1, 1) <= d <= date(2026, 12, 1)]
 
-# predictions_builder.py constants, mirrored here so drift between them is loud.
-CORRECTION_DAYS  = 28
-CORRECTION_MIN_N = 3
+# The trailing-residual layer is nowcast.py, imported by both this module and
+# predictions_builder.py. It used to be re-implemented here with a comment asking
+# future editors to keep the copies in sync, and nothing enforced that.
 
 
 def parse_supabase_timestamps(series):
@@ -99,13 +99,6 @@ def segment_for_date(d, ramp_days=10):
         return "break_deep"
     if phase in ("finals", "dead_week"):
         return "finals_dead"
-    return phase
-
-
-def correction_segment(phase):
-    """Mirrors predictions_builder._correction_segment (break sub-phases pooled)."""
-    if phase in ("winter_break", "spring_break") or phase.startswith("summer_break_"):
-        return "break"
     return phase
 
 
@@ -193,49 +186,42 @@ def build_base_matrix(slots, dates, origins=None, verbose=True):
 
 
 def apply_28day_correction(dates, actual_M, raw_M, verbose=True):
-    """Reproduce predictions_builder.py's trailing-residual layer.
+    """Reproduce the trailing-residual layer production actually serves.
 
-    Its key is (segment, regime, dow, hour, minute) over a 28-day window, and
-    `dow` is IN the key — so within any 28-day window exactly four days can
-    contribute to a cell: D-7, D-14, D-21, D-28. That turns what reads like a
-    rolling aggregation into a four-row lookup.
+    This is the second of the two layers under the within-day correction:
 
-    The horizon decay (0.5^(days/7)) is 1.0 for the current day, so it is
-    omitted: everything downstream of this module evaluates day-of predictions
-    only. Note the correction is NOT future-only — it applies to the current day
-    at full strength, which is exactly why it must be reproduced here.
+        curve_model's recency-weighted curve              (rebuilt weekly)
+      + nowcast.py's trailing-residual ladder             (rebuilt nightly)
+
+    Fitting carry against only the first layer would double-count the multi-day
+    drift the second has already removed, so both are reproduced here. The
+    arithmetic itself now lives in nowcast.py and is imported rather than
+    re-implemented, so there is no longer a mirror to drift.
+
+    One call per day, each fitting the ladder from a window strictly before that
+    day, which is what makes this an honest rolling origin rather than a fit that
+    has seen its own answer. The horizon decay (nowcast.decay) is 1.0 at zero
+    days out and is therefore omitted: everything downstream of this module
+    evaluates day-of predictions only. Note the correction is NOT future-only,
+    it applies to the current day at full strength, which is exactly why it has
+    to be reproduced here at all.
     """
     from academic_calendar import is_summer_day
-    index  = {d: i for i, d in enumerate(dates)}
-    seg    = {d: correction_segment(classify_date(d)) for d in dates}
-    regime = {d: is_summer_day(d) for d in dates}
+
+    segment, regime, dow = nw.day_keys(dates, classify_date, is_summer_day)
+    trailing = nw.Trailing(dates, actual_M - raw_M, segment, regime, dow)
 
     out = raw_M.copy()
-    resid = actual_M - raw_M
     n_fired = 0
-
     for i, d in enumerate(dates):
-        rows = [
-            index[p] for p in (d - timedelta(days=k) for k in (7, 14, 21, 28))
-            if p in index and seg[p] == seg[d] and regime[p] == regime[d]
-        ]
-        if len(rows) < CORRECTION_MIN_N:
-            continue
-        block  = resid[rows]
-        counts = np.isfinite(block).sum(axis=0)
-        # Slots nobody recorded on any of the prior days give an all-NaN column.
-        # They are dropped a line below by the `counts >= MIN_N` mask, so the
-        # empty-slice warning nanmean raises for them is noise, not a signal.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            cell = np.nanmean(np.where(np.isfinite(block), block, np.nan), axis=0)
-        usable = (counts >= CORRECTION_MIN_N) & np.isfinite(cell)
-        if usable.any():
-            out[i, usable] = raw_M[i, usable] + cell[usable]
+        corr = trailing.correction(d, segment[i], regime[i], int(dow[i]))
+        if np.any(corr != 0.0):
             n_fired += 1
+        # raw_M carries NaN where no curve matched; adding leaves those NaN.
+        out[i] = raw_M[i] + corr
 
     if verbose:
-        print(f"  28-day correction fired on {n_fired:,}/{len(dates):,} days")
+        print(f"  Trailing correction fired on {n_fired:,}/{len(dates):,} days")
     return out
 
 

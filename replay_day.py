@@ -64,10 +64,7 @@ if "SUPABASE_SERVICE_KEY" not in os.environ and "SUPABASE_KEY" in os.environ:
 
 import carry_model as km
 from academic_calendar import is_semester_day
-from carry_data import (
-    load_matrices, open_slot_range, segment_for_date,
-    CORRECTION_DAYS, CORRECTION_MIN_N,
-)
+from carry_data import load_matrices, open_slot_range, segment_for_date
 
 # ---------------------------------------------------------------------------
 # The model currently in production, replicated so it can be scored fairly.

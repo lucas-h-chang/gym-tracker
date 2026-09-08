@@ -1550,7 +1550,11 @@ function updatePredChart(data) {
       const span = nxt.x - lastActual.x;
       const t    = span > 0 ? Math.max(0, Math.min(1, (liveX - lastActual.x) / span)) : 1;
       const yAt  = Math.round((lastActual.y + (nxt.y - lastActual.y) * t) * 10) / 10;
-      predPoints = [{ x: liveX, y: yAt, label: livePoint.label }, ...predPoints];
+      // _anchor marks this as scaffolding, not a forecast slot. Real forecast
+      // points sit on 15-min boundaries; this one sits at "now" purely so the
+      // predicted fill starts where the actual fill stops. The tooltip filter
+      // keys off the flag so it never offers "Predicted: 67%" for an 11:47.
+      predPoints = [{ x: liveX, y: yAt, label: livePoint.label, _anchor: true }, ...predPoints];
       ghostTail  = { x0: lastActual.x, y0: lastActual.y, x1: liveX, y1: yAt };
     }
   } else if (isToday && actualPoints.length && nowVal >= closeH) {
@@ -1699,16 +1703,18 @@ function updatePredChart(data) {
           enabled: false,
           external: makeExternalTooltip('pred-tooltip'),
           displayColors: false,
-          filter: (item) => {
-            // Drop the synthetic connector point that bridges the actual line
-            // into the predicted line (same x/y as the last actual reading) —
-            // without this, hovering right at the seam shows "Actual" and
-            // "Predicted" twice with an identical, confusing value.
-            if (item.datasetIndex !== 1) return true;
-            const actualData = item.chart.data.datasets[0].data;
-            const lastActual = actualData[actualData.length - 1];
-            return !(lastActual && item.raw.x === lastActual.x && item.raw.y === lastActual.y);
-          },
+          // Drop the synthetic point that starts the predicted dataset at "now"
+          // (see _anchor in updatePredChart). It exists so the two fills tile
+          // rather than overlap, and it is not a forecast for anything: real
+          // forecast slots land on 15-min boundaries, so surfacing it offered a
+          // "Predicted: 67%" for an 11:47 that the model never produced.
+          //
+          // Flagged rather than identified by coordinates. The previous version
+          // matched x AND y against the last actual reading, which held only
+          // while the connector carried the live VALUE; the moment it started
+          // carrying the forecast's value instead, the y stopped matching and
+          // the row came back.
+          filter: (item) => !(item.datasetIndex === 1 && item.raw && item.raw._anchor),
           callbacks: {
             title: (items) => items[0].raw.label || '',
             label: (item) => `${item.dataset.label}: ${Math.round(item.raw.y)}%`,
