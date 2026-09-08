@@ -1168,6 +1168,35 @@ const capacityGradientPlugin = {
   }
 };
 
+// Strokes the forecast line across the minutes between the last completed
+// reading and "now" — the stretch datasets[1] deliberately no longer spans, so
+// that its fill cannot stack on top of the actual line's fill there. Line only,
+// never a fill: those minutes already happened, so the shading under them is
+// the actual series' to own. See the ghostTail block in updatePredChart().
+const ghostTailPlugin = {
+  id: 'ghostTail',
+  afterDatasetsDraw(chart) {
+    const seg = chart.options.plugins?.ghostTail?.seg;
+    if (!seg || !(seg.x1 > seg.x0)) return;
+    const { ctx, scales } = chart;
+    const ds = chart.data.datasets[1];
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(scales.x.getPixelForValue(seg.x0), scales.y.getPixelForValue(seg.y0));
+    ctx.lineTo(scales.x.getPixelForValue(seg.x1), scales.y.getPixelForValue(seg.y1));
+    // Reuses the very gradient object capacityGradientPlugin built for the
+    // predicted dataset, so the tail tracks its colour at every height rather
+    // than being a flat grey that drifts away from it as the curve climbs.
+    ctx.strokeStyle = ds.borderColor;
+    ctx.lineWidth   = ds.borderWidth;
+    ctx.setLineDash(ds.borderDash || [6, 5]);
+    ctx.lineCap  = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 // Closed-hours shading. The x-axis is pinned 7 AM to 11 PM on every day so that
 // any two days can be read against one scale, which leaves dead space whenever
 // the RSF opens late or shuts early (a Saturday closes at 6 PM, a summer weekday
@@ -1484,16 +1513,13 @@ function updatePredChart(data) {
     });
   }
 
-  if (ghostAnchor) {
-    predPoints = [{ x: ghostAnchor.x, y: ghostAnchor.y, label: ghostAnchor.label }, ...predPoints];
-  }
-
   // Extend the actual line all the way to "right now" (not just the last
   // completed 15-min bin) using the live capacity reading. This is also
   // what the pulse dot renders on top of, so the line, its fill and the dot
   // all end at one spot instead of the dot floating off the end of it, and the
   // sliver of time between the last bin and now gets shaded as "actual"
   // since it's already passed, instead of being left blank.
+  let ghostTail = null;
   if (isToday && actualPoints.length && gymIsOpen) {
     const lastActual = actualPoints[actualPoints.length - 1];
     const liveX = Math.min(Math.max(nowVal, lastActual.x), xMax);
@@ -1504,6 +1530,28 @@ function updatePredChart(data) {
       actualPoints.push(livePoint);
     } else {
       actualPoints[actualPoints.length - 1] = livePoint;
+    }
+
+    // The forecast dataset starts at "now", carrying the forecast's own value
+    // there (interpolated between the anchor reading and the next slot), so the
+    // two fills TILE the day: actual owns [open, now], predicted owns
+    // [now, close]. Letting the predicted dataset start back at the anchor
+    // instead made both of them cover the minutes since the last reading, and
+    // 0.15 alpha stacked on 0.35 painted that stretch as a bright vertical band
+    // under the live dot.
+    //
+    // The line still has to cross those minutes, or the dashed curve would
+    // begin at "now" and the divergence since the last reading would be
+    // invisible. ghostTailPlugin strokes that stretch on its own, so the eye
+    // sees one continuous dashed line from the anchor while only one fill ever
+    // covers a given x.
+    if (predPoints.length) {
+      const nxt  = predPoints[0];
+      const span = nxt.x - lastActual.x;
+      const t    = span > 0 ? Math.max(0, Math.min(1, (liveX - lastActual.x) / span)) : 1;
+      const yAt  = Math.round((lastActual.y + (nxt.y - lastActual.y) * t) * 10) / 10;
+      predPoints = [{ x: liveX, y: yAt, label: livePoint.label }, ...predPoints];
+      ghostTail  = { x0: lastActual.x, y0: lastActual.y, x1: liveX, y1: yAt };
     }
   } else if (isToday && actualPoints.length && nowVal >= closeH) {
     // Day is over. There's no live point to extend to, and the predicted
@@ -1540,6 +1588,7 @@ function updatePredChart(data) {
   if (predChart) {
     predChart.data.datasets[0].data = actualPoints;
     predChart.data.datasets[1].data = predPoints;
+    predChart.options.plugins.ghostTail.seg = ghostTail;
     predChart.options.plugins.nowLine.show  = showNow;
     predChart.options.plugins.nowLine.value = nowVal;
     predChart.options.plugins.closedHours.open  = openH;
@@ -1642,6 +1691,7 @@ function updatePredChart(data) {
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         capacityGradient: { enabled: true },
+        ghostTail: { seg: ghostTail },
         closedHours: { show: true, open: openH, close: closeH },
         nowLine: { show: showNow, value: nowVal },
         legend:  { display: false },
@@ -2029,7 +2079,8 @@ function renderInsightCards(data) {
 async function init() {
   // chart.js loads with `defer`, so it isn't available until DOMContentLoaded
   // (which gates this init call). Register plugins here, not at parse time.
-  Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin);
+  Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin,
+                 ghostTailPlugin);
   updateStatusBar();
   // Live capacity is server-cached for 30s (see api/live-capacity.js), so
   // polling any faster than that just re-fetches the same cached value.
