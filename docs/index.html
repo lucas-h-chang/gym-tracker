@@ -206,6 +206,64 @@
       color: var(--text);
       letter-spacing: -0.01em;
     }
+    .chart-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10.5px;
+    }
+    /* The dot is a SIBLING of #chart-title, never a child: updatePredChart()
+       assigns to that element's textContent on every render, which would wipe
+       any markup nested inside it. */
+    .info-dot {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 1px solid var(--sub);
+      background: none;
+      color: var(--sub);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: help;
+      opacity: 0.6;
+      transition: opacity .14s ease;
+    }
+    .info-dot:hover,
+    .info-dot:focus-visible { opacity: 1; }
+    /* .info-dot's own `display: flex` is an author rule, so it outranks the UA
+       stylesheet's [hidden] { display: none }. Without this, setting .hidden
+       from updatePredChart() would toggle the attribute and change nothing. */
+    .info-dot[hidden] { display: none; }
+    .info-dot::after {
+      content: attr(data-tip);
+      position: absolute;
+      top: calc(100% + 8px);
+      left: -4px;
+      /* max-content keeps it on one line where there is room, and max-width
+         lets it wrap on a narrow phone instead of forcing sideways scroll. */
+      width: max-content;
+      max-width: 230px;
+      background: #1e1c1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: var(--text);
+      text-align: left;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .14s ease;
+      z-index: 30;
+    }
+    .info-dot:hover::after,
+    .info-dot:focus-visible::after { opacity: 1; }
     /* Chart.js's documented responsive setup: the WRAPPER owns the dimensions
        and the canvas is left alone to fill it. Two things depend on that.
 
@@ -518,23 +576,6 @@
 
       .live-dot.on   { display: block; }
       .card-label    { letter-spacing: 1.2px; }  /* CardLabel .kerning(1.2) */
-
-      /* Single-line, as in iOS CardLabel: these two cards sit side by side, and
-         a label that wraps in one but not the other pushes its value down and
-         breaks the shared baseline. "VS SEMESTER WEDNESDAYS" is now the longest
-         string (the header names the comparison period since it picks an
-         all_semesters / all_summers / all_breaks baseline); it fits at 10px on a
-         390px phone, and the ellipsis only engages on something as narrow as an
-         SE. iOS gets the same string but scales it via minimumScaleFactor(0.75)
-         instead of clipping. */
-      #insight-trend .card-label,
-      #insight-comparison .card-label {
-        font-size: 10px;
-        letter-spacing: 0.8px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
       .card-sub      { font-size: 13px; }        /* CardSub .inter(13) */
       .cap-bar-track { height: 6px; }            /* CapacityBar frame(height: 6) */
 
@@ -617,12 +658,10 @@
   <div class="insight-row hidden" id="insight-row">
     <div class="insight-card" id="insight-status">
       <div class="skel-overlay">
-        <div class="skel" style="width:60%;height:12px"></div>
         <div class="skel skel-val" style="width:50%;animation-delay:.1s"></div>
         <div class="skel" style="width:100%;height:7px;animation-delay:.15s"></div>
         <div class="skel" style="width:40%;height:12px;animation-delay:.2s"></div>
       </div>
-      <span class="card-label" id="insight-status-label">LIVE CAPACITY</span>
       <div class="val-row">
         <span class="live-dot" id="insight-live-dot"></span>
         <span class="card-value" id="insight-pct">&mdash;</span>
@@ -636,22 +675,18 @@
 
     <div class="insight-card" id="insight-trend">
       <div class="skel-overlay">
-        <div class="skel" style="width:70%;height:12px"></div>
         <div class="skel skel-val" style="width:45%;animation-delay:.1s"></div>
         <div class="skel" style="width:35%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="card-label">NEXT 30 MIN</span>
       <span class="card-value" id="insight-trend-val">&mdash;</span>
       <span class="card-sub" id="insight-trend-sub"></span>
     </div>
 
     <div class="insight-card" id="insight-comparison">
       <div class="skel-overlay">
-        <div class="skel" style="width:80%;height:12px"></div>
         <div class="skel skel-val" style="width:55%;animation-delay:.1s"></div>
         <div class="skel" style="width:45%;height:14px;animation-delay:.15s"></div>
       </div>
-      <span class="card-label" id="insight-comp-header">VS &mdash;</span>
       <span class="card-value" id="insight-comp-verdict">&mdash;</span>
       <span class="card-sub" id="insight-comp-delta"></span>
     </div>
@@ -662,7 +697,12 @@
   <!-- PREDICTION CHART -->
   <div class="chart-section" id="section-predict">
     <div class="chart-header">
-      <h2 class="chart-title" id="chart-title">Today's Crowd</h2>
+      <div class="chart-title-wrap">
+        <h2 class="chart-title" id="chart-title">Today's Crowd</h2>
+        <button type="button" class="info-dot" id="chart-info"
+                data-tip="Predictions update every 15 minutes."
+                aria-label="Predictions update every 15 minutes.">i</button>
+      </div>
       <div class="day-pills" id="day-pills"></div>
     </div>
     <div id="cal-popup" class="cal-popup" style="display:none"></div>
@@ -1408,8 +1448,26 @@ function updatePredChart(data) {
   const actualPoints = liveToday
     ? (data.today_actuals || []).filter(p => p.x <= nowVal)
     : [];
+  // The forecast line begins at the last COMPLETED 15-min reading rather than
+  // at "now", and takes that reading's own value as its first point, so the two
+  // series leave a shared origin: from 3:30 the solid line shows what actually
+  // happened and the dashed line shows what was predicted, and the space that
+  // opens between them IS the forecast error. Starting it at "now" is what
+  // produced the cliff, because the only way to reach the 3:45 slot from a 3:44
+  // live reading is one near-vertical segment (a 20pp move across ~1px of
+  // x-axis, and worse the closer "now" sat to the boundary).
+  //
+  // Anchoring on the READING rather than on the base curve's own 3:30 value
+  // also keeps the dashed line kink-free. today_builder's level correction is
+  // computed FROM that reading and only ever covers slots after it (see
+  // carry_model.apply_to_day, which returns range(cut_slot + 1, hi)), so a
+  // base-curve anchor would put an uncorrected point next to a corrected one
+  // and reintroduce the same jump one slot to the left.
+  const ghostAnchor = (liveToday && gymIsOpen && actualPoints.length)
+    ? actualPoints[actualPoints.length - 1]
+    : null;
   let predPoints = liveToday
-    ? allPredPoints.filter(p => p.x >= nowVal)
+    ? allPredPoints.filter(p => ghostAnchor ? p.x > ghostAnchor.x : p.x >= nowVal)
     : allPredPoints;
 
   if (isToday && data.today_similarity_preds?.length) {
@@ -1426,11 +1484,14 @@ function updatePredChart(data) {
     });
   }
 
+  if (ghostAnchor) {
+    predPoints = [{ x: ghostAnchor.x, y: ghostAnchor.y, label: ghostAnchor.label }, ...predPoints];
+  }
+
   // Extend the actual line all the way to "right now" (not just the last
-  // completed 15-min bin) using the live capacity reading, then bridge the
-  // predicted line from that exact same point. This is also what the pulse
-  // dot renders on top of, so the line, its fill, and the dot all meet at
-  // one spot instead of the dot floating off the end of the line — and the
+  // completed 15-min bin) using the live capacity reading. This is also
+  // what the pulse dot renders on top of, so the line, its fill and the dot
+  // all end at one spot instead of the dot floating off the end of it, and the
   // sliver of time between the last bin and now gets shaded as "actual"
   // since it's already passed, instead of being left blank.
   if (isToday && actualPoints.length && gymIsOpen) {
@@ -1443,11 +1504,6 @@ function updatePredChart(data) {
       actualPoints.push(livePoint);
     } else {
       actualPoints[actualPoints.length - 1] = livePoint;
-    }
-    if (!predPoints.length || predPoints[0].x > liveX) {
-      predPoints = [livePoint, ...predPoints];
-    } else if (predPoints[0].x === liveX) {
-      predPoints[0] = livePoint;
     }
   } else if (isToday && actualPoints.length && nowVal >= closeH) {
     // Day is over. There's no live point to extend to, and the predicted
@@ -1463,6 +1519,10 @@ function updatePredChart(data) {
   }
 
   document.getElementById('chart-title').textContent = chartTitle(predDate);
+  // "every 15 minutes" is only true of today: other days come from the nightly
+  // predictions_builder.py run in daily.yml, so the dot is hidden on them
+  // rather than stating a cadence that does not apply.
+  document.getElementById('chart-info').hidden = !isToday;
 
   const closedFor = closureReason(predDay);
   const closedEl  = document.getElementById('chart-closed');
@@ -1527,8 +1587,8 @@ function updatePredChart(data) {
           borderWidth: 3.25,
           // The live "now" dot is rendered as a native point on the last actual
           // point (the live point built in updatePredChart), so it animates in
-          // with the line and stays glued to the exact seam where actual meets
-          // predicted, with no DOM overlay drifting off the curve. Only shown
+          // with the line and stays glued to the live end of the actual line,
+          // with no DOM overlay drifting off the curve. Only shown
           // while the gym is open (nowLine.show); the DOM .pulse-dot adds the halo.
           pointRadius: (c) => {
             const show = c.chart.options.plugins?.nowLine?.show;
@@ -1792,7 +1852,6 @@ function renderInsightCards(data) {
   const closure = closureReason(predDay);
 
   // ── Card 1: Status / Capacity ──
-  const statusLabel = document.getElementById('insight-status-label');
   const pctEl       = document.getElementById('insight-pct');
   const pctTagEl    = document.getElementById('insight-pct-tag');
   const capFill     = document.getElementById('insight-cap-fill');
@@ -1816,8 +1875,6 @@ function renderInsightCards(data) {
 
   if (isToday) {
     const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
-    statusLabel.textContent = 'LIVE CAPACITY';
-
     if (gymIsOpen && livePct != null) {
       pctEl.textContent = `${livePct.toFixed(0)}%`;
       pctEl.style.color = pctColor(livePct);
@@ -1860,7 +1917,6 @@ function renderInsightCards(data) {
       }
     }
   } else {
-    statusLabel.textContent = 'DAILY FORECAST';
     const allSlots = getBlendedSlots(data, openH, closeH, predDate);
     if (closure) {
       pctEl.textContent = 'CLOSED';
@@ -1896,14 +1952,15 @@ function renderInsightCards(data) {
     trendValEl.textContent = labels[trend.dir];
     trendValEl.style.color = dirColor;
 
-    // Magnitude only — the arrow already carries the direction — plus the time
-    // the window actually ends (computeTrend's last slot), so the number reads
-    // as a forecast to a moment rather than floating free. Kept identical to
-    // RSFApp2.0's TodayView trendCard.
+    // Magnitude only, since the arrow already carries the direction. Naming the
+    // window instead of its end time is safe here: computeTrend returns null
+    // when fewer than 30 minutes remain before close, so this can never claim a
+    // 30-minute window that actually got clipped at closing time.
+    // NOTE: no longer identical to RSFApp2.0's TodayView trendCard, which still
+    // renders "N% by <time>". The card label above it is gone on web only too.
     const arrows = { up: '↑', down: '↓', flat: '→' };
     const subColor = trend.dir === 'up' ? '#f87171' : trend.dir === 'down' ? '#6ee7b7' : 'var(--sub)';
-    const byTime = formatTime(trend.toH, trend.toMin);
-    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${Math.abs(trend.delta)}% by ${byTime}</span>`;
+    trendSubEl.innerHTML = `<span style="color:${subColor}">${arrows[trend.dir]} ${Math.abs(trend.delta)}% in next 30 mins</span>`;
   } else {
     trendValEl.textContent = '—';
     trendValEl.style.color = 'var(--sub)';
@@ -1911,7 +1968,6 @@ function renderInsightCards(data) {
   }
 
   // ── Card 3: Comparison (vs usual day of this same period type) ──
-  const compHeaderEl  = document.getElementById('insight-comp-header');
   const compVerdictEl = document.getElementById('insight-comp-verdict');
   const compDeltaEl   = document.getElementById('insight-comp-delta');
 
@@ -1920,10 +1976,12 @@ function renderInsightCards(data) {
     : 12;
   const cmp = computeDayComparisonAt(dayName, cmpH, data, new Date(predDate + 'T12:00:00'));
 
-  // Header names the baseline the comparison actually used (summer / semester /
-  // break Mondays), not a flat "usual" that hides which set of days it means.
-  // Set AFTER cmp so the two can never describe different periods.
-  compHeaderEl.textContent = `VS ${PERIOD_LABEL[cmp.period] || 'USUAL'} ${dayName.toUpperCase()}S`;
+  // The delta line now names the baseline the comparison actually used (summer /
+  // semester / break Tuesdays) instead of a card header doing it, so a reader
+  // never sees a bare "5% below" without knowing below WHAT. Built AFTER cmp so
+  // the phrase and the number can never describe different periods.
+  const periodWord = PERIOD_LABEL[cmp.period] ? PERIOD_LABEL[cmp.period].toLowerCase() : null;
+  const vsPhrase = periodWord ? `${dayName}s this ${periodWord}` : `usual ${dayName}s`;
   const refPct = isToday ? livePct : null;
   const baseline = cmp.baseline;
   const avgDelta = (baseline != null && refPct != null) ? Math.round(refPct - baseline) : null;
@@ -1949,11 +2007,11 @@ function renderInsightCards(data) {
     }
 
     // At exactly 0 the above/below split has nothing to describe, and
-    // "0% below usual" reads as a rendering bug rather than a dead-on match.
-    // Kept identical to RSFApp2.0's computeComparison deltaText.
+    // "0% below" reads as a rendering bug rather than a dead-on match.
+    // NOTE: no longer identical to RSFApp2.0's computeComparison deltaText.
     const deltaText = absDelta === 0
-      ? '0% right on usual'
-      : `${absDelta}% ${higher ? 'above' : 'below'} usual`;
+      ? `Right on ${vsPhrase}`
+      : `${absDelta}% ${higher ? 'above' : 'below'} ${vsPhrase}`;
 
     compVerdictEl.textContent = verdict;
     compVerdictEl.className = `card-value comp-verdict ${verdictClass}`;
