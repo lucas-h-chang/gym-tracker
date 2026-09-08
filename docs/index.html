@@ -1674,7 +1674,15 @@ function updatePredChart(data) {
           borderCapStyle: 'round',
           borderJoinStyle: 'round',
           pointRadius: 0,
-          pointHoverRadius: 5,
+          // The _anchor point shares its x with the live dot but carries the
+          // FORECAST's value, so hovering there drew this dataset's white hover
+          // marker a few pixels off the yellow live point and read as the two
+          // dots failing to line up. It is scaffolding, not a forecast slot
+          // (see the tooltip filter, which drops its row for the same reason),
+          // so it gets no marker at all. Note the tooltip filter alone is not
+          // enough: it decides what the tooltip PRINTS, not which points count
+          // as active and draw a hover radius.
+          pointHoverRadius: (c) => (c.dataset.data[c.dataIndex]?._anchor ? 0 : 5),
           pointBackgroundColor: '#fff',
           pointBorderColor: 'transparent',
           tension: 0.35,
