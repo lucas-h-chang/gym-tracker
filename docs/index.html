@@ -565,7 +565,12 @@
            makes the gap to the divider read larger than the number. Both ends
            grew when the three card labels came out: the cards lost a line each
            and started crowding the capacity bar above and the divider below. */
-        padding: 28px calc(20px + env(safe-area-inset-right)) 16px calc(20px + env(safe-area-inset-left));
+        /* 16, not 28. header is height:64 with align-items:center, so the 28px
+           logo already leaves ~15px of dead space below its text inside that
+           box; this padding lands on top of it. 15 + 28 read as ~43px between
+           "Bear Meter" and the capacity card, so this is the half of the pair
+           that can move without shifting the logo itself. */
+        padding: 16px calc(20px + env(safe-area-inset-right)) 16px calc(20px + env(safe-area-inset-left));
       }
       /* The skeleton state forces display:flex !important to survive
          .insight-row.hidden; without a matching override the placeholder would
