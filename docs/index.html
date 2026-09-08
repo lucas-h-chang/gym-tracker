@@ -283,6 +283,21 @@
     .chart-wrap {
       position: relative;
       height: 340px;
+      /* Scrubbing the chart is a press-and-drag, which is the same gesture a
+         mobile browser reads as "start selecting". Without these, dragging
+         across the curve on iOS raises the blue selection overlay and the
+         long-press Copy / Look Up callout on top of the chart you are trying
+         to read. The canvas already takes touch-action: none below, which stops
+         the drag being claimed as a PAN; this stops the same drag being claimed
+         as a SELECTION. Two different browser behaviours, two different
+         properties, and the chart needs both suppressed to be scrubbable.
+
+         On the wrapper rather than the canvas so the tooltip, the pulse dot and
+         the closed-day message layered over it are covered too: a drag that
+         crosses the tooltip would otherwise start selecting its text. */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
     /* A closure day has no curve to draw, and a bare grid with nothing on it
        reads as a failed load. The reason sits where the curve would have been. */
