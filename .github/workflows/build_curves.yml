@@ -14,14 +14,14 @@ jobs:
 
     steps:
       - name: Check out this repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           # Full history: the push step below rebases onto origin/main when a
           # concurrent push beats it, and rebase on a shallow clone is fragile.
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.10'
 
@@ -79,7 +79,7 @@ jobs:
 
       - name: Alert on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.create({
