@@ -1,10 +1,12 @@
 """
 supabase_io.py — shared Supabase read/parse helpers.
 
-Extracted (2026-07-21) so predictions_builder.py and build_curves.py don't need to
-import from train.py just to get parse_supabase_timestamps. train.py itself is
-unchanged and stays the source of truth for the frozen RF pipeline (see
-gym-tracker/legacy/README.md and CLAUDE.md for why it wasn't moved there).
+Extracted (2026-07-21) so predictions_builder.py and build_curves.py didn't have to
+import train.py just to get parse_supabase_timestamps.
+
+This is now the single definition. carry_data.py and backtest.py kept private
+copies until 2026-09-09; nothing enforced that the three agreed, and a silent
+divergence here shifts every timestamp by an hour at a DST boundary.
 """
 import pandas as pd
 

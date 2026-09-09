@@ -16,9 +16,11 @@ Fitting the within-day correction against only the first layer would
 double-count the multi-day drift the second layer has already removed, on every
 day where it fires. So both are reproduced here.
 
-Deliberately does NOT import backtest.py: that pulls in train.py -> sklearn for
-the retired RF, which is not installed in a plain checkout and has nothing to do
-with the curve model that replaced it.
+Kept independent of backtest.py. The original reason was that backtest.py dragged
+in train.py -> sklearn for the retired RF; that is no longer true (the RF moved to
+legacy/ on 2026-09-09 and backtest.py is sklearn-free). The separation still holds
+on its own terms: backtest.py gates the 90-day horizon, this module prepares the
+within-day fit, and they should be free to change independently.
 """
 import os
 import sys
@@ -30,6 +32,7 @@ import pandas as pd
 
 import curve_model as cm
 import nowcast as nw
+from supabase_io import parse_supabase_timestamps
 from academic_calendar import (
     classify_date, days_to_sem_start, days_to_sem_end, get_open_hours,
 )
@@ -47,15 +50,6 @@ ORIGINS = [d for d in (date(y, m, 1) for y in (2023, 2024, 2025, 2026) for m in 
 # The trailing-residual layer is nowcast.py, imported by both this module and
 # predictions_builder.py. It used to be re-implemented here with a comment asking
 # future editors to keep the copies in sync, and nothing enforced that.
-
-
-def parse_supabase_timestamps(series):
-    """TIMESTAMPTZ (UTC) -> naive PT wall-clock. Mirrors train.parse_supabase_timestamps."""
-    return (
-        pd.to_datetime(series, utc=True, format='ISO8601')
-          .dt.tz_convert('America/Los_Angeles')
-          .dt.tz_localize(None)
-    )
 
 
 def fetch_capacity_log():

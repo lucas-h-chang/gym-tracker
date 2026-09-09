@@ -193,6 +193,12 @@ def main():
     preds, meta = compute_level_correction(
         actuals_by_slot(fetch_today_rows()), base, load_carry())
 
+    # NOTE ON THESE TWO COLUMN NAMES. Both are vestigial and neither means what it
+    # says. There has been no similarity model since 2026-08-31 — `similarity_preds`
+    # carries the level-corrected forecast — and `blend_weight` is pinned to 1.0
+    # rather than scheduled. They keep the old names on purpose: renaming a column
+    # breaks docs/index.html and RSFApp2.0 at the same moment, so it needs its own
+    # migration and a coordinated client release. See handoffs/SPEC_TODAY_BUILDER_REWRITE.md.
     sb.table("today_summary").upsert({
         "date":             now.strftime('%Y-%m-%d'),
         "similarity_preds": preds,

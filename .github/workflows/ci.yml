@@ -31,6 +31,10 @@ jobs:
       # test_calendar_mirrors skips its Swift assertions here: RSFApp2.0/ lives
       # outside this repo, so TimeUtils.swift is not in the checkout. The JS and
       # workflow mirrors are fully covered.
+      #
+      # test_features.py and test_model_sanity.py used to run here. They cover the
+      # Random Forest, retired to legacy/ on 2026-09-09, and they were the only
+      # reason CI installed scikit-learn. They are archived, not deleted.
       - name: Run tests
         run: |
           python -m pytest -q \
@@ -38,6 +42,4 @@ jobs:
             test_curve_sanity.py \
             test_carry.py \
             test_nowcast.py \
-            test_snapshots.py \
-            test_features.py \
-            test_model_sanity.py
+            test_snapshots.py

@@ -1,3 +1,11 @@
+> **HISTORICAL — this job is done.** This is the procedure for one specific
+> 2026-07 change: swapping `day_profiles` and `weekly_averages` from tables to
+> views. `day_profiles` is still a view. The `weekly_averages` half was **reverted**
+> by `005` after it timed out on the anon role, so do not follow steps 3 or 5.
+>
+> It is kept as a model for how to stage a risky migration, not as a live runbook.
+> For current schema state see `README.md` in this directory.
+
 RUNBOOK — swap day_profiles / weekly_averages from tables to views
 ====================================================================
 

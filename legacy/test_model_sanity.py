@@ -11,13 +11,17 @@ These are called "behavioral tests" or "invariance tests" in ML.
 If any of these fail, something is seriously wrong with the model or features.
 
 Run with:  python3 -m pytest test_model_sanity.py -v
-Requires:  models/rf_model.pkl (run train.py first)
+Requires:  rf_model.pkl (archived beside this file in legacy/)
 """
 
 import pickle
 import pytest
 import pandas as pd
 from train import engineer_features
+from pathlib import Path
+
+# Archived artifacts sit beside this file in legacy/, not in models/.
+HERE = Path(__file__).resolve().parent
 
 
 # ==============================================================================
@@ -25,7 +29,7 @@ from train import engineer_features
 # ==============================================================================
 
 def load_model():
-    with open("models/rf_model.pkl", "rb") as f:
+    with open(HERE / "rf_model.pkl", "rb") as f:
         return pickle.load(f)
 
 def load_feature_names():
@@ -35,7 +39,7 @@ def load_feature_names():
     # to match instead of sklearn raising "unseen at fit time". Mirrors
     # backtest.py::load_rf()/rf_predict_grid()'s handling of the same drift.
     try:
-        with open("models/feature_names.pkl", "rb") as f:
+        with open(HERE / "feature_names.pkl", "rb") as f:
             return pickle.load(f)
     except FileNotFoundError:
         return None

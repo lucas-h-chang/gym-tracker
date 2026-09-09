@@ -1,11 +1,11 @@
-# Binary model artifacts
-models/rf_model.pkl
-models/feature_names.pkl
+# Binary model artifacts (frozen RF, retired to legacy/ 2026-09-09)
+legacy/rf_model.pkl
+legacy/feature_names.pkl
 
 # SQLite DB (obsolete)
 gym_history.db
 
-# PDF calendars (data already hardcoded in train.py)
+# PDF calendars (dates now live in academic_calendar.py)
 UCB_AcademicCalendar_*.pdf
 
 # Python bytecode

@@ -18,6 +18,11 @@ import pandas as pd
 # bagged deep trees fit better than boosting. So: one Random Forest, no torch.
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from pathlib import Path
+
+# Retired 2026-09-09: this pipeline is frozen and lives in legacy/. Artifacts
+# are written beside this file so a re-run can never overwrite the live models/.
+HERE = Path(__file__).resolve().parent
 
 MAX_CAPACITY = 150
 
@@ -477,11 +482,11 @@ if __name__ == "__main__":
         print(f"    {feat}: {imp:.3f}")
 
     # Save the trained Random Forest to disk as a .pkl (pickle) file.
-    with open("models/rf_model.pkl", "wb") as f:
+    with open(HERE / "rf_model.pkl", "wb") as f:
         pickle.dump(rf, f)
-    with open("models/feature_names.pkl", "wb") as f:
+    with open(HERE / "feature_names.pkl", "wb") as f:
         pickle.dump(feature_names, f)
-    print("  Saved → models/rf_model.pkl")
+    print(f"  Saved -> {HERE / 'rf_model.pkl'}")
 
     # --------------------------------------------------------------------------
     # STEP 5b: SEGMENTED METRICS
@@ -547,7 +552,7 @@ if __name__ == "__main__":
         "feature_importances": {k: round(float(v), 4) for k, v in importances.items()}
     }
 
-    with open("models/metrics.json", "w") as f:
+    with open(HERE / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
 
     print("\n=== Training Complete (test-set MAE, lower is better) ===")
@@ -560,4 +565,4 @@ if __name__ == "__main__":
     for seg, m in segmented.items():
         if m['n'] > 0:
             print(f"{seg:<28} {m['mae']:>5.2f}%  {m['bias']:>+6.2f}%  {m['baseline_mae']:>7.2f}%")
-    print(f"\nWithin ±10pp: {within_10pp:.1f}%  |  Metrics saved → models/metrics.json")
+    print(f"\nWithin ±10pp: {within_10pp:.1f}%  |  Metrics saved -> legacy/metrics.json")

@@ -1,13 +1,20 @@
 """
-backtest.py — rolling-origin evaluation harness for the curve model vs two
-baselines (equal-weight lookup, deployed RF). See SPEC_CURVE_MODEL.md §6.
+backtest.py — rolling-origin evaluation harness for the curve model against an
+equal-weight-lookup baseline. See SPEC_CURVE_MODEL.md §6.
+
+This is the 90-day-horizon gate. For the within-day level correction, the gate
+is replay_day.py, which replays a day reading by reading at production cadence.
 
 Origins: 1st of each month, 2024-01 -> 2026-06. Per origin: build a curve
 table on data strictly before that origin, predict every open 15-min slot
 for the next 90 days, and join against the actual per-(date,slot) mean
 (observed later in the same capacity_log history). This replaces a single
-70/10/20 split, which let the RF train on zero recent data and made the
-test window 40% break.
+70/10/20 split, which trained on zero recent data and made the test window
+40% break.
+
+The Random Forest baseline column was removed 2026-09-09 when the RF was
+retired to legacy/. It had been frozen since 2026-07-13, so scoring a current
+curve against it measured drift in the frozen pickle, not curve quality.
 
 Run:  python3 backtest.py
 Requires SUPABASE_URL and SUPABASE_SERVICE_KEY (or a read key) env vars.
@@ -15,7 +22,6 @@ Writes backtest_report.json next to this script.
 """
 import os
 import json
-import pickle
 import argparse
 from datetime import date, timedelta
 
@@ -26,7 +32,7 @@ import curve_model as cm
 from academic_calendar import (
     classify_date, days_to_sem_start, days_to_sem_end, get_open_hours,
 )
-from train import engineer_features, parse_supabase_timestamps
+from supabase_io import parse_supabase_timestamps
 
 MAX_CAPACITY = 150
 
@@ -119,36 +125,12 @@ def segment_for_date(d, ramp_days=10):
     return phase  # regular, first_week, holiday
 
 
-def load_rf():
-    with open("models/rf_model.pkl", "rb") as f:
-        rf = pickle.load(f)
-    # The deployed pickle may predate feature additions to engineer_features
-    # (e.g. days_to_sem_start/end) — feature_names.pkl records what it was
-    # actually fit on, so we can reindex engineer_features()'s output to match
-    # instead of erroring or silently retraining.
-    try:
-        with open("models/feature_names.pkl", "rb") as f:
-            feature_names = pickle.load(f)
-    except FileNotFoundError:
-        feature_names = None
-    return rf, feature_names
-
-
-def rf_predict_grid(rf, feature_names, grid):
-    ts = [pd.Timestamp(f"{d} {slot // 4:02d}:{(slot % 4) * 15:02d}") for d, slot in grid]
-    df = pd.DataFrame({'timestamp': ts, 'people_count': 100.0, 'percent_full': 66.7})
-    X, _ = engineer_features(df)
-    if feature_names is not None and list(X.columns) != list(feature_names):
-        X = X[feature_names]
-    return rf.predict(X)
-
-
-def run_backtest(full_slots, params, origins, rf=None, rf_feature_names=None, verbose=True):
+def run_backtest(full_slots, params, origins, verbose=True):
     """
     full_slots: output of curve_model.prepare_slots on the FULL history (used
       both as the training source, sliced per-origin by build_table's
       build_date cutoff, and as the source of ground truth).
-    Returns a long DataFrame: origin, date, slot, actual, curve, equal, rf.
+    Returns a long DataFrame: origin, date, slot, actual, curve, equal.
     """
     actual_map = {
         (row.date.date(), int(row.slot)): float(row.percent_full)
@@ -175,12 +157,11 @@ def run_backtest(full_slots, params, origins, rf=None, rf_feature_names=None, ve
         bw = params.get('blend_window_days')
         curve_preds = cm.predict(table, grid_k, blend_window_days=bw)
         eq_preds = cm.predict(eq_table, grid_k, blend_window_days=bw)
-        rf_preds = rf_predict_grid(rf, rf_feature_names, grid_k) if rf is not None else np.full(len(grid_k), np.nan)
 
-        for (d, slot), a, cpred, eqpred, rfpred in zip(grid_k, actual_k, curve_preds, eq_preds, rf_preds):
+        for (d, slot), a, cpred, eqpred in zip(grid_k, actual_k, curve_preds, eq_preds):
             records.append({
                 "origin": origin, "date": d, "slot": slot, "actual": a,
-                "curve": cpred, "equal": eqpred, "rf": rfpred,
+                "curve": cpred, "equal": eqpred,
             })
         if verbose:
             print(f"  origin {origin}: {len(grid_k):,} scored slots")
@@ -196,7 +177,7 @@ def _p90(df, pred_col):
     return round(float((df[pred_col] - df['actual']).abs().quantile(0.9)), 3)
 
 
-def report(records, model_cols=("curve", "equal", "rf")):
+def report(records, model_cols=("curve", "equal")):
     records = records.dropna(subset=['actual']).copy()
     records['hour_bucket'] = records['slot'].apply(hour_bucket)
     records['segment'] = records['date'].apply(segment_for_date)
@@ -288,7 +269,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--params-json", default=None, help='JSON overrides, e.g. \'{"halflife_days":120}\'')
     parser.add_argument("--origins", choices=["all", "tune", "holdout"], default="all")
-    parser.add_argument("--no-rf", action="store_true", help="skip the RF baseline (models/rf_model.pkl)")
     args = parser.parse_args()
 
     params = cm.DEFAULT_PARAMS.copy()
@@ -302,10 +282,8 @@ if __name__ == "__main__":
     print(f"Prepared {len(full_slots):,} (date, slot) rows spanning "
           f"{full_slots['date'].min().date()} -> {full_slots['date'].max().date()}")
 
-    rf, rf_feature_names = (None, None) if args.no_rf else load_rf()
-
     print(f"\nRunning backtest over {len(origins)} origins with params={params} ...")
-    records = run_backtest(full_slots, params, origins, rf=rf, rf_feature_names=rf_feature_names)
+    records = run_backtest(full_slots, params, origins)
 
     rep = report(records)
     print_report(f"Backtest report ({args.origins} origins, params={params})", rep)

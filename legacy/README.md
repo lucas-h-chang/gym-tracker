@@ -1,68 +1,75 @@
 # legacy/
 
-Retired artifacts from the pre-curve-model era, moved here 2026-07-21 during the
-RF-retirement cleanup (see `handoffs/HANDOFF_MODEL_REDESIGN.md` and
-`handoffs/SPEC_CURVE_MODEL.md`), plus `day_profiles_builder.py`, retired
-2026-07-22 when `day_profiles` became a live Postgres view
-(see `handoffs/SPEC_VIEWS_MIGRATION.md`).
+Frozen artifacts from earlier versions of the pipeline. **Nothing in here runs on a
+schedule, and nothing on a serving path imports from here.** Kept for provenance:
+each file is the reference source for something that replaced it.
 
-> **Note (2026-07-23):** `weekly_builder.py` was moved back OUT of here to the
-> `gym-tracker/` root and runs again in `daily.yml`. The `weekly_averages` view
-> (`003`/`004`) was reverted to a nightly table because it 57014'd — see
-> `handoffs/SPEC_WEEKLY_AVERAGES_REDESIGN.md`. Only `day_profiles` stays a view.
+Before deleting anything here, grep the repo. The rule this directory follows is
+"only move or delete if nothing on a live read path references it."
 
-## What's actually in here
+## The Random Forest (retired from inference 2026-07-21, moved here 2026-09-09)
 
-- `predictions_cache.json` — old local prediction cache, made obsolete when
-  predictions moved to the Supabase `predictions` table.
-  Already gitignored before this move (see `.gitignore` history); confirmed
-  zero code references anywhere in the repo before moving it.
-- `weekly_cache.json` — same story, for the Supabase `weekly_averages` table.
-- `day_profiles_builder.py` — used to rebuild the `day_profiles` table nightly
-  (incremental upsert) via `daily.yml`. Superseded by the `day_profiles` VIEW
-  in `migrations/002_day_profiles_view.sql`, translated line-by-line from this
-  file. No longer run; `today_builder.py` now reads the view directly. Kept as
-  the translation's reference source.
+- `train.py` — trained the single `RandomForestRegressor` that served predictions
+  until the curve model replaced it. Frozen since 2026-07-13; `train.yml` is deleted,
+  so nothing retrains it.
+- `rf_model.pkl`, `feature_names.pkl` — the frozen fitted model and the exact feature
+  list it was fitted on.
+- `metrics.json` — its last recorded scores. Nothing reads this file. The live
+  equivalent is `models/curve_metrics.json`.
+- `test_features.py`, `test_model_sanity.py` — cover `engineer_features()` and the
+  pickle. Removed from `ci.yml` in the same change; they were the only reason CI
+  installed scikit-learn.
 
-## What did NOT move here, and why
+**Why these moved when an earlier pass decided they could not.** The blocker was
+`backtest.py`, which imported `engineer_features` and loaded the pickle to compute an
+RF baseline column in every report. That column stopped being meaningful once the
+pickle froze: scoring a freshly built curve against a July artifact measures drift in
+the dead model, not quality in the live one. So the column was deleted rather than the
+import rerouted, which removed the last live reader and let these files move without
+package-ifying `legacy/` or duplicating `engineer_features`.
 
-The original cleanup plan called for moving `train.py`, `test_model_sanity.py`,
-`test_features.py`, `models/rf_model.pkl`, and `models/feature_names.pkl` here
-too, since the Random Forest they implement is no longer read at inference —
-`predictions_builder.py` reads `models/curves.json` via `curve_model.py` instead.
+**Running the archive.** These files resolve their artifacts relative to their own
+directory, not `models/`, so a re-run cannot overwrite a live artifact. `pytest.ini`
+excludes `legacy/` from default collection because scikit-learn is no longer in
+`requirements.txt`. To run it anyway:
 
-That move did not happen. Grepping the repo first (per the cleanup's own rule:
-"only move/delete if nothing on a live read path references it") found that
-`backtest.py` — the rolling-origin evaluation harness that is the actual gate
-for every curve-model tuning decision (see `SPEC_CURVE_MODEL.md` §5, §6) —
-still does:
-
-```python
-from train import engineer_features, parse_supabase_timestamps
-...
-with open("models/rf_model.pkl", "rb") as f: ...
-with open("models/feature_names.pkl", "rb") as f: ...
+```
+pip install scikit-learn
+python3 -m pytest legacy/
 ```
 
-to compute the RF baseline column in every backtest report (`backtest_report.json`),
-exactly as `HANDOFF_MODEL_REDESIGN.md` §7 intended ("archive RF code ... don't
-delete — it's the comparison baseline").
+## The pre-Supabase caches (moved here 2026-07-21)
 
-> The two RF-specific one-off analysis scripts that shared this dependency —
-> `eval_model.py` and `compare_cutoffs.py` — were deleted 2026-07-23 as orphaned
-> (nothing referenced them; `backtest.py`'s baseline column supersedes them).
-> `backtest.py` remains the sole live reader that keeps `train.py` here.
+- `predictions_cache.json` — local prediction cache, obsolete once predictions moved
+  to the Supabase `predictions` table.
+- `weekly_cache.json` — same story, for `weekly_averages`.
 
-Moving `train.py` out of the project root would have broken `backtest.py` without a
-messier fix (package-ifying `legacy/`, or duplicating `engineer_features`), which
-is a bigger change than "mechanical de-duplication and dead-code removal" should
-make. So `train.py`, `test_model_sanity.py`, `test_features.py`,
-`models/rf_model.pkl`, and `models/feature_names.pkl` all stay in the project
-root, unmoved, exactly as they were — they're frozen (nothing retrains them now
-that `train.yml` is deleted) but still live-read by the backtest/eval tooling.
+Both are gitignored, so they exist on disk only.
 
-If a future pass wants to actually relocate them, the clean way is to make
-`legacy/` an importable package (or fetch the RF baseline as read-only historical
-data instead of live-loading the pickle) and update `backtest.py` accordingly —
-that's a real refactor, not a move, and belongs in its own change with its own
-verification.
+## `day_profiles_builder.py` (retired 2026-07-22)
+
+Rebuilt the `day_profiles` table nightly via `daily.yml`. Superseded by the
+`day_profiles` VIEW in `migrations/002_day_profiles_view.sql`, which was translated
+line by line from this file. Kept as that translation's reference source.
+
+Its consumer is gone too: `today_builder.py` stopped reading `day_profiles` on
+2026-08-31 when the similarity nowcast was replaced by the fitted level correction.
+
+## Deleted outright, not archived
+
+- `eval_model.py`, `compare_cutoffs.py` (2026-07-23) — RF-specific one-offs, superseded
+  by `backtest.py`'s baseline column.
+- `nowcast_carry.py` + `nowcast_carry_report.json` (2026-09-09) — the exploratory
+  measurement that established the carry structure. It self-marked as superseded; its
+  conclusions are written up in `handoffs/SPEC_TODAY_BUILDER_REWRITE.md`.
+- `blend_sweep.py` (2026-09-09) — swept `blend_window_days` for a blend that no longer
+  exists.
+- `accuracy_check.py` (2026-09-09) — ad-hoc MAE table, orphaned since 2026-07-13 and
+  superseded by the `prediction_accuracy` view (`migrations/012`).
+
+## Related reading
+
+`handoffs/HANDOFF_MODEL_REDESIGN.md` (why the RF was replaced),
+`handoffs/SPEC_CURVE_MODEL.md` (what replaced it),
+`handoffs/SPEC_TODAY_BUILDER_REWRITE.md` (the within-day correction),
+`handoffs/SPEC_VIEWS_MIGRATION.md` (the `day_profiles` view).

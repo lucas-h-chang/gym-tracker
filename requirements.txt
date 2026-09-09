@@ -1,12 +1,14 @@
 # Runtime + dev dependencies for the Bear Meter data pipeline.
 #
-# The model is a single scikit-learn Random Forest — no torch, no XGBoost.
-# (The old PyTorch MLP was removed: measured honestly it scored worse than the
-# RF, and XGBoost lost to the RF on every config for this calendar-lookup task.)
+# The served model is a recency-weighted curve lookup (curve_model.py) plus a
+# fitted within-day level correction (carry_model.py). Both are plain
+# numpy/pandas, so there is no ML framework here at all.
+#
+# scikit-learn was dropped 2026-09-09 with the Random Forest, which is frozen in
+# legacy/. Install it by hand if you ever need to run that archive.
 supabase
 pandas
 numpy
-scikit-learn
 requests
 pytz
 cryptography

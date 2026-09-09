@@ -49,7 +49,8 @@ DEFAULT_PARAMS = {
 #     distinct days/year), and pulling them harder toward the phase-wide
 #     curve washes out exactly the character that makes a holiday different
 #     from a regular day.
-# See backtest_report.json for the confirmation run on HOLDOUT_ORIGINS
+# Confirmed on HOLDOUT_ORIGINS by `python3 backtest.py --origins holdout`, which
+# writes backtest_report.json locally (gitignored since 2026-09-09, so regenerate it)
 # (2025-07 -> 2026-06) — as of this tuning pass it does NOT clear the §5
 # Step 3 gate (good-day rate and the "holiday" segment both trail the
 # deployed RF baseline on properly held-out, leakage-free origins); see
