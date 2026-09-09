@@ -26,6 +26,23 @@
       --mono:       'JetBrains Mono', monospace;
     }
 
+    /* Vertical scrolling only. body's overflow-x below already stops the
+       document from being wider than the screen, but on a phone that is not the
+       whole story: the viewport still rubber-bands sideways under a horizontal
+       drag, which reads as the page being swipeable left/right.
+       overscroll-behavior-x kills that bounce and, with it, the browser's edge
+       swipe-to-go-back on the page itself. Set on html, not body: overflow
+       propagates from body to the viewport, overscroll-behavior does not, so
+       the root element's value is the one the viewport uses. Deliberately NOT
+       paired with overflow-x here - an overflow on the root makes html itself
+       the scroll container, which iOS Safari mishandles badly enough to lose
+       vertical scrolling outright. body keeps that job, as it always did. This page has no
+       horizontal scroller of its own, so nothing here needs the matching
+       overscroll-behavior-x: contain the other pages use. */
+    html {
+      overscroll-behavior-x: none;
+    }
+
     body {
       background: var(--bg);
       color: var(--text);

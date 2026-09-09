@@ -50,6 +50,23 @@
       --cap-dark-red:  #b91c1c;
     }
 
+    /* Vertical scrolling only. body's overflow-x below already stops the
+       document from being wider than the screen, but on a phone that is not the
+       whole story: the viewport still rubber-bands sideways under a horizontal
+       drag, which reads as the page being swipeable left/right.
+       overscroll-behavior-x kills that bounce and, with it, the browser's edge
+       swipe-to-go-back on the page itself. Set on html, not body: overflow
+       propagates from body to the viewport, overscroll-behavior does not, so
+       the root element's value is the one the viewport uses. Deliberately NOT
+       paired with overflow-x here - an overflow on the root makes html itself
+       the scroll container, which iOS Safari mishandles badly enough to lose
+       vertical scrolling outright. body keeps that job, as it always did. The day-pill row still
+       scrolls sideways on its own; it carries overscroll-behavior-x: contain so
+       reaching its end does not chain the swipe back out to the viewport. */
+    html {
+      overscroll-behavior-x: none;
+    }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -296,9 +313,9 @@
          mobile browser reads as "start selecting". Without these, dragging
          across the curve on iOS raises the blue selection overlay and the
          long-press Copy / Look Up callout on top of the chart you are trying
-         to read. The canvas already takes touch-action: none below, which stops
-         the drag being claimed as a PAN; this stops the same drag being claimed
-         as a SELECTION. Two different browser behaviours, two different
+         to read. The canvas already takes touch-action: pan-y below, which
+         stops a sideways drag being claimed as a PAN; this stops the same drag
+         being claimed as a SELECTION. Two different browser behaviours, two different
          properties, and the chart needs both suppressed to be scrubbable.
 
          On the wrapper rather than the canvas so the tooltip, the pulse dot and
@@ -332,12 +349,26 @@
     }
     .chart-wrap canvas {
       display: block;
-      /* Scrubbing the chart must not also scroll the page. Without this a drag
-         across the curve is claimed by the browser as a vertical pan, so the
-         readout jitters while the page slides under your finger. iOS gets the
-         same behaviour from GymChart's DragGesture(minimumDistance: 0), which
-         consumes the drag before the enclosing ScrollView sees it. */
-      touch-action: none;
+      /* pan-y, not none. Scrubbing the chart must not also scroll the page, and
+         `none` did stop that by refusing the browser every gesture on the
+         canvas - including the vertical one that scrolls. On a phone in
+         landscape the wrapper is 340px of a ~390px-tall viewport, so almost the
+         whole screen became a surface that could not be scrolled: a swipe
+         starting on the chart did nothing, and only one that happened to start
+         on a card moved the page.
+
+         pan-y splits the two gestures by direction instead of switching both
+         off. A vertical drag goes to the page and scrolls it. A horizontal drag
+         is left to the canvas, and horizontal is the only direction the scrub
+         reads, so the readout still tracks and no longer jitters against a
+         scrolling page. When the browser does claim a vertical drag it fires
+         touchcancel here, which the lift handler further down already treats as
+         "finger gone" and clears the tooltip on.
+
+         iOS gets the same split from GymChart's DragGesture, which consumes the
+         horizontal drag before the enclosing ScrollView sees it while leaving
+         the vertical one to scroll. */
+      touch-action: pan-y;
     }
 
     /* ── Day Pills ── */
@@ -618,7 +649,7 @@
       .chart-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 14px;
+        gap: 18px;
         /* 24px (the desktop value) on top of chartTopPad and the empty band the
            110 ceiling leaves above the 100% tick put ~65px between the day pills
            and the top gridline, which read as the chart having come unmoored
@@ -628,6 +659,7 @@
       }
       .day-pills {
         overflow-x: auto;
+        overscroll-behavior-x: contain;
         -webkit-overflow-scrolling: touch;
         padding-bottom: 4px;
         width: 100%;
@@ -643,9 +675,9 @@
            Horizontal is already maxed (the negative margins below run the plot
            edge to edge), so height is the only side of the height:width ratio
            left to move, and that ratio is what makes a variation legible. On a
-           typical phone this lands near 350px, taking a 10pp wiggle from about
-           18px to about 29px. */
-        height: clamp(260px, 44vh, 430px);
+           typical phone this lands near 335px, taking a 10pp wiggle from about
+           18px to about 28px. */
+        height: clamp(250px, 42vh, 410px);
         /* Bleed out of the section's gutter so the plot runs edge to edge.
            Nothing is lost on the left: Chart.js reserves that strip inside the
            canvas for the "100%"/"75%" labels, so those become the buffer
@@ -688,6 +720,21 @@
         font-size: 18px;
       }
       .cal-header { margin-bottom: 6px; }
+    }
+
+    /* A landscape phone is short, not narrow: roughly 390px tall and 850px
+       wide. That is wider than the 768px breakpoint above, so every mobile rule
+       in it is skipped and the chart falls back to its desktop height - 340px on a
+       ~390px viewport, i.e. the chart alone is taller than the screen it has to
+       share with the header, the cards and the hint text.
+
+       Keyed on height and orientation rather than width, because width is the
+       one dimension that is not the problem here. It sits after the 768px block
+       so it also wins on a small landscape phone, where both match and the
+       portrait height would otherwise apply. A wide short plot is a good shape
+       for a day curve anyway; this only stops it eating the whole screen. */
+    @media (max-height: 560px) and (orientation: landscape) {
+      .chart-wrap { height: clamp(180px, 58vh, 260px); }
     }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
@@ -1035,6 +1082,17 @@ function makeExternalTooltip(tooltipId) {
       return;
     }
 
+    // Every row can be filtered away while the tooltip still counts as active:
+    // Chart.js applies the filter when it builds the items but never re-checks
+    // whether any survived, so it would happily show a title over an empty box.
+    // Reachable via the Tail dataset, whose points are hoverable scaffolding
+    // with no row of their own (see the filter, and the dataset's comment).
+    const rows = (tt.body || []).reduce((n, b) => n + b.lines.length, 0);
+    if (!rows) {
+      el.style.opacity = 0;
+      return;
+    }
+
     let html = '';
     if (tt.title?.length) {
       html += `<div class="tt-title">${tt.title[0]}</div>`;
@@ -1225,45 +1283,6 @@ const capacityGradientPlugin = {
       fg.addColorStop(1,       `rgba(185,28,28,${fillOp})`);
       ds.backgroundColor = fg;
     });
-  }
-};
-
-// Strokes the forecast line across the minutes between the last completed
-// reading and "now" — the stretch datasets[1] deliberately no longer spans, so
-// that its fill cannot stack on top of the actual line's fill there. Line only,
-// never a fill: those minutes already happened, so the shading under them is
-// the actual series' to own. See the ghostTail block in updatePredChart().
-const ghostTailPlugin = {
-  id: 'ghostTail',
-  afterDatasetDraw(chart, args) {
-    // Straight after the predicted dataset (index 1), not after all of them:
-    // afterDatasetsDraw would stroke this over the live dot, which is the whole
-    // thing the dot needs to sit on top of.
-    if (args.index !== 1) return;
-    const pts = chart.options.plugins?.ghostTail?.seg?.pts;
-    if (!pts || pts.length < 2 || !(pts[pts.length - 1].x > pts[0].x)) return;
-    const { ctx, scales } = chart;
-    const ds = chart.data.datasets[1];
-    ctx.save();
-    ctx.beginPath();
-    // A polyline, not one segment: when a scrape is missed the tail spans whole
-    // forecast slots, and running straight past them would hide the very shape
-    // the dashed line exists to show.
-    pts.forEach((pt, i) => {
-      const px = scales.x.getPixelForValue(pt.x);
-      const py = scales.y.getPixelForValue(pt.y);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    // Reuses the very gradient object capacityGradientPlugin built for the
-    // predicted dataset, so the tail tracks its colour at every height rather
-    // than being a flat grey that drifts away from it as the curve climbs.
-    ctx.strokeStyle = ds.borderColor;
-    ctx.lineWidth   = ds.borderWidth;
-    ctx.setLineDash(ds.borderDash || [6, 5]);
-    ctx.lineCap  = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    ctx.restore();
   }
 };
 
@@ -1596,7 +1615,7 @@ function updatePredChart(data) {
   // all end at one spot instead of the dot floating off the end of it, and the
   // sliver of time between the last bin and now gets shaded as "actual"
   // since it's already passed, instead of being left blank.
-  let ghostTail = null;
+  let tailPoints = [];
   if (isToday && actualPoints.length && gymIsOpen) {
     const lastActual = actualPoints[actualPoints.length - 1];
     const liveX = Math.min(Math.max(nowVal, lastActual.x), xMax);
@@ -1619,9 +1638,9 @@ function updatePredChart(data) {
     //
     // The line still has to cross those minutes, or the dashed curve would
     // begin at "now" and the divergence since the last reading would be
-    // invisible. ghostTailPlugin strokes that stretch on its own, so the eye
-    // sees one continuous dashed line from the anchor while only one fill ever
-    // covers a given x.
+    // invisible. The Tail dataset carries that stretch on its own with fill
+    // off, so the eye sees one continuous dashed line from the anchor while
+    // only one fill ever covers a given x.
     if (predPoints.length) {
       // Forecast slots that "now" has already passed. Normally none: a reading
       // lands every 15 minutes, so the anchor sits between the last reading and
@@ -1650,7 +1669,10 @@ function updatePredChart(data) {
       predPoints = [{ x: liveX, y: yAt, label: livePoint.label, _anchor: true }, ...future];
       const tail = [{ x: lastActual.x, y: lastActual.y }, ...passed];
       if (liveX > tail[tail.length - 1].x) tail.push({ x: liveX, y: yAt });
-      ghostTail = { pts: tail };
+      // Only worth drawing when it actually spans something. A single point
+      // renders as nothing, but it would still put a stray hover target under
+      // the live dot.
+      if (tail.length >= 2 && tail[tail.length - 1].x > tail[0].x) tailPoints = tail;
     }
   } else if (isToday && actualPoints.length && nowVal >= closeH) {
     // Day is over. There's no live point to extend to, and the predicted
@@ -1687,7 +1709,7 @@ function updatePredChart(data) {
   if (predChart) {
     predChart.data.datasets[0].data = actualPoints;
     predChart.data.datasets[1].data = predPoints;
-    predChart.options.plugins.ghostTail.seg = ghostTail;
+    predChart.data.datasets[2].data = tailPoints;
     predChart.options.plugins.nowLine.show  = showNow;
     predChart.options.plugins.nowLine.value = nowVal;
     predChart.options.plugins.closedHours.open  = openH;
@@ -1743,8 +1765,8 @@ function updatePredChart(data) {
           //     dashed line, which is exactly what happened when it was tried.
           //   - drawActiveElementsOnTop is off below, so the white hover marker
           //     on an earlier actual point cannot jump above the live point.
-          //   - ghostTailPlugin strokes on the predicted dataset's own pass
-          //     rather than after all of them, for the same reason.
+          //   - The Tail dataset takes the HIGHEST order, so it is painted
+          //     first and cannot land over the dot either.
           pointRadius: (c) => {
             const show = c.chart.options.plugins?.nowLine?.show;
             return (show && c.dataIndex === c.dataset.data.length - 1) ? 5 : 0;
@@ -1801,6 +1823,47 @@ function updatePredChart(data) {
           // Higher than Actual, so this is painted first and sits underneath it.
           order: 2,
           _predicted: true,
+        },
+        {
+          // The minutes between the last completed reading and "now". This is
+          // the forecast's line continuing across a stretch the Predicted
+          // dataset deliberately no longer spans, so that its fill cannot stack
+          // on top of the actual line's fill there (see the tailPoints block in
+          // updatePredChart). Same dashes, same gradient, no fill of its own:
+          // those minutes already happened, so the shading under them is the
+          // actual series' to own.
+          //
+          // A dataset rather than a hand-stroked plugin, because a plugin
+          // painting through getPixelForValue has no idea the 320ms entrance
+          // tween is running. It snapped to its final position on the first
+          // frame while both real lines were still rising off the baseline,
+          // which read as a dashed stub floating over an empty chart.
+          label: 'Tail',
+          data: tailPoints,
+          borderColor: '#9ca3af',
+          backgroundColor: 'transparent',
+          borderWidth: 2.6,
+          borderDash: [6, 5],
+          borderCapStyle: 'round',
+          borderJoinStyle: 'round',
+          // Scaffolding, not readable data: it re-plots forecast slots the
+          // Predicted dataset already gave up, so a hover here would offer a
+          // second row for a slot that is already in the tooltip. No markers,
+          // and the tooltip filter drops it outright.
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          // Matches Predicted, so the bridge curves into the dashed line
+          // instead of kinking where the two meet.
+          tension: 0.35,
+          fill: false,
+          // Highest order = painted first = furthest back. That is where the
+          // old plugin already put it: it stroked after the Predicted dataset
+          // but before Actual, so the green fill has always washed over these
+          // dashes. Keeping it last preserves that exactly.
+          order: 3,
+          // Picks up the forecast's 0.55-opacity gradient from
+          // capacityGradientPlugin, which walks every dataset.
+          _predicted: true,
         }
       ]
     },
@@ -1815,7 +1878,6 @@ function updatePredChart(data) {
       interaction: { mode: 'nearest', intersect: false, axis: 'x' },
       plugins: {
         capacityGradient: { enabled: true },
-        ghostTail: { seg: ghostTail },
         closedHours: { show: true, open: openH, close: closeH },
         nowLine: { show: showNow, value: nowVal },
         legend:  { display: false },
@@ -1836,7 +1898,8 @@ function updatePredChart(data) {
           // while the connector carried the live VALUE; the moment it started
           // carrying the forecast's value instead, the y stopped matching and
           // the row came back.
-          filter: (item) => !(item.datasetIndex === 1 && item.raw && item.raw._anchor),
+          filter: (item) => item.datasetIndex !== 2 &&
+                            !(item.datasetIndex === 1 && item.raw && item.raw._anchor),
           callbacks: {
             title: (items) => items[0].raw.label || '',
             label: (item) => `${item.dataset.label}: ${Math.round(item.raw.y)}%`,
@@ -2216,8 +2279,7 @@ function renderInsightCards(data) {
 async function init() {
   // chart.js loads with `defer`, so it isn't available until DOMContentLoaded
   // (which gates this init call). Register plugins here, not at parse time.
-  Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin,
-                 ghostTailPlugin);
+  Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin);
   updateStatusBar();
   // Live capacity is server-cached for 30s (see api/live-capacity.js), so
   // polling any faster than that just re-fetches the same cached value.
