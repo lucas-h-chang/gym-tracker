@@ -1231,14 +1231,20 @@ const ghostTailPlugin = {
     // afterDatasetsDraw would stroke this over the live dot, which is the whole
     // thing the dot needs to sit on top of.
     if (args.index !== 1) return;
-    const seg = chart.options.plugins?.ghostTail?.seg;
-    if (!seg || !(seg.x1 > seg.x0)) return;
+    const pts = chart.options.plugins?.ghostTail?.seg?.pts;
+    if (!pts || pts.length < 2 || !(pts[pts.length - 1].x > pts[0].x)) return;
     const { ctx, scales } = chart;
     const ds = chart.data.datasets[1];
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(scales.x.getPixelForValue(seg.x0), scales.y.getPixelForValue(seg.y0));
-    ctx.lineTo(scales.x.getPixelForValue(seg.x1), scales.y.getPixelForValue(seg.y1));
+    // A polyline, not one segment: when a scrape is missed the tail spans whole
+    // forecast slots, and running straight past them would hide the very shape
+    // the dashed line exists to show.
+    pts.forEach((pt, i) => {
+      const px = scales.x.getPixelForValue(pt.x);
+      const py = scales.y.getPixelForValue(pt.y);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
     // Reuses the very gradient object capacityGradientPlugin built for the
     // predicted dataset, so the tail tracks its colour at every height rather
     // than being a flat grey that drifts away from it as the curve climbs.
@@ -1608,16 +1614,34 @@ function updatePredChart(data) {
     // sees one continuous dashed line from the anchor while only one fill ever
     // covers a given x.
     if (predPoints.length) {
-      const nxt  = predPoints[0];
-      const span = nxt.x - lastActual.x;
-      const t    = span > 0 ? Math.max(0, Math.min(1, (liveX - lastActual.x) / span)) : 1;
-      const yAt  = Math.round((lastActual.y + (nxt.y - lastActual.y) * t) * 10) / 10;
+      // Forecast slots that "now" has already passed. Normally none: a reading
+      // lands every 15 minutes, so the anchor sits between the last reading and
+      // the next slot. But a missed or late scrape leaves whole slots behind
+      // "now", and they have to come OUT of the predicted dataset — the anchor
+      // is its first point, so a 9:15 slot sitting in front of a 9:30 anchor
+      // makes the dataset's x run BACKWARDS. Chart.js draws points in array
+      // order, so that folded the dashed line back over itself (two dashed
+      // strands over the same minutes) and, worse, handed the tension-0.35
+      // bezier a negative x-step, whose control points then swept a straight
+      // ramp across the whole plot and dragged the forecast fill with it.
+      const passed = predPoints.filter(p => p.x <= liveX);
+      const future = predPoints.filter(p => p.x >  liveX);
+      // Interpolate along whatever brackets "now": the last passed slot when
+      // there is one, otherwise the reading itself, which is the shared origin
+      // the comment above describes.
+      const prev = passed.length ? passed[passed.length - 1] : lastActual;
+      const nxt  = future.length ? future[0] : null;
+      const span = nxt ? nxt.x - prev.x : 0;
+      const t    = span > 0 ? Math.max(0, Math.min(1, (liveX - prev.x) / span)) : 1;
+      const yAt  = nxt ? Math.round((prev.y + (nxt.y - prev.y) * t) * 10) / 10 : prev.y;
       // _anchor marks this as scaffolding, not a forecast slot. Real forecast
       // points sit on 15-min boundaries; this one sits at "now" purely so the
       // predicted fill starts where the actual fill stops. The tooltip filter
       // keys off the flag so it never offers "Predicted: 67%" for an 11:47.
-      predPoints = [{ x: liveX, y: yAt, label: livePoint.label, _anchor: true }, ...predPoints];
-      ghostTail  = { x0: lastActual.x, y0: lastActual.y, x1: liveX, y1: yAt };
+      predPoints = [{ x: liveX, y: yAt, label: livePoint.label, _anchor: true }, ...future];
+      const tail = [{ x: lastActual.x, y: lastActual.y }, ...passed];
+      if (liveX > tail[tail.length - 1].x) tail.push({ x: liveX, y: yAt });
+      ghostTail = { pts: tail };
     }
   } else if (isToday && actualPoints.length && nowVal >= closeH) {
     // Day is over. There's no live point to extend to, and the predicted
