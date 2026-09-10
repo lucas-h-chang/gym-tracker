@@ -9,8 +9,16 @@
 # also halved api/_sensor.js's STALL_RUN lookback from ~90 min to ~37 min.
 #
 # What is left here recomputes from data already in Supabase, so a runner delay
-# costs nothing. The filename stays put because cron-job.org dispatches by it.
-name: Scrape Gym Data
+# costs nothing.
+#
+# THE FILENAME IS NOT THE JOB. cron-job.org dispatches this workflow by its
+# path, so renaming the file breaks the 15-minute trigger until that job's URL
+# is updated to match — and GitHub treats a renamed workflow as a new one, so
+# dispatching by numeric id breaks too. The displayed name below was corrected
+# on 2026-09-09 because that costs nothing and is what you actually read in the
+# Actions tab. To finish the job: create the renamed file, repoint cron-job.org,
+# confirm one run lands, then delete this file. Do not rename it in one step.
+name: Today's Forecast + Notifications
 
 on:
   workflow_dispatch:  # triggered externally by cron-job.org every 15 minutes
