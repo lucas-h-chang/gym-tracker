@@ -23,6 +23,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { ptNow, getOpenHours } = require('./_hours');
 const { isSensorStalled } = require('./_sensor');
+const { insertCapacityRow } = require('./_supabase_retry');
 
 const DENSITY_URL = 'https://api.density.io/v2/spaces/spc_863128347956216317/count';
 const MAX_CAP = 150;
@@ -98,19 +99,31 @@ module.exports = async function handler(req, res) {
     console.warn(`[scrape] SENSOR STALL: ${stall.reason} (since ${stall.since}) — logging ${count} with sensor_ok=false`);
   }
 
-  const { error } = await supabase.from('capacity_log').insert({
+  const row = {
     timestamp,
     people_count: count,
     percent_full: pct,
     sensor_ok: !stall.stalled,
-  });
+  };
+  const { error, attempts } = await insertCapacityRow(supabase, row);
 
   if (error) {
-    console.error('[scrape] capacity_log insert failed:', JSON.stringify(error));
-    return res.status(500).json({ error: 'insert failed', details: error.message });
+    console.error(
+      `[scrape] capacity_log insert failed after ${attempts} attempts:`,
+      JSON.stringify(error)
+    );
+    return res.status(500).json({
+      error: 'insert failed',
+      attempts,
+      details: error.message,
+    });
   }
 
-  console.log(`[scrape] ${timestamp} Saved: ${count} people (${pct}%)${stall.stalled ? ' [sensor_ok=false]' : ''}`);
+  console.log(
+    `[scrape] ${timestamp} Saved: ${count} people (${pct}%)` +
+    `${stall.stalled ? ' [sensor_ok=false]' : ''}` +
+    `${attempts > 1 ? ` after ${attempts} attempts` : ''}`
+  );
   return res.status(200).json({
     timestamp,
     people_count: count,
