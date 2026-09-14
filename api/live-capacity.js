@@ -12,8 +12,12 @@ const MAX_CAP     = 150;
 const FRESH_SECS  = 30;
 
 module.exports = async function handler(req, res) {
-  // Edge cache: ~1 origin hit per 30s window regardless of client count.
-  res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+  // Supabase is the one shared 30-second cache for this endpoint. Do not add a
+  // second Vercel/browser cache here: stacking the two freshness windows made
+  // the first request after an edge entry expired receive the old percentage
+  // while Vercel refreshed it in the background.
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });

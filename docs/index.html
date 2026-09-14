@@ -2281,7 +2281,8 @@ async function init() {
   // (which gates this init call). Register plugins here, not at parse time.
   Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin);
   updateStatusBar();
-  // Live capacity is server-cached for 30s (see api/live-capacity.js), so
+  // Live capacity is shared through a 30s Supabase cache (see
+  // api/live-capacity.js), so
   // polling any faster than that just re-fetches the same cached value.
   setInterval(updateStatusBar, 30000);
 
