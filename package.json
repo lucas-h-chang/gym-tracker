@@ -6,6 +6,12 @@
     "@supabase/supabase-js": "^2.45.0"
   },
   "scripts": {
-    "test": "node api/_sensor.test.js && node api/_supabase_retry.test.js"
+    "test": "node api/_sensor.test.js && node api/_supabase_retry.test.js && node --test tests/*.test.js",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.63.0",
+    "chart.js": "4.4.3"
   }
 }

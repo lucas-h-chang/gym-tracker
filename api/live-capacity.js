@@ -7,7 +7,7 @@ const supabase = createClient(
 
 const { isSensorStalled } = require('./_sensor');
 
-const DENSITY_URL = 'https://api.density.io/v2/spaces/spc_863128347956216317/count';
+const { readDensity } = require('./_density');
 const MAX_CAP     = 150;
 const FRESH_SECS  = 30;
 
@@ -43,7 +43,8 @@ module.exports = async function handler(req, res) {
     ? (Date.now() - new Date(cached.recorded_at).getTime()) / 1000
     : Infinity;
 
-  if (cached && ageSecs < FRESH_SECS) {
+  if (cached && ageSecs >= 0 && ageSecs < FRESH_SECS &&
+      Number.isFinite(cached.capacity_pct) && cached.capacity_pct >= 0) {
     return res.status(200).json({
       capacity_pct: cached.capacity_pct,
       recorded_at:  cached.recorded_at,
@@ -58,12 +59,7 @@ module.exports = async function handler(req, res) {
 
   // 2. Cache miss → fetch Density.
   try {
-    const dResp = await fetch(DENSITY_URL, {
-      headers: { 'Authorization': `Bearer ${process.env.DENSITY_TOKEN}` },
-    });
-    if (!dResp.ok) throw new Error(`Density returned ${dResp.status}`);
-    const body  = await dResp.json();
-    const count = body.count;
+    const count = await readDensity();
     const pct   = Math.round((count / MAX_CAP) * 1000) / 10;
     const now   = new Date().toISOString();
 
@@ -97,8 +93,10 @@ module.exports = async function handler(req, res) {
     });
   } catch (err) {
     console.error('[live-capacity] density fetch failed:', err);
-    // Fallback: return whatever stale value we have so the UI stays alive.
-    if (cached) {
+    // A recent fallback is explicitly marked stale. Never serve an hours-old
+    // percentage as a successful live response to older clients.
+    if (cached && ageSecs >= 0 && ageSecs <= 120 &&
+        Number.isFinite(cached.capacity_pct) && cached.capacity_pct >= 0) {
       return res.status(200).json({
         capacity_pct:   cached.capacity_pct,
         recorded_at:    cached.recorded_at,

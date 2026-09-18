@@ -5,9 +5,14 @@ on:
     - cron: '0 8 * * *'  # midnight PT (PDT = UTC-7, so 8:00 UTC ≈ midnight PT)
   workflow_dispatch:       # manual trigger
 
+concurrency:
+  group: daily-publication
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out this repo

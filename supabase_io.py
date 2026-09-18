@@ -8,7 +8,31 @@ This is now the single definition. carry_data.py and backtest.py kept private
 copies until 2026-09-09; nothing enforced that the three agreed, and a silent
 divergence here shifts every timestamp by an hour at a DST boundary.
 """
+import os
+import time
 import pandas as pd
+
+
+def client():
+    """Create credentials/network clients only at an entry point, never on import."""
+    from supabase import create_client
+    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+
+def execute_read(make_query, *, attempts=3, sleep=time.sleep):
+    """Retry only transient reads. Never replay an arbitrary database write."""
+    for attempt in range(attempts):
+        try:
+            return make_query().execute()
+        except Exception as exc:
+            code = str(getattr(exc, "code", ""))
+            transient = code in {"502", "503", "504", "57014", "08006"}
+            transient |= any(s in str(exc).lower() for s in (
+                "bad gateway", "service unavailable", "gateway timeout",
+                "connection", "timed out", "timeout", "temporarily unavailable"))
+            if not transient or attempt + 1 == attempts:
+                raise
+            sleep(2 ** attempt)
 
 
 def parse_supabase_timestamps(series):
@@ -22,29 +46,27 @@ def parse_supabase_timestamps(series):
     )
 
 
-def paginated_fetch(sb, table, select, *, gte=None, lte=None, order="timestamp", batch=9000):
-    """
-    Reproduces the `while True: .range(offset, offset+batch-1); ... if len(page) <
-    batch: break` pagination loop duplicated across weekly_builder.py,
-    day_profiles_builder.py, today_builder.py, predictions_builder.py, and
-    build_curves.py. gte/lte (when given) filter on the same column used for
-    `order` — true for every call site refactored onto this helper.
+def paginated_fetch(sb, table, select, *, gte=None, lte=None, order="timestamp", batch=1000):
+    """Fetch a stable ordered table, respecting server-side response caps.
 
-    Call sites with extra .eq() filters (e.g. today_builder's day_profiles query)
-    or an exclusive `.lt()` bound (e.g. predictions_builder's stale-row purge
-    query) don't map cleanly onto this signature and were left as their own
-    loops rather than forced to fit.
+    Filtering uses the ordering column. Read retries recreate each request.
+    1,000-row pages avoid the gateway timeout seen in the weekly curve build.
+    Only an empty page ends the scan; a smaller response may be a server cap.
     """
     offset, rows = 0, []
     while True:
-        q = sb.table(table).select(select)
-        if gte is not None:
-            q = q.gte(order, gte)
-        if lte is not None:
-            q = q.lte(order, lte)
-        page = q.range(offset, offset + batch - 1).order(order).execute().data
+        def query():
+            q = sb.table(table).select(select)
+            if gte is not None:
+                q = q.gte(order, gte)
+            if lte is not None:
+                q = q.lte(order, lte)
+            return q.range(offset, offset + batch - 1).order(order)
+        page = execute_read(query).data
         rows.extend(page)
-        if len(page) < batch:
+        # A server-side response cap can be lower than the requested range.
+        # Advance by what arrived and stop only on an empty page.
+        if not page:
             break
-        offset += batch
+        offset += len(page)
     return rows

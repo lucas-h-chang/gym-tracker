@@ -98,11 +98,11 @@ def blocks():
         (ROOT / "api" / "_hours.js", "//", "CLOSURES",
          lambda: "const CLOSURES = [\n" + _js_closures() + "\n];"),
 
-        (ROOT / "docs" / "index.html", "//", "SUMMER_RANGES",
+        (ROOT / "docs" / "js" / "calendar.js", "//", "SUMMER_RANGES",
          lambda: "const SUMMER_RANGES = [\n" + _js_pairs(cal.SUMMER_RANGES) + "\n];"),
-        (ROOT / "docs" / "index.html", "//", "BREAK_RANGES",
+        (ROOT / "docs" / "js" / "calendar.js", "//", "BREAK_RANGES",
          lambda: "const BREAK_RANGES = [\n" + _breaks_js() + "\n];"),
-        (ROOT / "docs" / "index.html", "//", "CLOSURES",
+        (ROOT / "docs" / "js" / "calendar.js", "//", "CLOSURES",
          lambda: "const CLOSURES = [\n" + _js_closures() + "\n];"),
 
         (ROOT / ".github" / "workflows" / "freshness.yml", "#", "SUMMER_RANGES",

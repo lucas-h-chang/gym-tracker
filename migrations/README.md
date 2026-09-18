@@ -1,15 +1,15 @@
 # migrations/
 
-Applied-state ledger for the Supabase schema. **Migrations are not tracked by any
-tool** — there is no `supabase migration` state table here. Each file is pasted into
-the Supabase SQL editor by hand, so this ledger is the only record of what actually
-ran.
+Applied-state ledger for the Supabase schema. **Migration 016 introduces `public.schema_migrations`** for the verified forward
+baseline (013–016). It was applied on 2026-09-18. Historical 001–012 were applied manually;
+do not replay them wholesale, because some were subsequently reverted. This file records
+verified state alongside the database-owned ledger.
 
 Keep it accurate. Add a row when you add a file, and update the row when you apply it.
 
 ## Status
 
-All twelve were **verified applied on 2026-09-09** by probing the live database
+The first twelve were **verified applied on 2026-09-09** by probing the live database
 through the public REST API. The "verified by" column is the check that was run, so
 anyone can repeat it.
 
@@ -27,6 +27,10 @@ anyone can repeat it.
 | 010 | `holiday_closures.sql` | ✅ applied | `is_rsf_closed_day` → `true` for 2026-11-26, 2026-12-24, 2026-12-25, 2027-01-01 |
 | 011 | `device_tokens_anon_upsert.sql` | ✅ applied | `device_tokens` responds `42501 permission denied` (exists, backend-only) |
 | 012 | `prediction_snapshots.sql` | ✅ applied | `prediction_snapshots` responds `42501 permission denied` (exists, backend-only) |
+| 013 | `snapshot_bare_curve.sql` | ✅ applied | Verified 2026-09-16 in production: `prediction_snapshots.curve` and `prediction_accuracy.curve_pct` both exist |
+| 014 | `reliable_publication.sql` | ✅ applied 2026-09-18 | Function body hashes match migration; anon/authenticated execution denied, service_role allowed; internal tables have RLS |
+| 015 | `accuracy_publication_horizon.sql` | ✅ applied 2026-09-18 | View replacement succeeded; migration 016 verified baseline expansion; anon/authenticated reads denied |
+| 016 | `migration_history.sql` | ✅ applied 2026-09-18 | Ledger lists 013–016; RLS enabled, backend-only access verified |
 
 > `42501 permission denied` means the object **exists** and is locked down.
 > A missing object returns `42P01 relation does not exist`. That difference is what
@@ -46,7 +50,13 @@ closes for every other mirror.
 
 ## Running a new migration
 
-Paste the file into the Supabase SQL editor and run it, then update this ledger.
+Apply forward files in order and update this ledger after verification. After 016, include a
+`schema_migrations` entry in each new migration's transaction. The 016 rows for 013–015 adopt a
+verified baseline; their `applied_at` is the adoption time, not a claim about the original 013 run.
+
+**2026-09-18:** Lucas explicitly approved production migrations and deployment. Migrations
+014–016 were applied in order and verified in the production SQL editor.
+See `handoffs/FABLE_REVIEW.md` in the parent workspace for the exact rollout and rollback sequence.
 
 Note the role timeout difference: the SQL editor allows ~2 minutes, but the REST anon
 role is capped near 3 seconds. A query that succeeds in the editor can still return

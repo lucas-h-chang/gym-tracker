@@ -1,0 +1,10 @@
+[
+ {"name":"healthy zero","body":{"capacity_pct":0,"recorded_at":"2026-09-16T17:59:40Z","sensor_ok":true,"source":"density"},"state":"fresh","pct":0},
+ {"name":"over capacity","body":{"capacity_pct":110,"recorded_at":"2026-09-16T17:59:40Z","sensor_ok":true},"state":"fresh","pct":110},
+ {"name":"invalid sensor","body":{"capacity_pct":1,"recorded_at":"2026-09-16T17:59:40Z","sensor_ok":false},"state":"invalid","pct":null},
+ {"name":"old observation","body":{"capacity_pct":50,"recorded_at":"2026-09-16T17:00:00Z"},"state":"stale","pct":null},
+ {"name":"upstream unavailable","body":{"capacity_pct":50,"recorded_at":"2026-09-16T17:59:40Z","source":"cache_stale"},"state":"stale","pct":null},
+ {"name":"missing timestamp","body":{"capacity_pct":50},"state":"stale","pct":null},
+ {"name":"future timestamp","body":{"capacity_pct":50,"recorded_at":"2026-09-16T18:01:00Z"},"state":"stale","pct":null},
+ {"name":"malformed payload","body":{"capacity_pct":"50","recorded_at":"2026-09-16T17:59:40Z"},"state":"unavailable","pct":null}
+]

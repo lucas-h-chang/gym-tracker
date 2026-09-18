@@ -21,9 +21,11 @@ Exactly what a client would have rendered at `computed_at`, self-contained:
   preds  the corrected forecast today_builder published (may be [] when there
          were too few readings to correct anything — that is a real, meaningful
          state, not a missing row)
-  base   the uncorrected baseline it was built from, snapshotted because
+  base   the curve + trailing baseline it was built from, snapshotted because
          predictions_builder rebuilds `predictions` daily and purges past
          slots, so the baseline a day was served from is otherwise lost too
+  curve  the bare slow curve before the trailing-residual correction. Older
+         rows predate this field and legitimately carry an empty object
 
 Storing `base` on every row duplicates ~40 floats 40 times a day (~6 MB/year).
 That is bought deliberately: a self-contained audit row can be scored years
@@ -52,7 +54,7 @@ def slot_label(slot):
     return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
 
 
-def build_row(date, computed_at, preds, base, *, source=SOURCE_LIVE,
+def build_row(date, computed_at, preds, base, *, curve=None, source=SOURCE_LIVE,
               model=MODEL_CARRY, cut_slot=None, last_slot=None, n_obs=None,
               gaps=None):
     """One `prediction_snapshots` row, ready to insert.
@@ -62,6 +64,7 @@ def build_row(date, computed_at, preds, base, *, source=SOURCE_LIVE,
     preds        the published [{x, y, w, label}] list, exactly as today_summary
                  receives it. [] is valid and is stored as [].
     base         {slot: pct} baseline the correction was applied to
+    curve        {slot: pct} bare curve before the trailing correction
     gaps         (gap_day, gap_recent, gap_last) or None when uncorrected
 
     Diagnostics are nullable on purpose: below carry_model.MIN_OBSERVED readings
@@ -84,4 +87,7 @@ def build_row(date, computed_at, preds, base, *, source=SOURCE_LIVE,
         # jsonb object keys are text in Postgres either way; stringify here so
         # the round-trip is stable rather than depending on the client library.
         "base":        {str(int(s)): round(float(v), 1) for s, v in base.items()},
+        "curve":       {
+            str(int(s)): round(float(v), 1) for s, v in (curve or {}).items()
+        },
     }

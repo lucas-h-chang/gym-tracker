@@ -62,6 +62,13 @@ def test_base_keys_are_strings_and_values_rounded():
     assert row["base"] == {"28": 39.5, "29": 40.0}
 
 
+def test_curve_is_stored_separately_and_old_rows_default_empty():
+    row = snapshots.build_row("2026-09-03", "t", [], {28: 42.0},
+                              curve={28: 39.4999})
+    assert row["curve"] == {"28": 39.5}
+    assert snapshots.build_row("2026-09-03", "t", [], {})["curve"] == {}
+
+
 def test_numpy_scalars_are_coerced_to_python_types():
     """The backfill feeds numpy scalars straight out of a DataFrame; the JSON
     encoder in the Supabase client cannot serialize those."""

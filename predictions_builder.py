@@ -7,7 +7,7 @@ import json
 import pandas as pd
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from supabase import create_client
+from supabase_io import client
 
 import numpy as np
 
@@ -19,9 +19,6 @@ from academic_calendar import (
 from supabase_io import parse_supabase_timestamps, paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
-now = datetime.now(PT)
-
-sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 BATCH_SIZE = 500
 
@@ -38,7 +35,7 @@ def load_curves():
         return json.load(f)
 
 
-def build_trailing(table):
+def build_trailing(table, sb, now):
     """
     Fetch the trailing window of actuals, difference them against the curve, and
     return a nowcast.Trailing ready to answer "how far off is the gym running?"
@@ -114,8 +111,9 @@ def build_trailing(table):
     return nw.Trailing(dates, resid, segment, regime, dow)
 
 
-def compute_predictions(table, trailing, days=91):
+def compute_predictions(table, trailing, days=91, *, now=None):
     """Build (slot_ts ISO string, pct) for every open 15-min slot over the next N days."""
+    now = now or datetime.now(PT)
     slot_ts, dates_slots, corrections = [], [], []
 
     for offset in range(days):
@@ -164,6 +162,8 @@ def compute_predictions(table, trailing, days=91):
             n_moved += 1
         records.append({
             "slot_ts": ts,
+            "curve_pct": float(p),
+            "curve_version": table["built_at"],
             "pct":     round(min(max(float(p + c), 0.0), 100.0), 1),
         })
     pct_moved = 100.0 * n_moved / len(records) if records else 0.0
@@ -171,66 +171,19 @@ def compute_predictions(table, trailing, days=91):
     return records
 
 
-def main():
-    print("Loading curve table...")
+def main(sb=None, now=None):
+    now = now or datetime.now(PT)
+    sb = sb or client()
     table = load_curves()
-
-    print("Building trailing-residual ladder...")
-    trailing = build_trailing(table)
-
-    print("Computing predictions (today + 90 days)...")
-    records = compute_predictions(table, trailing, days=91)
-    print(f"  {len(records):,} slots computed")
-
-    print("Upserting to Supabase predictions table...")
-    for i in range(0, len(records), BATCH_SIZE):
-        batch = records[i:i + BATCH_SIZE]
-        sb.table("predictions").upsert(batch, on_conflict="slot_ts").execute()
-        print(f"  Upserted {min(i + BATCH_SIZE, len(records))}/{len(records)}")
-
-    # Purge stale in-horizon rows: upsert only ever adds/overwrites slots we generate
-    # today, it never removes ones from an earlier run whose open/close hours no
-    # longer match (e.g. a date that used to be generated with academic-year hours
-    # and is now correctly summer-hours-only keeps its old post-close rows forever
-    # otherwise). Diff today's generated slot set against what's actually in the
-    # table over the same horizon and delete anything left over.
-    horizon_start = datetime(now.year, now.month, now.day, 0, 0, tzinfo=PT)
-    horizon_end   = horizon_start + timedelta(days=91)
-    generated_instants = {datetime.fromisoformat(r["slot_ts"]) for r in records}
-
-    existing, offset = [], 0
-    while True:
-        batch = (
-            sb.table("predictions")
-            .select("slot_ts")
-            .gte("slot_ts", horizon_start.isoformat())
-            .lt("slot_ts", horizon_end.isoformat())
-            .range(offset, offset + 8999)
-            .execute()
-            .data
-        )
-        existing.extend(batch)
-        if len(batch) < 9000:
-            break
-        offset += 9000
-
-    stale = [
-        r["slot_ts"] for r in existing
-        if datetime.fromisoformat(r["slot_ts"]) not in generated_instants
-    ]
-    for i in range(0, len(stale), BATCH_SIZE):
-        sb.table("predictions").delete().in_("slot_ts", stale[i:i + BATCH_SIZE]).execute()
-    print(f"  Purged {len(stale)} stale in-horizon rows")
-
-    # Purge stale far-future rows left over from when we generated 180 days, so the
-    # table stays bounded to the ~90-day horizon we now compute. The +93-day margin sits
-    # beyond the clients' +92-day fetch bound, so this can never delete a slot that's
-    # still viewable, even accounting for PT/UTC boundary fuzz.
-    purge_from = (now.date() + timedelta(days=93)).isoformat()
-    sb.table("predictions").delete().gte("slot_ts", purge_from).execute()
-    print(f"  Purged any predictions on/after {purge_from}")
-
-    print(f"[{now.isoformat()}] predictions table updated: {len(records)} rows")
+    trailing = build_trailing(table, sb, now)
+    records = compute_predictions(table, trailing, days=91, now=now)
+    if len(records) < 1000:
+        raise RuntimeError("Incomplete prediction horizon; retaining previous publication")
+    result = sb.rpc("publish_predictions", {
+        "p_rows": records, "p_built_at": now.isoformat(),
+        "p_metadata": {"curve_version": table["built_at"], "rows": len(records)},
+    }).execute().data
+    print(f"[{now.isoformat()}] predictions publication: {result}, {len(records)} rows")
 
 
 if __name__ == "__main__":

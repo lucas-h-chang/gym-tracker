@@ -94,7 +94,14 @@ async function isSensorStalled(supabase, currentCount, todayPT = ptNow().date) {
   // Bounding the lookback by time rather than row count is what keeps the
   // opening ramp safe: right after doors open there are only one or two rows
   // inside the window, so the check declines to judge until ~90 minutes in.
-  const prior = (data || []).slice(0, STALL_RUN - 1);
+  // An ambiguous insert retry can leave identical timestamps. Count distinct
+  // observations so retries cannot shorten the intended stall window.
+  const seen = new Set();
+  const prior = (data || []).filter(row => {
+    if (seen.has(row.timestamp)) return false;
+    seen.add(row.timestamp);
+    return true;
+  }).slice(0, STALL_RUN - 1);
   if (prior.length < STALL_RUN - 1) {
     return { stalled: false, reason: `only ${prior.length} readings in lookback window` };
   }

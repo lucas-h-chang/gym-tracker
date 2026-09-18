@@ -58,7 +58,7 @@ def block(path, name):
 
 FRESHNESS = ROOT / ".github" / "workflows" / "freshness.yml"
 HOURS_JS  = ROOT / "api" / "_hours.js"
-INDEX     = ROOT / "docs" / "index.html"
+INDEX     = ROOT / "docs" / "js" / "calendar.js"
 
 
 def iso_pairs(path, name):

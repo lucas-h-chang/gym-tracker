@@ -55,16 +55,14 @@ from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from supabase import create_client
+from supabase_io import client
+from data_quality import FORECAST_MAX_AGE_SECONDS
 
 import carry_model as km
 import snapshots
 from academic_calendar import get_open_hours
 
 PT  = ZoneInfo("America/Los_Angeles")
-now = datetime.now(PT)
-
-sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 CARRY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           "models", "carry.json")
@@ -85,12 +83,13 @@ def load_carry():
         return None
 
 
-def fetch_today_rows():
+def fetch_today_rows(sb, now):
     """Today's capacity_log rows (a few dozen)."""
     return (
         sb.table("capacity_log")
-        .select("timestamp,percent_full")
+        .select("timestamp,percent_full,sensor_ok")
         .gte("timestamp", _pt_iso(now.date(), time.min))
+        .lte("timestamp", now.isoformat())
         .order("timestamp")
         .limit(2000)
         .execute()
@@ -98,7 +97,7 @@ def fetch_today_rows():
     )
 
 
-def fetch_today_predictions():
+def fetch_today_predictions(sb, now):
     """Today's deployed baseline from `predictions` -> {slot: pct}.
 
     This is the curve PLUS predictions_builder's 28-day trailing correction,
@@ -107,26 +106,38 @@ def fetch_today_predictions():
     """
     rows = (
         sb.table("predictions")
-        .select("slot_ts,pct")
+        .select("slot_ts,pct,curve_pct,curve_version")
         .gte("slot_ts", _pt_iso(now.date(), time.min))
         .lt("slot_ts", _pt_iso(now.date() + timedelta(days=1), time.min))
         .order("slot_ts")
         .execute()
         .data
     )
-    out = {}
+    out, curve, versions = {}, {}, set()
     for r in rows:
         ts = datetime.fromisoformat(r["slot_ts"]).astimezone(PT)
-        out[ts.hour * 4 + ts.minute // 15] = float(r["pct"])
-    return out
+        slot = ts.hour * 4 + ts.minute // 15
+        out[slot] = float(r["pct"])
+        if r.get("curve_pct") is not None:
+            curve[slot] = float(r["curve_pct"])
+        if r.get("curve_version"):
+            versions.add(r["curve_version"])
+    return out, curve, sorted(versions)
 
 
-def actuals_by_slot(today_rows):
+def actuals_by_slot(today_rows, now):
     """Today's readings so far -> {slot: mean percent_full}, up to now."""
     if not today_rows:
         return {}
     df = pd.DataFrame(today_rows)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], format='ISO8601').dt.tz_convert(PT)
+    if 'sensor_ok' in df:
+        df = df[df['sensor_ok'] != False].copy()
+    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True, format='ISO8601', errors='coerce').dt.tz_convert(PT)
+    df['percent_full'] = pd.to_numeric(df['percent_full'], errors='coerce')
+    df = df[df['percent_full'].between(0, float('inf'), inclusive='left')]
+    df = df[(df['timestamp'].dt.date == now.date()) & (df['timestamp'] <= now)]
+    if df.empty or (now - df['timestamp'].max()).total_seconds() > FORECAST_MAX_AGE_SECONDS:
+        return {}
     # Round to NEAREST quarter-hour, matching academic_calendar.slot_of and every
     # display consumer. Flooring would file a 10:40 scrape at 10:30.
     df['slot'] = ((df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60) * 4).round().astype(int)
@@ -134,7 +145,7 @@ def actuals_by_slot(today_rows):
     return df.groupby('slot')['percent_full'].mean().to_dict()
 
 
-def compute_level_correction(actuals, base, carry):
+def compute_level_correction(actuals, base, carry, now):
     """Base curve plus a fitted level correction, for every remaining slot.
 
     Returns (preds, meta). `preds` is [{x, y, w, label}] with w = 1.0, or []
@@ -179,69 +190,53 @@ def compute_level_correction(actuals, base, carry):
     }
 
 
-def main():
-    # Skip entirely when the RSF is closed — nothing to forecast.
+def main(sb=None, now=None):
+    now = now or datetime.now(PT)
     open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
-    now_hour = now.hour + now.minute / 60
-    if now_hour < open_h or now_hour >= close_h:
-        print(f"[{now.isoformat()}] RSF closed (open {open_h}:00-{close_h}:00); "
-              "skipping today_summary build.")
+    if not open_h <= now.hour + now.minute / 60 < close_h:
+        print("RSF closed; skipping today_summary build.")
         return
-
-    print("Computing today's level correction...")
-    base = fetch_today_predictions()
-    preds, meta = compute_level_correction(
-        actuals_by_slot(fetch_today_rows()), base, load_carry())
-
-    # NOTE ON THESE TWO COLUMN NAMES. Both are vestigial and neither means what it
-    # says. There has been no similarity model since 2026-08-31 — `similarity_preds`
-    # carries the level-corrected forecast — and `blend_weight` is pinned to 1.0
-    # rather than scheduled. They keep the old names on purpose: renaming a column
-    # breaks docs/index.html and RSFApp2.0 at the same moment, so it needs its own
-    # migration and a coordinated client release. See handoffs/SPEC_TODAY_BUILDER_REWRITE.md.
-    sb.table("today_summary").upsert({
-        "date":             now.strftime('%Y-%m-%d'),
-        "similarity_preds": preds,
-        # w = 1.0 on every point makes each client's (1-w)*base + w*y an
-        # identity. The scalar is kept at 1.0 for the one consumer that still
-        # reads it (send_workout_notifications.py) so it agrees with the rest.
-        "blend_weight":     1.0,
-        "computed_at":      now.isoformat(),
-    }).execute()
-
+    sb = sb or client()
+    base, curve, versions = fetch_today_predictions(sb, now)
+    if not base:
+        raise RuntimeError("No baseline for today; refusing to overwrite the last forecast")
+    rows = fetch_today_rows(sb, now)
+    actuals = actuals_by_slot(rows, now)
+    carry = load_carry()
+    preds, meta = compute_level_correction(actuals, base, carry, now)
+    metadata = {
+        "baseline_versions": versions,
+        "carry_version": (carry or {}).get("built_at"),
+        "last_input_at": max((r["timestamp"] for r in rows
+                               if r.get("sensor_ok") is not False), default=None),
+    }
+    published = sb.rpc("publish_today_summary", {
+        "p_date": now.date().isoformat(), "p_preds": preds,
+        "p_computed_at": now.isoformat(), "p_metadata": metadata,
+    }).execute().data
+    if not published:
+        print("A newer forecast is already published; skipping this run")
+        return
     print(f"[{now.isoformat()}] today_summary updated: {len(preds)} slots")
+    record_snapshot(sb, now, preds, base, curve, meta, metadata)
 
-    record_snapshot(preds, base, meta)
 
-
-def record_snapshot(preds, base, meta):
-    """Append what we just published to prediction_snapshots.
-
-    Deliberately AFTER the today_summary upsert and wrapped in its own guard:
-    this is an audit trail, and the site must never lose a forecast because an
-    audit table is missing, unmigrated or briefly unreachable. A failure here
-    prints and returns; the forecast is already live.
-    """
-    row = snapshots.build_row(
-        now.strftime('%Y-%m-%d'), now.isoformat(), preds, base,
-        source=snapshots.SOURCE_LIVE,
-        cut_slot=meta.get("cut_slot"),
-        last_slot=meta.get("last_slot"),
-        n_obs=meta.get("n_obs"),
-        gaps=meta.get("gaps"),
-    )
+def record_snapshot(sb, now, preds, base, curve, meta, metadata):
+    # Audit failure must not prevent publication; freshness monitoring detects
+    # missing snapshots independently. Include shaping inside this guard too.
     try:
-        # on_conflict names the natural key so the upsert has one to match on.
-        # In practice it never fires here: computed_at carries microseconds, so
-        # every live run is a fresh row. That is intended — this table records
-        # forecasts published, and a genuine double-fire really did publish
-        # twice. The constraint earns its keep on backfill_snapshots.py, whose
-        # computed_at is deterministic.
+        row = snapshots.build_row(
+            now.date().isoformat(), now.isoformat(), preds, base, curve=curve,
+            source=snapshots.SOURCE_LIVE, cut_slot=meta.get("cut_slot"),
+            last_slot=meta.get("last_slot"), n_obs=meta.get("n_obs"),
+            gaps=meta.get("gaps"),
+        )
+        row["metadata"] = metadata
         sb.table("prediction_snapshots").upsert(
             row, on_conflict="source,computed_at").execute()
         print(f"  snapshot recorded ({len(preds)} slots)")
-    except Exception as e:
-        print(f"WARNING: prediction_snapshots write failed, forecast unaffected: {e}")
+    except Exception as exc:
+        print(f"WARNING: snapshot write failed, forecast unaffected: {exc}")
 
 
 if __name__ == "__main__":

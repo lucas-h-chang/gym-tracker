@@ -7,7 +7,7 @@ Replaces train.py's monthly RF retrain per SPEC_CURVE_MODEL.md. Runs via
 """
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -70,7 +70,8 @@ def main():
     # one identical curve). Validated on holdout: overall MAE 8.98->8.69,
     # morning 7-9am 8.02->7.02, good-day rate 10.6%->12.6%. DEFAULT_PARAMS keeps
     # it off so the backtest baseline / other callers are unaffected.
-    table = cm.build_table(slots, {**cm.DEFAULT_PARAMS, "week_levels": True})
+    table = cm.build_table(slots, {**cm.DEFAULT_PARAMS, "week_levels": True},
+                           built_at=datetime.now(timezone.utc).isoformat())
     n_curves = len(table['curves'])
     print(f"  Built {n_curves} (phase, dow) curves")
 
@@ -105,7 +106,7 @@ def main():
         json.dump(curve_metrics, f, indent=2)
     print("  Saved -> models/curve_metrics.json")
 
-    print(f"\n[{datetime.now().isoformat()}] curves.json rebuilt: {n_curves} curves, "
+    print(f"\n[{datetime.now(timezone.utc).isoformat()}] curves.json rebuilt: {n_curves} curves, "
           f"{distinct_days:,} distinct days")
 
 

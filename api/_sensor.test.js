@@ -35,6 +35,8 @@ const cases = [
   ['2026-08-23 Caltopia closure — closed, NOT a dead sensor', '2026-08-23', seq([1,1,2,0,0,0,0,0,0,0]), 1, false],
   ['2026-08-25 Caltopia Tuesday', '2026-08-25', seq([0,0,0,0,0,0]), 0, false],
 
+  ['Duplicate retry timestamps do not count as new readings', OPEN_SUN, Array(6).fill(seq([0])[0]), 0, false],
+
   // Legitimately quiet moments that must never trip the alarm.
   ['2026-08-22 08:15, quiet open then a real crowd', OPEN_SAT, seq([1]), 37, false],
   ['The quiet opening slot itself (only 1 row in window)', OPEN_SAT, seq([1]), 1, false],

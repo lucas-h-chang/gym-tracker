@@ -25,7 +25,7 @@ const { ptNow, getOpenHours } = require('./_hours');
 const { isSensorStalled } = require('./_sensor');
 const { insertCapacityRow } = require('./_supabase_retry');
 
-const DENSITY_URL = 'https://api.density.io/v2/spaces/spc_863128347956216317/count';
+const { readDensity } = require('./_density');
 const MAX_CAP = 150;
 
 const supabase = createClient(
@@ -34,6 +34,8 @@ const supabase = createClient(
 );
 
 module.exports = async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
   // Every invocation must actually hit Density and write a row, so this must
   // never be served from the edge cache the way live-capacity.js is.
   res.setHeader('Cache-Control', 'no-store');
@@ -63,11 +65,7 @@ module.exports = async function handler(req, res) {
   let count;
   for (const attempt of [1, 2]) {
     try {
-      const resp = await fetch(DENSITY_URL, {
-        headers: { Authorization: `Bearer ${process.env.DENSITY_TOKEN}` },
-      });
-      if (!resp.ok) throw new Error(`Density returned ${resp.status}`);
-      count = (await resp.json()).count;
+      count = await readDensity();
       break;
     } catch (err) {
       console.error(`[scrape] density attempt ${attempt} failed:`, err.message);

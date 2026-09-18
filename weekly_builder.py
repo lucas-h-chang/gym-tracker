@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from supabase import create_client
+from supabase_io import client
 
 from academic_calendar import (
     is_summer_day,
@@ -18,9 +18,6 @@ from academic_calendar import (
 from supabase_io import paginated_fetch
 
 PT  = ZoneInfo("America/Los_Angeles")
-now = datetime.now(PT)
-
-sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 # SPRING_BREAKS/SUMMER_RANGES/is_summer_day/get_open_hours/is_semester_day live
 # in academic_calendar.py (consolidated 2026-07-21 — see CLAUDE.md). SPRING_BREAKS
@@ -48,7 +45,7 @@ def get_semester_start(today):
     return d + timedelta(days=1)
 
 
-def fetch_all_history():
+def fetch_all_history(sb):
     """Fetch all capacity_log from Supabase (paginated).
 
     sensor_ok is selected so main() can drop readings taken while the RSF's
@@ -145,7 +142,8 @@ def _emit_day_records(filtered, range_type, semester_only, records):
             })
 
 
-def compute_weekly_averages(df):
+def compute_weekly_averages(df, now=None):
+    now = now or datetime.now(PT)
     df['day_of_week']  = df['timestamp'].dt.day_name()
     df['hour_numeric'] = df['timestamp'].dt.hour + df['timestamp'].dt.minute / 60
 
@@ -212,9 +210,13 @@ def compute_weekly_averages(df):
     return records
 
 
-def main():
+def main(sb=None, now=None):
+    sb = sb or client()
+    now = now or datetime.now(PT)
     print("Fetching all history from Supabase...")
-    rows = fetch_all_history()
+    rows = fetch_all_history(sb)
+    if not rows:
+        raise RuntimeError("No history returned; retaining previous weekly averages")
     print(f"  {len(rows):,} rows loaded")
 
     df = pd.DataFrame(rows)
@@ -250,27 +252,15 @@ def main():
         df = df[~closed_mask]
 
     print("Computing weekly averages...")
-    records = compute_weekly_averages(df)
+    records = compute_weekly_averages(df, now)
     print(f"  {len(records):,} records computed")
 
-    # Truncate-then-insert. This intentionally does NOT use upsert(on_conflict=...):
-    # that would require (day_of_week, hour_slot, range_type, semester_only) to be a
-    # declared unique constraint in Postgres, which is not defined anywhere in this
-    # repo and could not be verified against the live DB. If that constraint is
-    # missing, an upsert errors at runtime and this daily job silently stops updating
-    # (weekly_averages is not covered by freshness.yml). The brief empty-table window
-    # at midnight is the accepted cost of not depending on an unverified constraint.
-    # To switch to upsert-then-purge, first confirm/add that unique constraint.
-    print("Truncating weekly_averages table...")
-    sb.table("weekly_averages").delete().neq("day_of_week", "").execute()
-
-    print("Inserting weekly averages...")
-    for i in range(0, len(records), BATCH_SIZE):
-        batch = records[i:i + BATCH_SIZE]
-        sb.table("weekly_averages").insert(batch).execute()
-        print(f"  Inserted {min(i + BATCH_SIZE, len(records))}/{len(records)}")
-
-    print(f"[{now.isoformat()}] weekly_averages updated: {len(records)} rows")
+    if len(records) < 100:
+        raise RuntimeError("Incomplete weekly data; retaining previous publication")
+    published = sb.rpc("publish_weekly_averages", {
+        "p_rows": records, "p_built_at": now.isoformat(),
+    }).execute().data
+    print(f"[{now.isoformat()}] weekly publication: {published}, {len(records)} rows")
 
 
 if __name__ == "__main__":

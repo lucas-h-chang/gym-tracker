@@ -8,8 +8,8 @@
 # flagged came with a clean duplicate, halving the guard. The doubled cadence
 # also halved api/_sensor.js's STALL_RUN lookback from ~90 min to ~37 min.
 #
-# What is left here recomputes from data already in Supabase, so a runner delay
-# costs nothing.
+# Readings survive runner delays, but forecasts and reminders still become late.
+# Publication ordering and a delivery ledger handle overlapping/catch-up runs.
 #
 # THE FILENAME IS NOT THE JOB. cron-job.org dispatches this workflow by its
 # path, so renaming the file breaks the 15-minute trigger until that job's URL
@@ -23,9 +23,14 @@ name: Today's Forecast + Notifications
 on:
   workflow_dispatch:  # triggered externally by cron-job.org every 15 minutes
 
+concurrency:
+  group: scrape-publication
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out this repo
@@ -43,7 +48,7 @@ jobs:
           key: ${{ runner.os }}-pip-scrape-${{ hashFiles('requirements.txt') }}
 
       - name: Install dependencies
-        run: pip install requests supabase pandas numpy pytz cryptography httpx[http2]
+        run: pip install -r requirements.txt
 
       - name: Build today's forecast → Supabase
         env:

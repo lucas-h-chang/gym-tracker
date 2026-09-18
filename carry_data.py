@@ -25,6 +25,10 @@ within-day fit, and they should be free to change independently.
 import os
 import sys
 import pickle
+import hashlib
+import json
+import time
+from pathlib import Path
 from datetime import date, timedelta
 
 import numpy as np
@@ -32,7 +36,7 @@ import pandas as pd
 
 import curve_model as cm
 import nowcast as nw
-from supabase_io import parse_supabase_timestamps
+from supabase_io import parse_supabase_timestamps, paginated_fetch
 from academic_calendar import (
     classify_date, days_to_sem_start, days_to_sem_end, get_open_hours,
 )
@@ -44,8 +48,35 @@ RAW_CACHE = os.environ.get("CARRY_BASE_CACHE", "/tmp/rsf_raw_base_matrix.pkl")
 # Match build_curves.py exactly, so the baseline here is the curve production serves.
 PARAMS = {**cm.DEFAULT_PARAMS, "week_levels": True}
 
-ORIGINS = [d for d in (date(y, m, 1) for y in (2023, 2024, 2025, 2026) for m in range(1, 13))
-           if date(2023, 1, 1) <= d <= date(2026, 12, 1)]
+def origins_through(last_day):
+    """Production origins grow with observed history; backtest.py stays fixed."""
+    return [d.date() for d in pd.date_range("2023-01-01", last_day, freq="MS")]
+
+
+def source_fingerprint():
+    digest = hashlib.sha256()
+    for name in ("curve_model.py", "academic_calendar.py", "carry_data.py", "supabase_io.py"):
+        digest.update(Path(__file__).with_name(name).read_bytes())
+    digest.update(json.dumps(PARAMS, sort_keys=True).encode())
+    return digest.hexdigest()
+
+
+def read_cache(path, key, max_age=3600):
+    try:
+        cached = pickle.loads(Path(path).read_bytes())
+        if (cached["key"] == key and 0 <= time.time() - cached["created_at"] <= max_age):
+            return cached["data"]
+    except (OSError, ValueError, TypeError, KeyError, EOFError, pickle.UnpicklingError):
+        pass
+    return None
+
+
+def write_cache(path, key, data):
+    target = Path(path)
+    temp = target.with_suffix(target.suffix + f".{os.getpid()}.tmp")
+    temp.write_bytes(pickle.dumps({"key": key, "created_at": time.time(), "data": data}))
+    os.replace(temp, target)
+
 
 # The trailing-residual layer is nowcast.py, imported by both this module and
 # predictions_builder.py. It used to be re-implemented here with a comment asking
@@ -58,21 +89,9 @@ def fetch_capacity_log():
     sb = create_client(os.environ["SUPABASE_URL"], key)
 
     print("Loading data from Supabase capacity_log...")
-    BATCH, offset, rows = 9000, 0, []
-    while True:
-        batch = (
-            sb.table("capacity_log")
-            .select("timestamp,people_count,sensor_ok")
-            .range(offset, offset + BATCH - 1)
-            .order("timestamp")
-            .execute()
-            .data
-        )
-        rows.extend(batch)
-        if len(batch) < BATCH:
-            break
-        offset += BATCH
-        print(f"  Fetched {len(rows):,} rows...")
+    rows = paginated_fetch(sb, "capacity_log", "timestamp,people_count,sensor_ok")
+    if not rows:
+        raise RuntimeError("capacity_log returned no training history")
 
     df = pd.DataFrame(rows)
     # Mirror build_curves.py: drop readings taken while the counter was dead.
@@ -102,13 +121,13 @@ def open_slot_range(d):
 
 
 def load_slots(use_cache=True):
-    if use_cache and os.path.exists(CACHE):
-        print(f"Using cached capacity_log -> {CACHE}")
-        raw = pickle.load(open(CACHE, "rb"))
-    else:
+    key = source_fingerprint()
+    raw = read_cache(CACHE, key) if use_cache else None
+    if raw is None:
         raw = fetch_capacity_log()
-        pickle.dump(raw, open(CACHE, "wb"))
-        print(f"Cached capacity_log -> {CACHE}")
+        write_cache(CACHE, key, raw)
+    else:
+        print(f"Using fingerprinted history cache -> {CACHE}")
 
     slots = cm.prepare_slots(raw)
     n_days = slots['date'].nunique()
@@ -144,7 +163,7 @@ def build_base_matrix(slots, dates, origins=None, verbose=True):
     than usual here: thin phases like first_week carry n_eff ~= 2.3, so a single
     leaked day is a large share of its own curve.
     """
-    origins = origins or ORIGINS
+    origins = origins_through(max(dates)) if origins is None else origins
     B = np.full((len(dates), SLOTS_PER_DAY), np.nan)
     index = {d: i for i, d in enumerate(dates)}
     scored_origin = {}
@@ -224,13 +243,16 @@ def load_matrices(use_cache=True, verbose=True):
     slots = load_slots(use_cache)
     dates, M = build_day_matrix(slots)
 
-    if use_cache and os.path.exists(RAW_CACHE):
-        raw_M, scored_origin = pickle.load(open(RAW_CACHE, "rb"))
-        print(f"Using cached raw base matrix -> {RAW_CACHE}")
+    data_hash = hashlib.sha256(pd.util.hash_pandas_object(slots, index=True).values.tobytes()).hexdigest()
+    key = source_fingerprint() + data_hash
+    cached = read_cache(RAW_CACHE, key) if use_cache else None
+    if cached is not None:
+        raw_M, scored_origin = cached
+        print(f"Using fingerprinted raw matrix -> {RAW_CACHE}")
     else:
-        print("Building rolling-origin curve predictions (slow, cached after this)...")
+        print("Building rolling-origin curve predictions...")
         raw_M, scored_origin = build_base_matrix(slots, dates, verbose=verbose)
-        pickle.dump((raw_M, scored_origin), open(RAW_CACHE, "wb"))
+        write_cache(RAW_CACHE, key, (raw_M, scored_origin))
 
     print("Applying the 28-day trailing correction (matching predictions_builder)...")
     base_M = apply_28day_correction(dates, M, raw_M, verbose=verbose)

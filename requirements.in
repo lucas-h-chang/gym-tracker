@@ -1,0 +1,8 @@
+# Runtime inputs. Regenerate with uv pip compile --universal --python-version 3.10.
+supabase
+pandas>=2.2,<3
+numpy>=2,<3
+requests
+pytz
+cryptography
+httpx[http2]

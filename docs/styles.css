@@ -1,0 +1,702 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0a0a0f;
+      --text:       #e8e6e3;
+      --sub:        #8a8480;
+      --muted:      #4a4540;
+      --border:     rgba(255,255,255,0.06);
+      --font:       'Inter', -apple-system, sans-serif;
+      --mono:       'JetBrains Mono', monospace;
+      --cap-green:     #6ee7b7;
+      --cap-yellow:    #fbbf24;
+      --cap-red:       #f87171;
+      --cap-dark-red:  #b91c1c;
+    }
+
+    /* Vertical scrolling only. body's overflow-x below already stops the
+       document from being wider than the screen, but on a phone that is not the
+       whole story: the viewport still rubber-bands sideways under a horizontal
+       drag, which reads as the page being swipeable left/right.
+       overscroll-behavior-x kills that bounce and, with it, the browser's edge
+       swipe-to-go-back on the page itself. Set on html, not body: overflow
+       propagates from body to the viewport, overscroll-behavior does not, so
+       the root element's value is the one the viewport uses. Deliberately NOT
+       paired with overflow-x here - an overflow on the root makes html itself
+       the scroll container, which iOS Safari mishandles badly enough to lose
+       vertical scrolling outright. body keeps that job, as it always did. The day-pill row still
+       scrolls sideways on its own; it carries overscroll-behavior-x: contain so
+       reaching its end does not chain the swipe back out to the viewport. */
+    html {
+      overscroll-behavior-x: none;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      /* dvh tracks the iOS Safari URL bar as it retracts; vh is the fallback
+         for browsers without it, and undershoots by the bar's height. */
+      min-height: 100vh;
+      min-height: 100dvh;
+      /* Stops iOS inflating body text when the phone is rotated. */
+      -webkit-text-size-adjust: 100%;
+      /* Backstop against sideways scroll; the tooltip clamp is the actual fix.
+         hidden, NOT clip: body's overflow propagates to the viewport (html is
+         visible), and a clip on one axis forces the other to clip too, which
+         would leave the page unable to scroll vertically. hidden resolves the
+         other axis to auto instead. */
+      overflow-x: hidden;
+    }
+
+    /* ── Data Warning ── */
+    #data-warning {
+      display: none;
+      text-align: center;
+      padding: 10px 24px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      font-family: var(--mono);
+      background: rgba(248, 113, 113, 0.07);
+      border-bottom: 1px solid rgba(248, 113, 113, 0.12);
+      color: #f87171;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      height: 64px;
+      margin-top: 16px;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .about-link {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--sub);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .about-link:hover { color: var(--text); }
+
+    /* ── Insight Cards ── */
+    .insight-row {
+      display: flex;
+      gap: 48px;
+      padding: 32px 48px 36px;
+    }
+    .insight-row.hidden { display: none; }
+    .insight-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      min-height: 120px;
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--sub);
+      text-transform: uppercase;
+      line-height: 1;
+    }
+    .card-value {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .val-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    /* Mirrors the 10pt Circle() beside the iOS capacity value
+       (TodayView.swift:141-145). Desktop never shows it — the phone layout
+       turns it on in the media query — so this is inert above 768px. */
+    .live-dot {
+      display: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+      align-self: center;
+      background: var(--sub);
+    }
+    .card-sub {
+      font-size: 14px;
+      color: var(--sub);
+      line-height: 1.2;
+    }
+    .card-sub a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    /* Capacity bar */
+    .cap-bar-wrap { width: 100%; }
+    .cap-bar-track {
+      height: 7px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .cap-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--cap-green);
+      transition: width 0.6s ease, background 0.4s;
+    }
+    .cap-bar-fill.mid      { background: var(--cap-yellow); }
+    .cap-bar-fill.high     { background: var(--cap-red); }
+    .cap-bar-fill.critical { background: var(--cap-dark-red); }
+
+    /* Comparison verdict colors */
+    .comp-verdict.much-busier  { color: #dc2626; }
+    .comp-verdict.busier       { color: #f87171; }
+    .comp-verdict.bit-busier   { color: #fca5a5; }
+    .comp-verdict.much-quieter { color: #059669; }
+    .comp-verdict.quieter      { color: #6ee7b7; }
+    .comp-verdict.bit-quieter  { color: #a7f3d0; }
+    .comp-verdict.average      { color: var(--text); }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 48px;
+    }
+
+    /* ── Chart Sections ── */
+    .chart-section {
+      position: relative;
+      padding: 32px 48px 0;
+    }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .chart-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .chart-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10.5px;
+    }
+    /* The dot is a SIBLING of #chart-title, never a child: updatePredChart()
+       assigns to that element's textContent on every render, which would wipe
+       any markup nested inside it. */
+    .info-dot {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 1px solid var(--sub);
+      background: none;
+      color: var(--sub);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: help;
+      opacity: 0.6;
+      transition: opacity .14s ease;
+    }
+    .info-dot:hover,
+    .info-dot:focus-visible { opacity: 1; }
+    /* .info-dot's own `display: flex` is an author rule, so it outranks the UA
+       stylesheet's [hidden] { display: none }. Without this, setting .hidden
+       from updatePredChart() would toggle the attribute and change nothing. */
+    .info-dot[hidden] { display: none; }
+    .info-dot::after {
+      content: attr(data-tip);
+      position: absolute;
+      top: calc(100% + 8px);
+      left: -4px;
+      /* max-content keeps it on one line where there is room, and max-width
+         lets it wrap on a narrow phone instead of forcing sideways scroll. */
+      width: max-content;
+      max-width: 230px;
+      background: #1e1c1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: var(--text);
+      text-align: left;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .14s ease;
+      z-index: 30;
+    }
+    .info-dot:hover::after,
+    .info-dot:focus-visible::after { opacity: 1; }
+    /* Chart.js's documented responsive setup: the WRAPPER owns the dimensions
+       and the canvas is left alone to fill it. Two things depend on that.
+
+       Height: the canvas used to carry height="340", which Chart.js reads once
+       at construction to lock an aspect ratio it then preserves forever. Widen
+       the window and the chart grew proportionally taller; rotate a phone to
+       landscape and the near-square portrait ratio inflated it to ~680px.
+       A fixed wrapper height plus maintainAspectRatio:false removes the ratio
+       from the picture entirely.
+
+       Sharpness: this rule used to be `width: 100% !important`. Chart.js sizes
+       the canvas by writing an inline style.width next to a matching backing
+       store canvas.width, and an !important stylesheet rule beats a
+       non-important inline style — so the browser stretched whatever bitmap
+       was last rendered to fill the container and Chart.js could never correct
+       the display size. That mismatch is what showed up as blur on resize. */
+    .chart-wrap {
+      position: relative;
+      height: 340px;
+      /* Scrubbing the chart is a press-and-drag, which is the same gesture a
+         mobile browser reads as "start selecting". Without these, dragging
+         across the curve on iOS raises the blue selection overlay and the
+         long-press Copy / Look Up callout on top of the chart you are trying
+         to read. The canvas already takes touch-action: pan-y below, which
+         stops a sideways drag being claimed as a PAN; this stops the same drag
+         being claimed as a SELECTION. Two different browser behaviours, two different
+         properties, and the chart needs both suppressed to be scrubbable.
+
+         On the wrapper rather than the canvas so the tooltip, the pulse dot and
+         the closed-day message layered over it are covered too: a drag that
+         crosses the tooltip would otherwise start selecting its text. */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    /* A closure day has no curve to draw, and a bare grid with nothing on it
+       reads as a failed load. The reason sits where the curve would have been. */
+    .chart-closed {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+      pointer-events: none;
+    }
+    .chart-closed .cc-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #f87171;
+    }
+    .chart-closed .cc-sub {
+      font-size: 12px;
+      color: var(--sub);
+    }
+    .chart-wrap canvas {
+      display: block;
+      /* pan-y, not none. Scrubbing the chart must not also scroll the page, and
+         `none` did stop that by refusing the browser every gesture on the
+         canvas - including the vertical one that scrolls. On a phone in
+         landscape the wrapper is 340px of a ~390px-tall viewport, so almost the
+         whole screen became a surface that could not be scrolled: a swipe
+         starting on the chart did nothing, and only one that happened to start
+         on a card moved the page.
+
+         pan-y splits the two gestures by direction instead of switching both
+         off. A vertical drag goes to the page and scrolls it. A horizontal drag
+         is left to the canvas, and horizontal is the only direction the scrub
+         reads, so the readout still tracks and no longer jitters against a
+         scrolling page. When the browser does claim a vertical drag it fires
+         touchcancel here, which the lift handler further down already treats as
+         "finger gone" and clears the tooltip on.
+
+         iOS gets the same split from GymChart's DragGesture, which consumes the
+         horizontal drag before the enclosing ScrollView sees it while leaving
+         the vertical one to scroll. */
+      touch-action: pan-y;
+    }
+
+    /* ── Day Pills ── */
+    .day-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .pill {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 7px 18px;
+      background: transparent;
+      color: var(--sub);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .pill:hover {
+      border-color: rgba(255,255,255,0.22);
+      color: var(--text);
+    }
+    .pill.active {
+      background: #ececec;
+      border-color: #ececec;
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+    .pill-cal {
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Calendar Popup ── */
+    .cal-popup {
+      position: absolute;
+      background: #141310;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px;
+      z-index: 100;
+      width: 260px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .cal-month-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .cal-nav-btn {
+      background: none;
+      border: none;
+      color: var(--sub);
+      cursor: pointer;
+      font-size: 15px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    .cal-nav-btn:hover { color: var(--text); }
+    .cal-nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .cal-dow {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      padding: 4px 0;
+      font-weight: 600;
+    }
+    .cal-day {
+      text-align: center;
+      padding: 6px 2px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--sub);
+      transition: background 0.12s, color 0.12s;
+    }
+    .cal-day:hover:not(.cal-day-disabled):not(.cal-day-selected) {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    .cal-day-disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+    .cal-day-selected { background: var(--cap-green); color: #000; font-weight: 700; }
+    .cal-day-today { color: var(--cap-green); font-weight: 700; }
+    .cal-day-selected.cal-day-today { color: #000; }
+    .cal-day-empty { pointer-events: none; }
+
+    /* ── Pulse Dot (live indicator) ── */
+    .pulse-dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+      z-index: 10;
+      --dot-rgb: 110, 231, 183;
+    }
+    /* Only the expanding halo. The solid dot core is a native canvas point
+       (see the Actual dataset's scriptable pointRadius) so it stays perfectly
+       glued to the line. This ring is centered on that same point. */
+    .pulse-dot::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: rgba(var(--dot-rgb), 0.35);
+      animation: pulse-ring 2s ease-out infinite;
+    }
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.8); opacity: 0.9; }
+      70%  { transform: scale(2.2); opacity: 0; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* ── Chart Tooltip (custom HTML — sits above the pulse dot, unlike
+       Chart.js's canvas-drawn tooltip which the dot always painted over) ── */
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      z-index: 20;
+      background: #1e1c1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .chart-tooltip .tt-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sub);
+      margin-bottom: 6px;
+    }
+    .chart-tooltip .tt-row {
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .chart-tooltip .tt-row b { font-weight: 700; }
+
+    /* ── Skeleton Loading ── */
+    @keyframes skel-pulse {
+      0%, 100% { opacity: 0.4; }
+      50%       { opacity: 0.8; }
+    }
+    .skel {
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+      animation: skel-pulse 1.5s ease-in-out infinite;
+    }
+    /* The bar standing in for a .card-value. Its height lives here rather than
+       inline so the phone layout, where the values are 34px and 22px instead of
+       desktop's 40px, can shrink it — otherwise the cards would visibly shrink
+       the moment real data replaced a too-tall placeholder. */
+    .skel-val { height: 42px; }
+    .skel-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      /* Top-aligned, not centered: the bars stand in for the label/value/sub
+         stack below them, which starts at the top of the card. Centering them
+         floated the placeholder ~14px off the text it was standing in for, so
+         everything visibly jumped on reveal. */
+      justify-content: flex-start;
+      gap: 12px;
+      padding: 0;
+      z-index: 2;
+      background: var(--bg);
+    }
+    body.loading .skel-overlay        { display: flex; }
+    body.loading #insight-row         { display: flex !important; }
+    body.loading .chart-wrap canvas   { visibility: hidden; }
+    /* Hide the real content rather than trusting the overlay to paint over it.
+       An opaque box only covers what it happens to overlap, so a card that
+       outgrows min-height (a wrapped "VS USUAL WEDNESDAYS", a long verdict)
+       leaked text past the bars. Same idiom as the canvas rule above. */
+    body.loading .insight-card > *:not(.skel-overlay) { visibility: hidden; }
+
+    /* ── Responsive ──────────────────────────────────────────────
+       The phone layout mirrors the iOS app's Today tab
+       (RSFApp2.0/Views/TodayView.swift:58-119) so the two products read as one:
+       a full-width capacity card over a pair of side-by-side insight cards,
+       then a divider, then the chart. Every rule below is scoped to this
+       breakpoint — desktop is untouched by all of it. */
+    @media (max-width: 768px) {
+      /* cardGutter: CGFloat = 20 (CardText.swift). Header, cards, divider,
+         and chart all start on the same vertical line, as on iOS.
+         The safe-area insets are 0 in portrait and non-zero in landscape, where
+         viewport-fit=cover would otherwise let the notch sit over the gutter. */
+      #data-warning  { padding: 10px calc(20px + env(safe-area-inset-right)) 10px calc(20px + env(safe-area-inset-left)); }
+      header         { padding: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      .divider       { margin: 0 calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left)); }
+      /* Title and pills stay on the 20px gutter with the cards above them. */
+      /* The chart section is the last thing on the page, and viewport-fit=cover
+         means the page paints under the home indicator, where iOS Safari floats
+         its toolbar. With no bottom padding the x-axis hour labels ended flush
+         against that, so the chrome read as a black bar laid over the chart.
+         The inset is 0 in a browser without one, so desktop and Android are
+         unaffected. */
+      .chart-section { padding: 20px calc(20px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
+
+      /* Stacking all three cards pushed the chart ~450px down, below the fold
+         on every phone. This is the iOS VStack(spacing: 22) wrapping an
+         HStack(alignment: .top, spacing: 16). */
+      .insight-row {
+        display: grid;
+        /* minmax(0, 1fr), not 1fr: a grid item defaults to min-width:auto, so
+           the nowrap "VS USUAL THURSDAYS" label sets a floor on its column's
+           width and pushes the whole row past the viewport. That is what shows
+           up as the page sitting ~20px to the left with its gutter gone, and
+           it also stops the label's text-overflow:ellipsis from ever engaging. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        column-gap: 16px;
+        /* Wider than iOS's 22 because the capacity card ends on a small grey
+           sub-line; at 22 the two cards read as attached to it. */
+        row-gap: 32px;
+        align-items: start;
+        /* Still asymmetric, since .card-sub reserves a line under each value and
+           makes the gap to the divider read larger than the number. Both ends
+           grew when the three card labels came out: the cards lost a line each
+           and started crowding the capacity bar above and the divider below. */
+        /* 16, not 28. header is height:64 with align-items:center, so the 28px
+           logo already leaves ~15px of dead space below its text inside that
+           box; this padding lands on top of it. 15 + 28 read as ~43px between
+           "Bear Meter" and the capacity card, so this is the half of the pair
+           that can move without shifting the logo itself. */
+        padding: 16px calc(20px + env(safe-area-inset-right)) 16px calc(20px + env(safe-area-inset-left));
+      }
+      /* The skeleton state forces display:flex !important to survive
+         .insight-row.hidden; without a matching override the placeholder would
+         lay out as a flex column and then snap into the grid on first paint. */
+      body.loading #insight-row { display: grid !important; }
+      #insight-status { grid-column: 1 / -1; }
+
+      /* No min-height on the phone. It was reserving room for a sub-line the
+         closed state never fills, which is what left the dead band between the
+         two small cards and the divider. Height stability instead comes from
+         .card-sub always occupying a line (below), which is how iOS does it:
+         CardSub renders " " with .opacity(0) rather than collapsing. */
+      .insight-card   { min-height: 0; min-width: 0; gap: 11px; }
+      .card-sub       { min-height: 1.25em; }
+
+      /* .inter(34, .bold) and .inter(22, .bold) in TodayView. */
+      #insight-pct { font-size: 37px; }
+      /* min() is the CSS stand-in for iOS's .lineLimit(1).minimumScaleFactor():
+         caps at the iOS size on a normal phone and scales down on narrow ones.
+         "Holding steady", the longest value either card shows, needs it — at a
+         flat 22px it wraps in a 167px column and drops that card's sub-line
+         below its neighbour's, which is exactly the misalignment the nowrap
+         and the shared min-height below are there to prevent. */
+      #insight-trend-val, #insight-comp-verdict {
+        font-size: min(22px, 5.6vw);
+        white-space: nowrap;
+      }
+      #insight-status .skel-val { height: 36px; }
+      #insight-trend .skel-val, #insight-comparison .skel-val { height: 24px; }
+
+      .live-dot.on   { display: block; }
+      .card-label    { letter-spacing: 1.2px; }  /* CardLabel .kerning(1.2) */
+      .card-sub      { font-size: 14px; }
+      .cap-bar-track { height: 6px; }            /* CapacityBar frame(height: 6) */
+
+      .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 18px;
+        /* 24px (the desktop value) on top of chartTopPad and the empty band the
+           110 ceiling leaves above the 100% tick put ~65px between the day pills
+           and the top gridline, which read as the chart having come unmoored
+           from its own header. The canvas supplies its own clearance; this only
+           needs to separate the pills from it. */
+        margin-bottom: 2px;
+      }
+      .day-pills {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+        width: 100%;
+      }
+
+      /* GymChart is .frame(height: 200), but that 200 is all plot — SwiftUI
+         Charts lays its axis labels inside it. Chart.js adds the x-axis row and
+         the top padding on top of the plot area, so matching iOS's *plot* means
+         a taller box here. */
+      .chart-wrap {
+        /* Was a flat 246px, i.e. the same box on an SE and a Pro Max, of which
+           roughly 40% went to axis furniture and headroom rather than curve.
+           Horizontal is already maxed (the negative margins below run the plot
+           edge to edge), so height is the only side of the height:width ratio
+           left to move, and that ratio is what makes a variation legible. On a
+           typical phone this lands near 335px, taking a 10pp wiggle from about
+           18px to about 28px. */
+        height: clamp(250px, 42vh, 410px);
+        /* Bleed out of the section's gutter so the plot runs edge to edge.
+           Nothing is lost on the left: Chart.js reserves that strip inside the
+           canvas for the "100%"/"75%" labels, so those become the buffer
+           instead of empty padding. The right keeps a small 8px margin, since
+           the curve itself runs right up to the closing hour. */
+        margin-left: calc(-20px - env(safe-area-inset-left));
+        margin-right: calc(-12px - env(safe-area-inset-right));
+      }
+
+      /* Exactly the iOS pill: .inter(13) with .padding(.horizontal, 18) and
+         .padding(.vertical, 8). An earlier pass pushed these to a 40px touch
+         target, which overshot the app it is supposed to match — and at 32px
+         they are still comfortably tappable. */
+      .pill { padding: 8px 18px; font-size: 13px; }
+
+      .cal-popup {
+        /* Was a fixed 260px, which left 7 columns of ~35px. Fill the gutters
+           instead so the day cells can be square-ish. */
+        width: min(320px, calc(100vw - 40px));
+        padding: 14px;
+        /* The open handler sets right:0 inline, which would put the popup flush
+           against the screen edge. Margin isn't part of that inline offset, so
+           it's what pulls the popup back onto the 20px gutter. */
+        margin-right: calc(20px + env(safe-area-inset-right));
+      }
+      .cal-day, .cal-dow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cal-day {
+        min-height: 40px;
+        padding: 0;
+        font-size: 15px;
+      }
+      .cal-dow { min-height: 28px; padding: 0; }
+      .cal-nav-btn {
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 18px;
+      }
+      .cal-header { margin-bottom: 6px; }
+    }
+
+    /* A landscape phone is short, not narrow: roughly 390px tall and 850px
+       wide. That is wider than the 768px breakpoint above, so every mobile rule
+       in it is skipped and the chart falls back to its desktop height - 340px on a
+       ~390px viewport, i.e. the chart alone is taller than the screen it has to
+       share with the header, the cards and the hint text.
+
+       Keyed on height and orientation rather than width, because width is the
+       one dimension that is not the problem here. It sits after the 768px block
+       so it also wins on a small landscape phone, where both match and the
+       portrait height would otherwise apply. A wide short plot is a good shape
+       for a day curve anyway; this only stops it eating the whole screen. */
+    @media (max-height: 560px) and (orientation: landscape) {
+      .chart-wrap { height: clamp(180px, 58vh, 260px); }
+    }

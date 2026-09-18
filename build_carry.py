@@ -26,7 +26,7 @@ Requires SUPABASE_URL and SUPABASE_SERVICE_KEY.
 """
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import carry_model as km
 from carry_data import load_matrices, open_slot_range
@@ -35,7 +35,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "carry.
 
 
 def main():
-    slots, dates, M, base_M, scored_origin = load_matrices()
+    slots, dates, M, base_M, scored_origin = load_matrices(use_cache=False)
 
     print("Building regression samples against the deployed baseline...")
     usable = set(scored_origin)
@@ -47,7 +47,7 @@ def main():
         raise SystemExit("no samples — cannot fit")
     print(f"  {len(samples):,} rows over {samples['date'].nunique():,} days")
 
-    table = km.build_table(samples, built_at=datetime.now().isoformat())
+    table = km.build_table(samples, built_at=datetime.now(timezone.utc).isoformat())
 
     n_cut = len(table["by_cut"])
     n_anch = sum(len(v) for v in table["by_cut"].values())
