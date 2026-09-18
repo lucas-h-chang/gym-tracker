@@ -31,6 +31,7 @@ anyone can repeat it.
 | 014 | `reliable_publication.sql` | ✅ applied 2026-09-18 | Function body hashes match migration; anon/authenticated execution denied, service_role allowed; internal tables have RLS |
 | 015 | `accuracy_publication_horizon.sql` | ✅ applied 2026-09-18 | View replacement succeeded; migration 016 verified baseline expansion; anon/authenticated reads denied |
 | 016 | `migration_history.sql` | ✅ applied 2026-09-18 | Ledger lists 013–016; RLS enabled, backend-only access verified |
+| 017 | `weekly_safeupdate.sql` | ✅ applied 2026-09-18 | Explicit non-null weekday predicate satisfies Supabase safeupdate without disabling the guard; transaction/rollback SQL test passes |
 
 > `42501 permission denied` means the object **exists** and is locked down.
 > A missing object returns `42P01 relation does not exist`. That difference is what
@@ -55,7 +56,10 @@ Apply forward files in order and update this ledger after verification. After 01
 verified baseline; their `applied_at` is the adoption time, not a claim about the original 013 run.
 
 **2026-09-18:** Lucas explicitly approved production migrations and deployment. Migrations
-014–016 were applied in order and verified in the production SQL editor.
+014–016 were applied in order and verified in the production SQL editor. The first weekly
+publication encountered Supabase safeupdate (unqualified DELETE rejected); it rolled back
+without data loss. Forward migration 017 adds an explicit predicate on the table’s NOT NULL
+weekday column. Existing migrations remain unchanged and permissions are preserved.
 See `handoffs/FABLE_REVIEW.md` in the parent workspace for the exact rollout and rollback sequence.
 
 Note the role timeout difference: the SQL editor allows ~2 minutes, but the REST anon

@@ -11,10 +11,10 @@ test('publication migrations: atomic rollback, monotonic writes, roles, claims, 
       create table capacity_log(timestamp timestamptz, people_count int, sensor_ok boolean);
       create table predictions(slot_ts timestamptz primary key, pct real);
       create table today_summary(date text primary key, similarity_preds jsonb, blend_weight real, computed_at timestamptz);
-      create table weekly_averages(day_of_week text, hour_slot float8, avg_pct float8, range_type text, semester_only boolean);
+      create table weekly_averages(day_of_week text not null, hour_slot float8, avg_pct float8, range_type text, semester_only boolean);
       grant all on all tables in schema public to service_role;
     `);
-    for (const name of ['012_prediction_snapshots.sql','013_snapshot_bare_curve.sql','014_reliable_publication.sql','015_accuracy_publication_horizon.sql','016_migration_history.sql']) {
+    for (const name of ['012_prediction_snapshots.sql','013_snapshot_bare_curve.sql','014_reliable_publication.sql','015_accuracy_publication_horizon.sql','016_migration_history.sql','017_weekly_safeupdate.sql']) {
       await db.exec(fs.readFileSync(`migrations/${name}`, 'utf8'));
     }
     const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
