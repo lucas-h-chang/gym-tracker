@@ -34,7 +34,7 @@ async function updateStatusBar() {
   lastLiveAttempt = Date.now();
   liveRequest = (async () => {
     try {
-      const r = await fetch('/api/live-capacity', { signal: AbortSignal.timeout(8000) });
+      const r = await fetch('/api/live-capacity', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
       if (!r.ok) throw new Error(`Live count ${r.status}`);
       const d = await r.json();
       const state = BearQuality.liveState(d);
@@ -46,7 +46,10 @@ async function updateStatusBar() {
       liveCapacity = null;
     } finally {
       liveRequest = null;
-      if (window._insightData) renderInsightCards(window._insightData);
+      if (window._insightData) {
+        if (predDate === todayPT()) updatePredChart(window._insightData);
+        renderInsightCards(window._insightData);
+      }
     }
   })();
   return liveRequest;

@@ -177,7 +177,10 @@ async function init() {
     // Settle both before the final render so the live % and the forecast the
     // trend card subtracts it from always describe the same moment.
     await Promise.allSettled([updateStatusBar(), refreshTodayData()]);
-    if (window._insightData) renderInsightCards(window._insightData);
+    if (window._insightData) {
+      if (predDate === todayPT()) updatePredChart(window._insightData);
+      renderInsightCards(window._insightData);
+    }
   };
   document.addEventListener('visibilitychange', wake);
   window.addEventListener('focus', wake);

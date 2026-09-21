@@ -49,3 +49,18 @@ test('stale corrections fall back to the baseline',async({page})=>{
   await expect(page.locator('body')).not.toHaveClass(/loading/);
   expect(await page.evaluate(()=>correctedPoints(window._insightData))).toEqual([]);
 });
+
+test('returning to a tab updates the live card and chart together',async({page})=>{
+  await mockNetwork(page);
+  await page.goto('/');
+  await expect(page.locator('#insight-pct')).toHaveText('50%');
+  await page.clock.runFor(2000);
+
+  await page.route('**/api/live-capacity',route=>route.fulfill({json:{
+    capacity_pct:70, recorded_at:new Date(now.getTime()+2000).toISOString(),
+    sensor_ok:true, source:'density',
+  }}));
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('#insight-pct')).toHaveText('70%');
+  await expect.poll(()=>page.evaluate(()=>predChart.data.datasets[0].data.at(-1).y)).toBe(70);
+});
