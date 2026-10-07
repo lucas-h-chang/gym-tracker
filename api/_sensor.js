@@ -1,123 +1,79 @@
-// _sensor.js — shared detection for "the RSF's occupancy hardware is dead".
-//
-// THE FAILURE MODE (observed 2026-08-23)
-// Density does not error when the RSF's counter fails. It keeps returning a
-// plausible-looking small number forever. That Sunday it reported 0-2 people
-// from 8:00 AM open straight through midday, while the previous Saturday had
-// already hit 37 people by 8:15. Nothing upstream was "down", so every surface
-// faithfully rendered the lie: a 1% live pill, a "Filling up" trend
-// extrapolated off that 1%, and a "Much quieter than usual Sundays" verdict —
-// which is the worst of the three, because it states the broken number as a
-// confident comparison against real history.
-//
-// WHY A RUN, NOT A SINGLE LOW READING
-// The obvious rule ("flag anything under 10% away from open/close") is both
-// too loose and too tight.
-//
-//   Too tight: the opening slot is LEGITIMATELY at the floor. weekly_averages
-//   for all_summers has Sunday 8:00 AM at 1% and Saturday 8:00 AM at 1% — but
-//   8:15 AM is already 9-10%. So a real quiet boundary lasts exactly one slot,
-//   while a dead sensor lasts all day. Run length separates them on its own,
-//   with no open/close carve-out — which matters, because open-hours logic is
-//   already mirrored by hand in six places (see CLAUDE.md) and this must not
-//   become a seventh.
-//
-//   Too loose: 10% is 15 people, and summer weekend mornings genuinely sit at
-//   9-10% one slot after open. A 10% floor would fire on a slightly-quiet real
-//   Sunday.
-//
-// THRESHOLD PROVENANCE
-// people_count <= 5 is not a new constant. curve_model.prepare_slots() already
-// drops those rows from training, because the <=5 band is flat across hours
-// (closures, sensor noise) while 6+ follows the real daily open/close curve.
-// Reusing it keeps one definition of "implausibly empty" in the project
-// instead of two that can drift apart.
-//
-// NOT A STALL: A CLOSED GYM
-// A full-facility closure produces an identical signature — a flat run at the
-// floor, all day. The first version of this file shipped without that guard
-// and would have reported the 2026-08-23 Caltopia closure as a dead sensor.
-// Closure days come from the calendar, not from the readings, which is the
-// only way to tell the two apart.
-//
-// FAIL-OPEN
-// Every error path returns stalled:false. A Supabase hiccup must not black out
-// a live pill that is probably fine; the cost of a missed outage is a wrong
-// number for one cycle, the cost of a false outage is the whole feature dark.
+// Shared scraper/live-pill rule. Two consecutive quarter-hour readings <=25%
+// are invalid inside [open+15min, close-15min]. Raw readings remain in history.
+// A current count above 25% clears the alarm; 6 people no longer counts as recovery.
+const { ptNow, getOpenHours } = require('./_hours');
+const MAX_CAPACITY = 150;
+const OUTAGE_PCT = 25;
+const FLOOR_COUNT = MAX_CAPACITY * OUTAGE_PCT / 100;
+const STALL_RUN = 2;
+const WINDOW_MS = 45 * 60 * 1000;
 
-const { ptNow, closureReason } = require('./_hours');
+function interior(pt) {
+  const [open, close] = getOpenHours(pt.weekday, pt.date);
+  const minutes = pt.hour * 60 + pt.minute;
+  return close > open && minutes >= open * 60 + 15 && minutes <= close * 60 - 15;
+}
+function slot(pt) { return pt.hour * 4 + Math.floor(pt.minute / 15); }
+function low(count) { return Number.isFinite(count) && count >= 0 && count <= FLOOR_COUNT; }
 
-const FLOOR_COUNT = 5;   // people; mirrors curve_model.prepare_slots()
-const STALL_RUN   = 6;   // consecutive floor readings (~90 min at 15-min cadence)
-const WINDOW_MS   = 3 * 60 * 60 * 1000;
-
-/**
- * @param supabase     service-role client
- * @param currentCount the count just read from Density (may be null)
- * @param todayPT      'YYYY-MM-DD' in Pacific; defaults to now. Injectable so
- *                     the tests can pin a date — otherwise every assertion
- *                     changes meaning on a closure day.
- * @returns {{stalled: boolean, reason: string, since?: string}}
- */
-async function isSensorStalled(supabase, currentCount, todayPT = ptNow().date) {
-  // A single healthy reading clears the alarm instantly. This is also what
-  // makes the check self-healing: capacity_log still holds the stalled rows
-  // when the hardware recovers, but the live count is above the floor again,
-  // so we never have to "expire" the outage on a timer.
-  if (currentCount == null || currentCount > FLOOR_COUNT) {
-    return { stalled: false, reason: 'live count above floor' };
+// Pure logic, also exercised against fixtures shared with the Python escape hatch.
+function evaluateSensorReading(rows, currentCount, now = new Date()) {
+  const pt = ptNow(now);
+  if (!low(currentCount)) return { stalled: false, reason: 'count above 25% or invalid' };
+  if (!interior(pt)) return { stalled: false, reason: 'outside interior open hours' };
+  const currentSlot = slot(pt);
+  const prior = (rows || []).filter(row => {
+    const ms = Date.parse(row.timestamp);
+    if (!Number.isFinite(ms) || ms >= now.getTime()) return false;
+    const previousPT = ptNow(new Date(ms));
+    return previousPT.date === pt.date && slot(previousPT) < currentSlot;
+  }).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+  const last = prior[0];
+  if (!last) return { stalled: false, reason: 'no previous distinct slot' };
+  const previousPT = ptNow(new Date(last.timestamp));
+  if (slot(previousPT) !== currentSlot - 1 || !interior(previousPT) || !low(last.people_count)) {
+    return { stalled: false, reason: 'previous slot missing, outside margins, or above 25%' };
   }
-
-  // A shut building genuinely holds 0-2 people, and it holds them all day —
-  // exactly the signature this function looks for. 2026-08-23 was a Caltopia
-  // closure, not a hardware failure, and without this guard the rule calls it
-  // one. Closure days are in academic_calendar.py CLOSURES / _hours.js.
-  const closure = closureReason(todayPT);
-  if (closure) {
-    return { stalled: false, reason: `RSF closed for ${closure}` };
-  }
-
-  const since = new Date(Date.now() - WINDOW_MS).toISOString();
-  const { data, error } = await supabase
-    .from('capacity_log')
-    .select('timestamp, people_count')
-    .gte('timestamp', since)
-    .order('timestamp', { ascending: false })
-    .limit(STALL_RUN * 2);
-
-  if (error) {
-    console.error('[sensor] stall lookback failed:', JSON.stringify(error));
-    return { stalled: false, reason: 'lookback failed' };
-  }
-
-  // The current reading is the STALL_RUN'th; we need STALL_RUN-1 before it.
-  // Bounding the lookback by time rather than row count is what keeps the
-  // opening ramp safe: right after doors open there are only one or two rows
-  // inside the window, so the check declines to judge until ~90 minutes in.
-  // An ambiguous insert retry can leave identical timestamps. Count distinct
-  // observations so retries cannot shorten the intended stall window.
-  const seen = new Set();
-  const prior = (data || []).filter(row => {
-    if (seen.has(row.timestamp)) return false;
-    seen.add(row.timestamp);
-    return true;
-  }).slice(0, STALL_RUN - 1);
-  if (prior.length < STALL_RUN - 1) {
-    return { stalled: false, reason: `only ${prior.length} readings in lookback window` };
-  }
-
-  const allFloor = prior.every(
-    (r) => r.people_count != null && r.people_count <= FLOOR_COUNT
-  );
-  if (!allFloor) {
-    return { stalled: false, reason: 'a recent reading was above the floor' };
-  }
-
-  return {
-    stalled: true,
-    reason: `${STALL_RUN} consecutive readings <= ${FLOOR_COUNT} people`,
-    since: prior[prior.length - 1].timestamp,
-  };
+  // Include timestamp duplicates in the confirmed prior bin so none can leak
+  // into training after the first observation is retroactively invalidated.
+  const timestamps = prior.filter(row => slot(ptNow(new Date(row.timestamp))) === currentSlot - 1
+    && low(row.people_count)).map(row => row.timestamp);
+  return { stalled: true, reason: 'two consecutive readings at or below 25%',
+    since: last.timestamp, timestamps: [...new Set(timestamps)] };
 }
 
-module.exports = { isSensorStalled, FLOOR_COUNT, STALL_RUN };
+async function isSensorStalled(supabase, currentCount, now = new Date()) {
+  if (!low(currentCount) || !interior(ptNow(now))) return evaluateSensorReading([], currentCount, now);
+  try {
+    const { data, error } = await supabase.from('capacity_log')
+      .select('timestamp, people_count')
+      .gte('timestamp', new Date(now.getTime() - WINDOW_MS).toISOString())
+      .lte('timestamp', now.toISOString())
+      .order('timestamp', { ascending: false }).limit(12);
+    if (error) throw error;
+    return evaluateSensorReading(data, currentCount, now);
+  } catch (error) {
+    console.error('[sensor] stall lookback failed:', error.message);
+    return { stalled: false, reason: 'lookback failed' };
+  }
+}
+
+// Called by the scraper after inserting the second invalid reading. The live
+// endpoint only reads history. Retry this idempotent, timestamp-bounded update.
+async function invalidatePriorReadings(supabase, stall, { sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+  if (!stall.stalled || !stall.timestamps?.length) return;
+  let failure;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { error } = await supabase.from('capacity_log').update({ sensor_ok: false })
+        .in('timestamp', stall.timestamps).lte('people_count', FLOOR_COUNT);
+      if (error) throw error;
+      return;
+    } catch (error) {
+      failure = error;
+      if (attempt < 2) await sleep(1000 * 2 ** attempt);
+    }
+  }
+  throw failure;
+}
+module.exports = { isSensorStalled, evaluateSensorReading, invalidatePriorReadings, OUTAGE_PCT, FLOOR_COUNT, STALL_RUN };

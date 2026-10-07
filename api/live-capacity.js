@@ -66,9 +66,9 @@ module.exports = async function handler(req, res) {
     // Density does not error when the RSF's hardware dies — it keeps serving a
     // small plausible number. Without this the pill renders that number as
     // fact, and the trend and comparison cards then build confident sentences
-    // on top of it. See api/_sensor.js for why the rule is a run of floor
-    // readings and not a percentage threshold.
-    const stall = await isSensorStalled(supabase, count);
+    // on top of it. Two consecutive quarter-hour readings at or below
+    // 25% within interior open hours trigger the shared api/_sensor.js rule.
+    const stall = await isSensorStalled(supabase, count, new Date(now));
     if (stall.stalled) {
       console.warn(`[live-capacity] SENSOR STALL: ${stall.reason} (since ${stall.since})`);
     }

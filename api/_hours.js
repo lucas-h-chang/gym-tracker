@@ -32,13 +32,13 @@ const SUMMER_RANGES = [
  * Current Pacific wall-clock, independent of the server's own timezone.
  * Vercel functions run in UTC, so we cannot read Date methods directly.
  */
-function ptNow() {
+function ptNow(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Los_Angeles',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
     hour12: false, weekday: 'long',
-  }).formatToParts(new Date());
+  }).formatToParts(now);
 
   const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
   return {

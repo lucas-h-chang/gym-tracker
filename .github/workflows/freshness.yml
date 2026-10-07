@@ -14,7 +14,7 @@ name: Data Freshness Monitor
 # The plausibility rule is deliberately re-derived here from people_count rather
 # than reading capacity_log.sensor_ok, so this stays an INDEPENDENT monitor: if
 # api/_sensor.js ever stops flagging, this still fires. Thresholds mirror
-# api/_sensor.js (<= 5 people, 6 consecutive readings) — see that file for why.
+# api/_sensor.js (two consecutive readings <=25%, inside the 15-minute margins).
 
 on:
   schedule:
@@ -160,21 +160,29 @@ jobs:
               sys.exit(0)
 
           # --- Plausibility: is the hardware alive, not just the pipeline? -------
-          FLOOR, RUN = 5, 6
-          counts = [r.get("people_count") for r in rows]
-          if len(rows) >= RUN and all(c is not None and c <= FLOOR for c in counts):
-              oldest = datetime.fromisoformat(rows[-1]["timestamp"].replace("Z", "+00:00"))
-              print(f"SENSOR STALL: last {RUN} readings all <= {FLOOR} people: {counts}")
+          # Re-derive from raw counts, never trust the sensor_ok flag itself.
+          FLOOR, RUN = 150 * .25, 2
+          distinct = {}
+          for row in rows:
+              ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00")).astimezone(PT)
+              if ts.date() != now.date():
+                  continue
+              distinct.setdefault(ts.hour * 4 + ts.minute // 15, (ts, row.get("people_count")))
+          pair = list(distinct.items())[:RUN]
+          stalled = len(pair) == RUN and pair[0][0] - pair[1][0] == 1 and all(
+              open_h * 60 + 15 <= ts.hour * 60 + ts.minute <= close_h * 60 - 15
+              and count is not None and 0 <= count <= FLOOR
+              for _, (ts, count) in pair
+          )
+          if stalled:
+              counts = [count for _, (_, count) in pair]
+              oldest = pair[-1][1][0]
+              print(f"SENSOR STALL: last {RUN} readings <=25%: {counts}")
               emit("stale", "true")
               emit("title", "RSF sensor stalled — readings are arriving but implausible")
-              emit("detail",
-                   f"The last {RUN} capacity_log readings are all <= {FLOOR} people "
-                   f"({counts}), spanning {oldest.astimezone(PT):%H:%M} to "
-                   f"{latest.astimezone(PT):%H:%M} PT while the RSF is open. Rows are "
-                   f"arriving on schedule, so the scraper is healthy — this points at "
-                   f"the RSF's own occupancy hardware. The site suppresses the live "
-                   f"pill and comparison card automatically (api/_sensor.js); no "
-                   f"action is needed beyond confirming with the RSF.")
+              emit("detail", f"Two consecutive interior readings at or below 25% "
+                   f"({counts}), from {oldest:%H:%M} to {latest.astimezone(PT):%H:%M} PT. "
+                   f"The shared detector excludes both readings from forecasts.")
               sys.exit(0)
 
           emit("stale", "false")

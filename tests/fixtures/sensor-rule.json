@@ -1,0 +1,251 @@
+[
+  {
+    "name": "two low readings confirm",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 20,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 30
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "six people is not recovery",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 6,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "exactly 25 percent",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 37.5,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 37.5
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "above 25 percent recovers",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 38,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "preceding healthy reading breaks pair",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 38
+      },
+      {
+        "timestamp": "2026-10-07T17:00:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "missing slot breaks pair",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:00:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "duplicates in current slot cannot form pair",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:30:04-07:00",
+        "people_count": 2
+      },
+      {
+        "timestamp": "2026-10-07T17:30:04-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "flagged prior still confirms",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 2,
+        "sensor_ok": false
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "bad current count fails open",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": null,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "negative count rejected",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": -1,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "malformed previous count rejected",
+    "now": "2026-10-07T17:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T17:15:10-07:00",
+        "people_count": "2"
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "opening slot does not confirm",
+    "now": "2026-10-07T07:15:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T07:00:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "first eligible pair",
+    "now": "2026-10-07T07:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T07:15:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "last eligible pair",
+    "now": "2026-10-07T22:45:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T22:30:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "closing slot excluded",
+    "now": "2026-10-07T23:00:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-07T22:45:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "closed Caltopia day",
+    "now": "2026-08-24T12:30:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-08-24T12:15:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "summer pair at end",
+    "now": "2026-07-06T19:45:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-07-06T19:30:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": true
+  },
+  {
+    "name": "summer closed evening",
+    "now": "2026-07-06T20:00:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-07-06T19:45:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "Saturday closes at six",
+    "now": "2026-10-10T18:00:10-07:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-10-10T17:45:10-07:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": false
+  },
+  {
+    "name": "winter timezone pair",
+    "now": "2026-12-02T17:30:10-08:00",
+    "count": 2,
+    "rows": [
+      {
+        "timestamp": "2026-12-02T17:15:10-08:00",
+        "people_count": 2
+      }
+    ],
+    "stalled": true
+  }
+]

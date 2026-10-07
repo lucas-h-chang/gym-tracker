@@ -27,34 +27,36 @@ from supabase import create_client
 
 from academic_calendar import get_open_hours
 
-URL     = "https://api.density.io/v2/spaces/spc_863128347956216317/count"
-HEADERS = {"Authorization": f"Bearer {os.environ['DENSITY_TOKEN']}"}
+from sensor_guard import is_sensor_stalled, FLOOR_COUNT
+from supabase_io import execute_read
+
 MAX_CAP = 150
-PT      = ZoneInfo("America/Los_Angeles")
+PT = ZoneInfo("America/Los_Angeles")
 
-# Open-hours gate: cron fires through academic hours year-round; this guard
-# prevents inserts during summer evenings when the RSF is actually closed.
-# get_open_hours/is_summer_day/SUMMER_RANGES live in academic_calendar.py
-# (consolidated 2026-07-21 — see CLAUDE.md).
 
-now = datetime.now(PT)
-open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
-now_hour = now.hour + now.minute / 60
-if now_hour < open_h or now_hour >= close_h:
-    print(f"[{now.isoformat()}] RSF closed (open {open_h}:00 – {close_h}:00); skipping insert.")
-    sys.exit(0)
+def main():
+    now = datetime.now(PT)
+    open_h, close_h = get_open_hours(now.strftime('%A'), now.date())
+    if not open_h <= now.hour + now.minute / 60 < close_h:
+        print(f"[{now.isoformat()}] RSF closed; skipping insert.")
+        return
+    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    response = requests.get("https://api.density.io/v2/spaces/spc_863128347956216317/count",
+        headers={"Authorization": f"Bearer {os.environ['DENSITY_TOKEN']}"}, timeout=10)
+    response.raise_for_status()
+    count = response.json()["count"]
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        raise ValueError('Invalid Density count')
+    stall = is_sensor_stalled(sb, count, now)
+    pct = round(count / MAX_CAP * 100, 1)
+    sb.table("capacity_log").insert({"timestamp": now.isoformat(),
+        "people_count": count, "percent_full": pct, "sensor_ok": not stall['stalled']}).execute()
+    if stall['stalled']:
+        # Bounded/idempotent update; reuse retry handling for transient failures.
+        execute_read(lambda: sb.table('capacity_log').update({'sensor_ok': False})
+            .in_('timestamp', stall['timestamps']).lte('people_count', FLOOR_COUNT))
+    print(f"[{now.isoformat()}] Saved: {count} people ({pct}%), sensor_ok={not stall['stalled']}")
 
-sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
-data  = requests.get(URL, headers=HEADERS, timeout=10).json()
-count = data["count"]
-pct   = round((count / MAX_CAP) * 100, 1)
-ts    = now.isoformat()
-
-sb.table("capacity_log").insert({
-    "timestamp":    ts,
-    "people_count": count,
-    "percent_full": pct,
-}).execute()
-
-print(f"[{ts}] Saved: {count} people ({pct}%)")
+if __name__ == '__main__':
+    main()

@@ -22,7 +22,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { ptNow, getOpenHours } = require('./_hours');
-const { isSensorStalled } = require('./_sensor');
+const { isSensorStalled, invalidatePriorReadings } = require('./_sensor');
 const { insertCapacityRow } = require('./_supabase_retry');
 
 const { readDensity } = require('./_density');
@@ -92,7 +92,7 @@ module.exports = async function handler(req, res) {
   //     with sensor_ok = false keeps the forensic record and keeps the stall
   //     detector fed (it reads this very table to find its run) while taking
   //     the reading out of every downstream average. See migration 008.
-  const stall = await isSensorStalled(supabase, count);
+  const stall = await isSensorStalled(supabase, count, new Date(timestamp));
   if (stall.stalled) {
     console.warn(`[scrape] SENSOR STALL: ${stall.reason} (since ${stall.since}) — logging ${count} with sensor_ok=false`);
   }
@@ -115,6 +115,15 @@ module.exports = async function handler(req, res) {
       attempts,
       details: error.message,
     });
+  }
+
+  // The pair confirms the first reading was invalid too. Without this repair,
+  // every outage leaves one poisoned observation in the next nightly build.
+  try {
+    await invalidatePriorReadings(supabase, stall);
+  } catch (error) {
+    console.error('[scrape] prior-reading invalidation failed:', error.message);
+    return res.status(500).json({ error: 'prior-reading invalidation failed' });
   }
 
   console.log(
