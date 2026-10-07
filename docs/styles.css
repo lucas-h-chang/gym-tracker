@@ -637,6 +637,7 @@
            needs to separate the pills from it. */
         margin-bottom: 2px;
       }
+      .sensor-warning { margin-top: 16px; }
       .day-pills {
         overflow-x: auto;
         overscroll-behavior-x: contain;
