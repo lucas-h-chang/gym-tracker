@@ -42,6 +42,7 @@ async function init() {
     predictions,
     weekly,
     today_actuals:           buildTodayActuals(actualsRows, today),
+    today_readings:          actualsRows,
     today_computed_at: ts.computed_at,
     today_similarity_preds:  ts.similarity_preds || [],
     today_blend_weight:      ts.blend_weight || 0,

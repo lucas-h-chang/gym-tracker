@@ -110,6 +110,7 @@ async function refreshTodayData() {
   }
 
   data.today_actuals = buildTodayActuals(actualsRows, bootDate);
+  data.today_readings = actualsRows;
 
   const ts = todaySummaryRows[0] || {};
   data.today_computed_at = ts.computed_at;

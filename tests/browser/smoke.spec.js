@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const now = new Date('2026-09-16T18:00:00Z');
 const predictionRows = Array.from({length:64},(_,i)=>({slot_ts:new Date(Date.parse('2026-09-16T14:00:00Z')+i*900000).toISOString(),pct:60}));
-async function mockNetwork(page, {live={}, weeklyDelay=false, summary=[]}={}) {
+async function mockNetwork(page, {live={}, weeklyDelay=false, summary=[], readings=[{timestamp:'2026-09-16T17:45:00Z',percent_full:50,sensor_ok:true}]}={}) {
   await page.clock.install({time:now});
   await page.route('https://fonts.**', route=>route.abort());
   await page.route('**/_vercel/insights/script.js', route=>route.fulfill({body:'',contentType:'application/javascript'}));
@@ -18,7 +18,7 @@ async function mockNetwork(page, {live={}, weeklyDelay=false, summary=[]}={}) {
       return route.fulfill({json:[]});
     }
     if (url.includes('/today_summary')) return route.fulfill({json:summary});
-    if (url.includes('/capacity_log')) return route.fulfill({json:[{timestamp:'2026-09-16T17:45:00Z',percent_full:50,sensor_ok:true}]});
+    if (url.includes('/capacity_log')) return route.fulfill({json:readings});
     return route.fulfill({json:predictionRows});
   });
   return releaseWeekly;
@@ -32,6 +32,30 @@ test('first chart paint does not wait for weekly averages',async({page})=>{
   await expect(page.locator('#pred-chart')).toBeVisible();
   expect(errors).toEqual([]);
   release();
+});
+
+for (const width of [1280, 390]) test(`sensor warning appears above today's graph at ${width}px`, async ({page}) => {
+  await page.setViewportSize({width, height:900});
+  await mockNetwork(page, {readings:[
+    {timestamp:'2026-09-16T17:15:00Z',percent_full:2,sensor_ok:false},
+    {timestamp:'2026-09-16T17:30:00Z',percent_full:3,sensor_ok:false},
+  ]});
+  await page.goto('/');
+  await expect(page.locator('body')).not.toHaveClass(/loading/);
+  const warning = page.locator('#sensor-warning');
+  await expect(warning).toBeVisible();
+  await expect(warning).toHaveText('Sensor error or outage may be occurring');
+  const box = await warning.boundingBox();
+  const chart = await page.locator('#pred-chart').boundingBox();
+  expect(box.y + box.height).toBeLessThanOrEqual(chart.y);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
+  expect(await warning.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({path:`/tmp/bear-meter-sensor-warning-${width}.png`});
+  await page.getByRole('button', {name:'Tomorrow', exact:true}).click();
+  await expect(warning).toBeHidden();
+  await page.getByRole('button', {name:'Today', exact:true}).click();
+  await expect(warning).toBeVisible();
 });
 for (const [name,live,label] of [
   ['invalid sensor',{sensor_ok:false},'RSF sensor offline'],

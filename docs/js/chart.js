@@ -419,6 +419,8 @@ function updatePredChart(data) {
   // open) there's no actual line for it to cap, so it would float alone in
   // empty space — only show it while the gym is actually open.
   const { open: openH, close: closeH } = getOpenHours(predDay.getDay(), predDay);
+  document.getElementById('sensor-warning').hidden =
+    !isToday || !hasSensorWarning(data.today_readings, predDate, nowVal);
   const gymIsOpen = pt.getHours() >= openH && pt.getHours() < closeH;
   const showNow   = isToday && gymIsOpen;
 

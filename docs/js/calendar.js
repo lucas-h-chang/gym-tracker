@@ -65,6 +65,31 @@ function buildTodayActuals(rows, today) {
 }
 
 
+// Inspect raw readings, including sensor_ok=false rows omitted from the graph.
+// Match its quarter-hour bins; retries in one bin must not count as two readings.
+function hasSensorWarning(rows, dateStr, nowHour) {
+  const day = new Date(dateStr + 'T12:00:00');
+  const { open, close } = getOpenHours(day.getDay(), day);
+  if (close <= open) return false;
+  const bins = new Map();
+  [...(rows || [])].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).forEach(row => {
+    if (!Number.isFinite(Date.parse(row.timestamp))) return;
+    const key = slotTsToKey(row.timestamp);
+    if (key.slice(0, 10) !== dateStr) return;
+    const [h, m] = key.slice(11).split(':').map(Number);
+    const slot = Math.round((h * 60 + m) / 15) / 4;
+    bins.set(slot, row.percent_full);
+  });
+  let previousLow = null;
+  for (const [slot, pct] of bins) {
+    const low = slot >= open + 0.25 && slot <= close - 0.25 && slot <= nowHour
+      && Number.isFinite(pct) && pct >= 0 && pct < 30;
+    if (low && previousLow === slot - 0.25) return true;
+    previousLow = low ? slot : null;
+  }
+  return false;
+}
+
 function getPTNow() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 }
