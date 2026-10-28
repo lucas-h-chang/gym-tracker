@@ -32,7 +32,10 @@ async function updateStatusBar() {
   if (liveRequest) return liveRequest;
   if (Date.now() - lastLiveAttempt < 1000) return;
   lastLiveAttempt = Date.now();
-  liveRequest = (async () => {
+  // Assign the single-flight promise before running request setup. Otherwise
+  // a synchronous throw can clear liveRequest in finally before this assignment
+  // overwrites it with a settled promise, permanently blocking every poll.
+  liveRequest = Promise.resolve().then(async () => {
     try {
       const r = await fetch('/api/live-capacity', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
       if (!r.ok) throw new Error(`Live count ${r.status}`);
@@ -42,8 +45,11 @@ async function updateStatusBar() {
         pct: Math.round(d.capacity_pct), count: Math.round(d.capacity_pct * 1.5),
         recordedAt: d.recorded_at, sensorOk: d.sensor_ok !== false, source: d.source,
       };
-    } catch (_) {
-      liveCapacity = null;
+    } catch (error) {
+      console.warn('Live capacity request failed:', error);
+      // A network failure does not invalidate a reading that is still within
+      // the existing freshness limit. usableLive() expires it after 120s.
+      if (!usableLive()) liveCapacity = null;
     } finally {
       liveRequest = null;
       if (window._insightData) {
@@ -51,7 +57,7 @@ async function updateStatusBar() {
         renderInsightCards(window._insightData);
       }
     }
-  })();
+  });
   return liveRequest;
 }
 

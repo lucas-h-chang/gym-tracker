@@ -3,11 +3,6 @@ async function init() {
   // chart.js loads with `defer`, so it isn't available until DOMContentLoaded
   // (which gates this init call). Register plugins here, not at parse time.
   Chart.register(capacityGradientPlugin, closedHoursPlugin, nowLinePlugin, scrubLinePlugin);
-  updateStatusBar();
-  // Live capacity is shared through a 30s Supabase cache (see
-  // api/live-capacity.js), so
-  // polling any faster than that just re-fetches the same cached value.
-  setInterval(updateStatusBar, 30000);
 
   const today     = todayPT();
   const yesterday = shiftDate(today, -1);
@@ -26,7 +21,13 @@ async function init() {
     console.error('Supabase load failed:', e);
     document.body.classList.remove('loading');
     showDataWarning(`Could not load gym data: ${e.message}`);
-    return;
+    throw e;
+  }
+
+  const warning = document.getElementById('data-warning');
+  if (warning.textContent.startsWith('Could not load gym data:')) {
+    warning.textContent = '';
+    warning.style.display = 'none';
   }
 
   const weekly = {};
@@ -200,11 +201,39 @@ async function init() {
     .catch(e => console.error('background predictions load failed:', e));
 }
 
-// chart.js is loaded with `defer`, which executes before DOMContentLoaded but
-// after this inline script parses. Gating init on DOMContentLoaded guarantees
-// the Chart global exists before updatePredChart runs.
+// A temporary boot failure must not leave the page stranded until a manual
+// reload. Keep the live poll independent and start only one copy of it.
+let bootInFlight = false;
+let bootComplete = false;
+let bootRetry = null;
+async function boot() {
+  if (bootInFlight || bootComplete) return;
+  clearTimeout(bootRetry);
+  bootInFlight = true;
+  try {
+    await init();
+    bootComplete = true;
+  } catch (e) {
+    console.error('Page initialization failed; retrying:', e);
+    bootRetry = setTimeout(boot, 5000);
+  } finally {
+    bootInFlight = false;
+  }
+}
+function start() {
+  updateStatusBar();
+  setInterval(updateStatusBar, 30000);
+  // Recover immediately when connectivity or a suspended tab comes back.
+  window.addEventListener('online', boot);
+  window.addEventListener('pageshow', boot);
+  window.addEventListener('focus', boot);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') boot();
+  });
+  boot();
+}
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', start);
 } else {
-  init();
+  start();
 }

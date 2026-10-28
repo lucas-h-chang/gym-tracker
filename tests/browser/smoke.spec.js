@@ -88,3 +88,61 @@ test('returning to a tab updates the live card and chart together',async({page})
   await expect(page.locator('#insight-pct')).toHaveText('70%');
   await expect.poll(()=>page.evaluate(()=>predChart.data.datasets[0].data.at(-1).y)).toBe(70);
 });
+
+test('a failed startup request recovers without reloading', async ({page}) => {
+  await mockNetwork(page);
+  let attempts = 0;
+  let recovered = false;
+  await page.route('**/rest/v1/today_summary?**', route => {
+    attempts++;
+    return !recovered
+      ? route.fulfill({status:503, json:{message:'temporarily unavailable'}})
+      : route.fulfill({json:[]});
+  });
+  await page.goto('/');
+  await expect(page.locator('#data-warning')).toContainText('Could not load gym data:');
+  recovered = true;
+  await page.clock.runFor(5100);
+  await expect(page.locator('#insight-pct')).toHaveText('50%');
+  await expect(page.locator('#insight-trend-val')).toHaveText('Filling up');
+  await expect(page.locator('#data-warning')).toBeHidden();
+  await expect(page.locator('#pred-chart')).toBeVisible();
+  expect(attempts).toBeGreaterThanOrEqual(2);
+});
+
+test('a temporary live failure preserves a fresh reading and still expires it', async ({page}) => {
+  await mockNetwork(page);
+  await page.goto('/');
+  await expect(page.locator('#insight-pct')).toHaveText('50%');
+  await page.route('**/api/live-capacity', route => route.fulfill({status:502,json:{error:'temporary failure'}}));
+  await page.clock.runFor(31000);
+  await expect(page.locator('#insight-pct')).toHaveText('50%');
+  await page.clock.runFor(100000);
+  await expect(page.locator('#insight-pct')).toHaveText('—');
+});
+
+test('a synchronous live-request failure cannot block later polls', async ({page}) => {
+  await mockNetwork(page);
+  let liveRequests = 0;
+  page.on('request', request => {
+    if (request.url().endsWith('/api/live-capacity')) liveRequests++;
+  });
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch;
+    let failOnce = true;
+    window.fetch = function (...args) {
+      if (args[0] === '/api/live-capacity' && failOnce) {
+        failOnce = false;
+        throw new TypeError('Simulated failure before fetch returns a promise');
+      }
+      return originalFetch.apply(this, args);
+    };
+  });
+  await page.goto('/');
+  await expect(page.locator('body')).not.toHaveClass(/loading/);
+  await expect(page.locator('#insight-pct')).toHaveText('—');
+  expect(liveRequests).toBe(0);
+  await page.clock.runFor(31000);
+  await expect(page.locator('#insight-pct')).toHaveText('50%');
+  expect(liveRequests).toBe(1);
+});
