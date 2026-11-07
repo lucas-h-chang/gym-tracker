@@ -1,0 +1,52 @@
+name: Shadow Forecast Health
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/shadow_health.yml'
+      - 'shadow_forecast.py'
+      - 'shadow_health.py'
+  schedule:
+    - cron: '45 16 * * *'  # morning PT, after the preceding day is complete
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shadow-forecast-health
+  cancel-in-progress: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Score frozen holdout and ongoing window
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -o pipefail
+          python shadow_health.py --days 30 2>&1 | tee shadow-health.txt
+      - name: Keep report in the run summary
+        if: always()
+        run: |
+          if [ -f shadow-health.txt ]; then
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat shadow-health.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: shadow-health-${{ github.run_id }}
+          path: shadow-health.txt
+          retention-days: 90

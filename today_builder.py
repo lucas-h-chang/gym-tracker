@@ -218,10 +218,11 @@ def main(sb=None, now=None):
         print("A newer forecast is already published; skipping this run")
         return
     print(f"[{now.isoformat()}] today_summary updated: {len(preds)} slots")
-    record_snapshot(sb, now, preds, base, curve, meta, metadata)
+    record_snapshot(sb, now, preds, base, curve, meta, metadata,
+                    actuals=actuals, carry=carry)
 
 
-def record_snapshot(sb, now, preds, base, curve, meta, metadata):
+def record_snapshot(sb, now, preds, base, curve, meta, metadata, *, actuals=None, carry=None):
     # Audit failure must not prevent publication; freshness monitoring detects
     # missing snapshots independently. Include shaping inside this guard too.
     try:
@@ -231,7 +232,16 @@ def record_snapshot(sb, now, preds, base, curve, meta, metadata):
             last_slot=meta.get("last_slot"), n_obs=meta.get("n_obs"),
             gaps=meta.get("gaps"),
         )
-        row["metadata"] = metadata
+        row["metadata"] = dict(metadata)
+        # Isolate shadow computation as well as its storage from publication.
+        # Failure still leaves the ordinary live audit row intact and visible.
+        try:
+            import shadow_forecast
+            row["metadata"]["shadow"] = shadow_forecast.build_shadow(
+                now, preds, base, curve, actuals or {}, carry)
+        except Exception as exc:
+            row["metadata"]["shadow"] = {"status": "error", "error": str(exc)}
+            print(f"WARNING: shadow forecast failed, production unaffected: {exc}")
         sb.table("prediction_snapshots").upsert(
             row, on_conflict="source,computed_at").execute()
         print(f"  snapshot recorded ({len(preds)} slots)")
