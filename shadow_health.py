@@ -11,6 +11,8 @@ from datetime import date, datetime, time, timedelta
 from statistics import mean
 from zoneinfo import ZoneInfo
 
+from dateutil.parser import isoparse
+
 from academic_calendar import classify_date, get_open_hours
 from forecast_health import horizon_label, load_env, recent_open_dates
 from shadow_forecast import ARMS, EXPERIMENT_ID, HOLDOUT_OPEN_DAYS, HOLDOUT_START, POLICY_HASH
@@ -55,7 +57,9 @@ def actual_slots(rows):
     for row in rows:
         if row.get("sensor_ok") is False or row.get("people_count") is None:
             continue
-        ts = datetime.fromisoformat(row["timestamp"]).astimezone(PT)
+        # PostgREST trims fractional zeros; Python 3.10 fromisoformat rejects
+        # fractional precision other than three or six digits.
+        ts = isoparse(row["timestamp"]).astimezone(PT)
         lo, hi = get_open_hours(ts.strftime("%A"), ts.date())
         slot = min(95, math.floor((ts.hour * 60 + ts.minute) / 15 + 0.5))
         count = float(row["people_count"])
@@ -69,7 +73,7 @@ def paired_points(snapshots, actuals, dates):
     for row in snapshots:
         if row["date"] not in dates:
             continue
-        now = datetime.fromisoformat(row["computed_at"]).astimezone(PT)
+        now = isoparse(row["computed_at"]).astimezone(PT)
         lo, hi = get_open_hours(now.strftime("%A"), now.date())
         # End-of-day runs with no future open slot have no testable forecast.
         if not any(datetime.combine(now.date(), time(s // 4, s % 4 * 15), PT) > now

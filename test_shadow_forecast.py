@@ -122,6 +122,19 @@ def test_actuals_drop_sensor_failures_and_keep_true_zero():
     assert sh.actual_slots([reading(0), reading(150, False)]) == {("2026-11-07", 45): 0}
 
 
+@pytest.mark.parametrize("fraction", ["", ".8", ".07", ".005", ".0052", ".00529", ".005291"])
+def test_postgrest_fractional_precision_in_actuals_and_publications(fraction):
+    actuals = sh.actual_slots([{
+        "timestamp": f"2026-11-07T19:15:09{fraction}+00:00",
+        "people_count": 75, "sensor_ok": True,
+    }])
+    publication = row()
+    publication["computed_at"] = f"2026-11-07T19:00:05{fraction}+00:00"
+    points, valid, expected = sh.paired_points([publication], actuals, {"2026-11-07"})
+    assert (len(points), valid, expected) == (1, 1, 1)
+    assert points[0]["actual"] == 50
+
+
 def test_holdout_is_30_future_open_days_and_configuration_is_frozen():
     days = sh.holdout_dates()
     assert len(days) == 30 and days[0] == date(2026, 11, 7)
