@@ -1,4 +1,9 @@
 {
   "outputDirectory": "docs",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "functions": {
+    "api/scrape-5m.js": {
+      "maxDuration": 30
+    }
+  }
 }

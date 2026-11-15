@@ -1,0 +1,48 @@
+name: Five Minute Collection Health
+
+on:
+  schedule:
+    - cron: '15 17 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: five-minute-collection-health
+  cancel-in-progress: false
+
+jobs:
+  score:
+    # Enable only AFTER migration, deployment, and cron verification.
+    if: vars.FIVE_MINUTE_EXPERIMENT_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Score collection and frozen reference forecasts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -o pipefail
+          python five_minute_health.py --days 14 2>&1 | tee five-minute-health.txt
+      - name: Keep report in run summary
+        if: always()
+        run: |
+          if [ -f five-minute-health.txt ]; then
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat five-minute-health.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: five-minute-health-${{ github.run_id }}
+          path: five-minute-health.txt
+          retention-days: 90

@@ -32,6 +32,7 @@ anyone can repeat it.
 | 015 | `accuracy_publication_horizon.sql` | ✅ applied 2026-09-18 | View replacement succeeded; migration 016 verified baseline expansion; anon/authenticated reads denied |
 | 016 | `migration_history.sql` | ✅ applied 2026-09-18 | Ledger lists 013–016; RLS enabled, backend-only access verified |
 | 017 | `weekly_safeupdate.sql` | ✅ applied 2026-09-18 | Explicit non-null weekday predicate satisfies Supabase safeupdate without disabling the guard; transaction/rollback SQL test passes |
+| 018 | `five_minute_collection.sql` | ⏳ prepared, **not applied** | Separate backend-only `capacity_samples_5m`; insert/select only, immutable first sample per tick. Local transactional SQL tests pass. Enable collection only after applying this migration. |
 
 > `42501 permission denied` means the object **exists** and is locked down.
 > A missing object returns `42P01 relation does not exist`. That difference is what
