@@ -66,7 +66,9 @@ async function invalidatePriorReadings(supabase, stall, { sleep = ms => new Prom
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const { error } = await supabase.from('capacity_log').update({ sensor_ok: false })
-        .in('timestamp', stall.timestamps).lte('people_count', FLOOR_COUNT);
+        // PostgREST parses the filter as an integer, matching people_count.
+        // <=37 is equivalent to <=37.5 for stored whole-person counts.
+        .in('timestamp', stall.timestamps).lte('people_count', Math.floor(FLOOR_COUNT));
       if (error) throw error;
       return;
     } catch (error) {

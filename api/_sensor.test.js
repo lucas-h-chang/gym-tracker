@@ -21,7 +21,7 @@ const fixtures = require('../tests/fixtures/sensor-rule.json');
   let attempts=0;
   const update={from:()=>update,update:value=>{assert.deepEqual(value,{sensor_ok:false});return update;},
     in:(key,values)=>{assert.equal(key,'timestamp');assert.deepEqual(values,stall.timestamps);return update;},
-    lte:async(key,value)=>{assert.equal(key,'people_count');assert.equal(value,37.5);
+    lte:async(key,value)=>{assert.equal(key,'people_count');assert.equal(value,37);
       attempts++;return {error:attempts<2?{message:'temporary'}:null};}};
   await invalidatePriorReadings(update,stall,{sleep:async()=>{}});
   assert.equal(attempts,2);

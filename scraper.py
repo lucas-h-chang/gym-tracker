@@ -19,6 +19,7 @@ costs nothing. See handoffs/SPEC_VERCEL_SCRAPE.md.
 Keep this file's behaviour in sync with api/scrape.js.
 """
 import os
+import math
 import sys
 import requests
 from datetime import datetime
@@ -54,7 +55,7 @@ def main():
     if stall['stalled']:
         # Bounded/idempotent update; reuse retry handling for transient failures.
         execute_read(lambda: sb.table('capacity_log').update({'sensor_ok': False})
-            .in_('timestamp', stall['timestamps']).lte('people_count', FLOOR_COUNT))
+            .in_('timestamp', stall['timestamps']).lte('people_count', math.floor(FLOOR_COUNT)))
     print(f"[{now.isoformat()}] Saved: {count} people ({pct}%), sensor_ok={not stall['stalled']}")
 
 

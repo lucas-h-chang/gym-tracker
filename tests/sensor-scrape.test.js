@@ -11,7 +11,10 @@ test('scraper confirms a low pair, invalidates both, stays down at six people, t
   const sb={from:()=>{
     let patch,targets,floor;
     const q={select:()=>q,gte:()=>q,order:()=>q,
-      lte:(key,value)=>{floor=value;return q;},
+      lte:(key,value)=>{
+        // PostgREST rejects a fractional literal for this integer column.
+        if(key==='people_count')assert.ok(Number.isInteger(value),'people_count filter must be an integer');
+        floor=value;return q;},
       limit:async()=>({data:rows,error:null}),
       insert:async row=>{rows.push(row);return {error:null};},
       update:value=>{patch=value;return q;},
