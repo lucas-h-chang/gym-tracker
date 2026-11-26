@@ -333,6 +333,23 @@ CLOSURES = [
 ]
 
 
+# Thanksgiving Friday–Sunday: 2026 posted hours supplied by Lucas;
+# 2027 projects the same policy onto next year's Thanksgiving weekend.
+# Do not apply this projection to historical training dates.
+SPECIAL_HOURS = [
+    (date(2026, 11, 27), date(2026, 11, 29), 10, 16),
+    (date(2027, 11, 26), date(2027, 11, 28), 10, 16),
+]
+
+
+def special_hours(d):
+    d = _as_date(d)
+    for start, end, opening, closing in SPECIAL_HOURS:
+        if start <= d <= end:
+            return opening, closing
+    return None
+
+
 def closure_reason(d):
     """The reason the RSF is shut on `d`, or None if it keeps normal hours."""
     d = _as_date(d)
@@ -410,6 +427,9 @@ def get_open_hours(day_name, d):
     # gates and mirroring the new branch into each of them.
     if d is not None and is_closed_day(d):
         return 0, 0
+    override = special_hours(d) if d is not None else None
+    if override is not None:
+        return override
     summer = is_summer_day(d)
     if day_name == 'Saturday':
         return 8, 18

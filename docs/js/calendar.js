@@ -200,6 +200,13 @@ const CLOSURES = [
 ];
 // <<< END GENERATED CLOSURES
 
+// >>> GENERATED SPECIAL_HOURS — from academic_calendar.py via sync_calendar.py; do not edit by hand
+const SPECIAL_HOURS = [
+  ['2026-11-27', '2026-11-29', 10, 16],
+  ['2027-11-26', '2027-11-28', 10, 16],
+];
+// <<< END GENERATED SPECIAL_HOURS
+
 function closureReason(date) {
   const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
   const hit = CLOSURES.find(([s, e]) => ds >= s && ds <= e);
@@ -211,6 +218,11 @@ function getOpenHours(jsDay, date) {
   // every `open <= h < close` test is false for all 24 hours, so the day reads
   // as closed everywhere without special-casing each caller.
   if (date != null && closureReason(date)) return { open: 0, close: 0 };
+  if (date != null) {
+    const ds = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA');
+    const override = SPECIAL_HOURS.find(([s, e]) => ds >= s && ds <= e);
+    if (override) return { open: override[2], close: override[3] };
+  }
   const summer = date != null && isSummerHours(date);
   if (jsDay === 6) return { open: 8, close: 18 };
   if (jsDay === 0) return { open: 8, close: summer ? 20 : 23 };

@@ -78,6 +78,7 @@ def expected(ranges):
 
 BREAKS = cal.WINTER_BREAK_RANGES + cal.SPRING_BREAK_RANGES + cal.SUMMER_BREAK_RANGES
 CLOSURE_PAIRS = [(s, e) for s, e, _ in cal.CLOSURES]
+SPECIAL_PAIRS = [(s, e) for s, e, _, _ in cal.SPECIAL_HOURS]
 
 
 # ── 1. Nothing has been hand-edited ─────────────────────────────────────────
@@ -89,6 +90,9 @@ def test_no_drift():
 
 # ── 2. Every mirror's dates equal the Python source ─────────────────────────
 @pytest.mark.parametrize("path,name,ranges", [
+    (HOURS_JS, "SPECIAL_HOURS", SPECIAL_PAIRS),
+    (INDEX, "SPECIAL_HOURS", SPECIAL_PAIRS),
+    pytest.param(IOS, "specialHours", SPECIAL_PAIRS, marks=needs_ios),
     (HOURS_JS, "SUMMER_RANGES",       cal.SUMMER_RANGES),
     (HOURS_JS, "CLOSURES",            CLOSURE_PAIRS),
     (INDEX,    "SUMMER_RANGES",       cal.SUMMER_RANGES),
@@ -103,6 +107,7 @@ def test_js_and_swift_dates_match_source(path, name, ranges):
 
 
 @pytest.mark.parametrize("name,ranges", [
+    ("SPECIAL_HOURS", SPECIAL_PAIRS),
     ("SUMMER_RANGES", cal.SUMMER_RANGES),
     ("CLOSURES",      CLOSURE_PAIRS),
 ])
@@ -163,9 +168,9 @@ def _code_lines(text):
 
 
 @pytest.mark.parametrize("path,names", [
-    (HOURS_JS, ["SUMMER_RANGES", "CLOSURES"]),
-    (INDEX,    ["SUMMER_RANGES", "BREAK_RANGES", "CLOSURES"]),
-    pytest.param(IOS, ["summerRanges", "semesterBreakRanges", "closureRanges"], marks=needs_ios),
+    (HOURS_JS, ["SUMMER_RANGES", "CLOSURES", "SPECIAL_HOURS"]),
+    (INDEX,    ["SUMMER_RANGES", "BREAK_RANGES", "CLOSURES", "SPECIAL_HOURS"]),
+    pytest.param(IOS, ["summerRanges", "semesterBreakRanges", "closureRanges", "specialHours"], marks=needs_ios),
 ])
 def test_no_calendar_dates_outside_generated_blocks(path, names):
     """Every calendar date in the file lives inside a generated block.

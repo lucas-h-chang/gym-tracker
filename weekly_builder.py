@@ -96,13 +96,9 @@ def _emit_day_records(filtered, range_type, semester_only, records):
     # Per-row open/close bounds based on each row's date — summer dates close
     # earlier than academic-year dates, so filter row-by-row.
     row_dates  = filtered['timestamp'].dt.date
-    row_summer = row_dates.apply(is_summer_day).to_numpy()
-    row_days   = filtered['day_of_week'].to_numpy()
-    row_open   = np.where(np.isin(row_days, ['Saturday', 'Sunday']), 8, 7)
-    row_close  = np.where(
-        row_days == 'Saturday', 18,
-        np.where(row_summer, 20, 23),
-    )
+    bounds = {d: get_open_hours(d.strftime('%A'), d) for d in row_dates.unique()}
+    row_open = row_dates.map(lambda d: bounds[d][0]).to_numpy()
+    row_close = row_dates.map(lambda d: bounds[d][1]).to_numpy()
     filtered = filtered.assign(_open_h=row_open, _close_h=row_close)
 
     for day in DAYS:

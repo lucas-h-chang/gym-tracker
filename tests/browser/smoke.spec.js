@@ -146,3 +146,16 @@ test('a synchronous live-request failure cannot block later polls', async ({page
   await expect(page.locator('#insight-pct')).toHaveText('50%');
   expect(liveRequests).toBe(1);
 });
+
+for (const ds of ['2026-11-27','2027-11-26']) test(`Thanksgiving weekend ${ds} shows late opening and shortened chart hours`,async({page})=>{
+  await mockNetwork(page);
+  await page.clock.setFixedTime(new Date(`${ds}T17:30:00Z`)); // 9:30 AM Pacific
+  await page.goto('/');
+  await expect(page.locator('body')).not.toHaveClass(/loading/);
+  await expect(page.locator('#insight-pct')).toHaveText('CLOSED');
+  await expect(page.locator('#insight-cap-label')).toContainText('10:00 AM');
+  expect(await page.evaluate(()=>{
+    const opts=Chart.getChart(document.getElementById('pred-chart')).options.plugins.closedHours;
+    return {open:opts.open,close:opts.close};
+  })).toEqual({open:10,close:16});
+});

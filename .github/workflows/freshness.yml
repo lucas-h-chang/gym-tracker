@@ -99,6 +99,13 @@ jobs:
               (date(2028, 1, 1), date(2028, 1, 1)),
           ]
           # <<< END GENERATED CLOSURES
+
+          # >>> GENERATED SPECIAL_HOURS — from academic_calendar.py via sync_calendar.py; do not edit by hand
+          SPECIAL_HOURS = [
+              (date(2026, 11, 27), date(2026, 11, 29), 10, 16),
+              (date(2027, 11, 26), date(2027, 11, 28), 10, 16),
+          ]
+          # <<< END GENERATED SPECIAL_HOURS
           def is_closed_day(d):
               return any(s <= d <= e for s, e in CLOSURES)
           def is_summer_day(d):
@@ -109,6 +116,9 @@ jobs:
               # closed for all 24 hours without a separate branch.
               if is_closed_day(d):
                   return 0, 0
+              for start, end, opening, closing in SPECIAL_HOURS:
+                  if start <= d <= end:
+                      return opening, closing
               summer = is_summer_day(d)
               if day_name == 'Saturday':
                   return 8, 18

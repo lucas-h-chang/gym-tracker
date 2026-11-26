@@ -85,6 +85,13 @@ const CLOSURES = [
 ];
 // <<< END GENERATED CLOSURES
 
+// >>> GENERATED SPECIAL_HOURS — from academic_calendar.py via sync_calendar.py; do not edit by hand
+const SPECIAL_HOURS = [
+  ['2026-11-27', '2026-11-29', 10, 16],
+  ['2027-11-26', '2027-11-28', 10, 16],
+];
+// <<< END GENERATED SPECIAL_HOURS
+
 /** dateStr: 'YYYY-MM-DD' in PT. Returns the closure reason, or null. */
 function closureReason(dateStr) {
   const hit = CLOSURES.find(([s, e]) => dateStr >= s && dateStr <= e);
@@ -106,6 +113,8 @@ function getOpenHours(weekday, dateStr) {
   // false at every hour, so existing gates report "closed" all day with no
   // change at the call site. Mirrors academic_calendar.get_open_hours().
   if (closureReason(dateStr)) return [0, 0];
+  const override = SPECIAL_HOURS.find(([s, e]) => dateStr >= s && dateStr <= e);
+  if (override) return override.slice(2);
   const summer = isSummerDay(dateStr);
   if (weekday === 'Saturday') return [8, 18];
   if (weekday === 'Sunday') return [8, summer ? 20 : 23];

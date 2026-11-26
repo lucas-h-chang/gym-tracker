@@ -93,6 +93,19 @@ def _breaks_swift(indent="    "):
 # ── Block table: (file, comment token, block name, body builder) ─────────────
 def blocks():
     return [
+        *[(ROOT / path, "//", "SPECIAL_HOURS",
+           lambda: "const SPECIAL_HOURS = [\n" + "\n".join(
+               f"  ['{s:%Y-%m-%d}', '{e:%Y-%m-%d}', {o}, {c}],"
+               for s, e, o, c in cal.SPECIAL_HOURS) + "\n];")
+          for path in ("api/_hours.js", "docs/js/calendar.js")],
+        (ROOT / ".github/workflows/freshness.yml", "#", "SPECIAL_HOURS",
+         lambda: "SPECIAL_HOURS = [\n" + "\n".join(
+             f"    (date({s.year}, {s.month}, {s.day}), date({e.year}, {e.month}, {e.day}), {o}, {c}),"
+             for s, e, o, c in cal.SPECIAL_HOURS) + "\n]"),
+        (IOS, "//", "specialHours",
+         lambda: "private let specialHours: [(String, String, Int, Int)] = [\n" + "\n".join(
+             f'    ("{s:%Y-%m-%d}", "{e:%Y-%m-%d}", {o}, {c}),'
+             for s, e, o, c in cal.SPECIAL_HOURS) + "\n]"),
         (ROOT / "api" / "_hours.js", "//", "SUMMER_RANGES",
          lambda: "const SUMMER_RANGES = [\n" + _js_pairs(cal.SUMMER_RANGES) + "\n];"),
         (ROOT / "api" / "_hours.js", "//", "CLOSURES",
